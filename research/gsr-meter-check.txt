@@ -1,0 +1,7 @@
+4-byte mul/mod: 7720
+8-byte mul/mod: 8028
+32-byte mul/mod: 15004
+CAT+SHA256 parent: 5892
+OP_2 MULTI SHA256 parent: 6966
+6400 parents: 37708800
+200 KiB witness budget contribution: 2048000000

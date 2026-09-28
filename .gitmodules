@@ -1,0 +1,4 @@
+[submodule "bitcoin"]
+	path = bitcoin
+	url = https://github.com/jmoik/bitcoin
+	branch = gsr-full

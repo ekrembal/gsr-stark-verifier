@@ -1,0 +1,45 @@
+{
+  "script_sha256": "bf1d3cdf64ebde16ae91cd02298db749386e0fdac442789b316a3eed8400be17",
+  "node_commit": "d2799052604eb138c5a79acf88514a0c8b07f4ef",
+  "node_version": "/Satoshi:31.99.0/",
+  "weight": 370387,
+  "eligible_weight": 370387,
+  "varops_budget": 3703870000,
+  "internal_key": "50929b74c1a04954b78b4b6035e97a5e078a5a0f28ec96d547bfee9ace803ac0",
+  "leaf_version": 194,
+  "control_block": "c250929b74c1a04954b78b4b6035e97a5e078a5a0f28ec96d547bfee9ace803ac0",
+  "funding_txid": "7af978855aea122c33908c702a80fdbaf606bef44ae7e44ed1f06d7d6f140164",
+  "activation": {
+    "type": "bip9",
+    "height": 432,
+    "active": true,
+    "bip9": {
+      "start_time": 0,
+      "timeout": 3999999999,
+      "min_activation_height": 0,
+      "status": "active",
+      "since": 432,
+      "status_next": "active"
+    }
+  },
+  "mempool_acceptance": [
+    {
+      "txid": "82b81efb332b9708970fe05b946771b5b53f553d67b7a4789d736942bb00dc25",
+      "wtxid": "9aa916828eea899fe9ead6f4f08947d4b1da7c840b77f7d73c821cd7f8b1cd57",
+      "allowed": true,
+      "vsize_adjusted": 92597,
+      "vsize": 92597,
+      "vsize_bip141": 92597,
+      "fees": {
+        "base": 0.002,
+        "effective-feerate": 2.159e-05,
+        "effective-includes": [
+          "9aa916828eea899fe9ead6f4f08947d4b1da7c840b77f7d73c821cd7f8b1cd57"
+        ]
+      }
+    }
+  ],
+  "txid": "82b81efb332b9708970fe05b946771b5b53f553d67b7a4789d736942bb00dc25",
+  "blockhash": "254198ec3eef698e91f7c0eb27cada931aaae88ed95c4e217b098edc80fcccf7",
+  "mined": true
+}

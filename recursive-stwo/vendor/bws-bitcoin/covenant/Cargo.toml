@@ -1,0 +1,37 @@
+[package]
+name = "recursive-stwo-covenant"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+recursive-stwo-bitcoin-dsl = { path = "../bitcoin_dsl" }
+recursive-stwo-delegation = { path = "../delegation" }
+recursive-stwo-last = { path = "../last" }
+stwo-prover.workspace = true
+bitcoin.workspace = true
+bitcoin-scriptexec.workspace = true
+num-traits.workspace = true
+circle-plonk-dsl-hints.workspace = true
+circle-plonk-dsl-last-folding.workspace = true
+circle-plonk-dsl-last-fiat-shamir.workspace = true
+circle-plonk-dsl-last-answer.workspace = true
+bincode.workspace = true
+covenants-gadgets.workspace = true
+sha2.workspace = true
+anyhow.workspace = true
+bitcoin-simulator.workspace = true
+clap.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+hex.workspace = true
+colored.workspace = true
+
+[[bin]]
+name = "gen_demo_params"
+test = false
+bench = false
+
+[[bin]]
+name = "demo"
+test = false
+bench = false

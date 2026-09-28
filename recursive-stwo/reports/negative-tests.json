@@ -1,0 +1,1992 @@
+{
+  "passed": true,
+  "cases": 397,
+  "results": [
+    {
+      "case": "nonce_39",
+      "error": "Script failed an OP_EQUALVERIFY operation",
+      "main_pc": 6442
+    },
+    {
+      "case": "nonce_4923",
+      "error": "Script failed an OP_EQUALVERIFY operation",
+      "main_pc": 56365
+    },
+    {
+      "case": "inverse_hint3674",
+      "error": "Script failed an OP_EQUALVERIFY operation",
+      "main_pc": 39628
+    },
+    {
+      "case": "inverse_hint3675",
+      "error": "Script failed an OP_EQUALVERIFY operation",
+      "main_pc": 39628
+    },
+    {
+      "case": "inverse_hint3676",
+      "error": "Script failed an OP_EQUALVERIFY operation",
+      "main_pc": 39628
+    },
+    {
+      "case": "last_layer_poly4919",
+      "error": "Script failed an OP_EQUALVERIFY operation",
+      "main_pc": 56365
+    },
+    {
+      "case": "last_layer_poly4920",
+      "error": "Script failed an OP_EQUALVERIFY operation",
+      "main_pc": 56365
+    },
+    {
+      "case": "last_layer_poly4921",
+      "error": "Script failed an OP_EQUALVERIFY operation",
+      "main_pc": 56365
+    },
+    {
+      "case": "commitment3672",
+      "error": "Script failed an OP_EQUALVERIFY operation",
+      "main_pc": 39518
+    },
+    {
+      "case": "commitment3673",
+      "error": "Script failed an OP_EQUALVERIFY operation",
+      "main_pc": 39628
+    },
+    {
+      "case": "commitment4770",
+      "error": "Script failed an OP_EQUALVERIFY operation",
+      "main_pc": 56365
+    },
+    {
+      "case": "delegated_decommit_preprocessed_input_64",
+      "error": "Script failed an OP_EQUALVERIFY operation",
+      "main_pc": 7254
+    },
+    {
+      "case": "delegated_decommit_preprocessed_input_65",
+      "error": "Script failed an OP_EQUALVERIFY operation",
+      "main_pc": 7254
+    },
+    {
+      "case": "delegated_decommit_preprocessed_input_66",
+      "error": "Script failed an OP_EQUALVERIFY operation",
+      "main_pc": 7254
+    },
+    {
+      "case": "delegated_decommit_trace_input_320",
+      "error": "Script failed an OP_EQUALVERIFY operation",
+      "main_pc": 9336
+    },
+    {
+      "case": "delegated_decommit_trace_input_321",
+      "error": "Script failed an OP_EQUALVERIFY operation",
+      "main_pc": 9336
+    },
+    {
+      "case": "delegated_decommit_trace_input_322",
+      "error": "Script failed an OP_EQUALVERIFY operation",
+      "main_pc": 9336
+    },
+    {
+      "case": "delegated_first_layer_input_1082",
+      "error": "Script failed an OP_EQUALVERIFY operation",
+      "main_pc": 15779
+    },
+    {
+      "case": "delegated_first_layer_input_1083",
+      "error": "Script failed an OP_EQUALVERIFY operation",
+      "main_pc": 15779
+    },
+    {
+      "case": "delegated_first_layer_input_1084",
+      "error": "Script failed an OP_EQUALVERIFY operation",
+      "main_pc": 15779
+    },
+    {
+      "case": "stage_0_hint_0",
+      "error": "Script failed an OP_EQUALVERIFY operation",
+      "main_pc": 5967
+    },
+    {
+      "case": "stage_0_hint_276",
+      "error": "Script failed an OP_EQUALVERIFY operation",
+      "main_pc": 8582
+    },
+    {
+      "case": "stage_0_hint_551",
+      "error": "Script failed an OP_EQUALVERIFY operation",
+      "main_pc": 10668
+    },
+    {
+      "case": "stage_1_hint_552",
+      "error": "Script failed an OP_EQUALVERIFY operation",
+      "main_pc": 11411
+    },
+    {
+      "case": "stage_1_hint_972",
+      "error": "Script failed an OP_EQUALVERIFY operation",
+      "main_pc": 14397
+    },
+    {
+      "case": "stage_1_hint_1391",
+      "error": "Script failed an OP_EQUALVERIFY operation",
+      "main_pc": 17828
+    },
+    {
+      "case": "stage_2_hint_1392",
+      "error": "Script failed an OP_EQUALVERIFY operation",
+      "main_pc": 18421
+    },
+    {
+      "case": "stage_2_hint_1800",
+      "error": "Script failed an OP_EQUALVERIFY operation",
+      "main_pc": 22400
+    },
+    {
+      "case": "stage_2_hint_2207",
+      "error": "Script failed an OP_EQUALVERIFY operation",
+      "main_pc": 25886
+    },
+    {
+      "case": "stage_3_hint_2208",
+      "error": "Script failed an OP_EQUALVERIFY operation",
+      "main_pc": 26570
+    },
+    {
+      "case": "stage_3_hint_2556",
+      "error": "Script failed an OP_EQUALVERIFY operation",
+      "main_pc": 29590
+    },
+    {
+      "case": "stage_3_hint_2903",
+      "error": "Script failed an OP_EQUALVERIFY operation",
+      "main_pc": 32429
+    },
+    {
+      "case": "stage_4_hint_2904",
+      "error": "Script failed an OP_EQUALVERIFY operation",
+      "main_pc": 33170
+    },
+    {
+      "case": "stage_4_hint_3671",
+      "error": "Script failed an OP_EQUALVERIFY operation",
+      "main_pc": 39436
+    },
+    {
+      "case": "stage_4_hint_3288",
+      "error": "Script failed an OP_EQUALVERIFY operation",
+      "main_pc": 36404
+    },
+    {
+      "case": "stage_5_hint_3672",
+      "error": "Script failed an OP_EQUALVERIFY operation",
+      "main_pc": 39518
+    },
+    {
+      "case": "stage_5_hint_3685",
+      "error": "Script failed an OP_EQUALVERIFY operation",
+      "main_pc": 39729
+    },
+    {
+      "case": "stage_5_hint_3679",
+      "error": "Script failed an OP_EQUALVERIFY operation",
+      "main_pc": 39678
+    },
+    {
+      "case": "stage_6_hint_3713",
+      "error": "Script failed an OP_EQUALVERIFY operation",
+      "main_pc": 40114
+    },
+    {
+      "case": "stage_6_hint_3700",
+      "error": "Script failed an OP_EQUALVERIFY operation",
+      "main_pc": 39949
+    },
+    {
+      "case": "stage_6_hint_3686",
+      "error": "Script failed an OP_EQUALVERIFY operation",
+      "main_pc": 39784
+    },
+    {
+      "case": "stage_7_hint_3728",
+      "error": "Script failed an OP_EQUALVERIFY operation",
+      "main_pc": 40334
+    },
+    {
+      "case": "stage_7_hint_3714",
+      "error": "Script failed an OP_EQUALVERIFY operation",
+      "main_pc": 40169
+    },
+    {
+      "case": "stage_7_hint_3741",
+      "error": "Script failed an OP_EQUALVERIFY operation",
+      "main_pc": 40499
+    },
+    {
+      "case": "stage_8_hint_3769",
+      "error": "Script failed an OP_EQUALVERIFY operation",
+      "main_pc": 40884
+    },
+    {
+      "case": "stage_8_hint_3756",
+      "error": "Script failed an OP_EQUALVERIFY operation",
+      "main_pc": 40719
+    },
+    {
+      "case": "stage_8_hint_3742",
+      "error": "Script failed an OP_EQUALVERIFY operation",
+      "main_pc": 40554
+    },
+    {
+      "case": "stage_9_hint_3784",
+      "error": "Script failed an OP_EQUALVERIFY operation",
+      "main_pc": 41104
+    },
+    {
+      "case": "stage_9_hint_3770",
+      "error": "Script failed an OP_EQUALVERIFY operation",
+      "main_pc": 40939
+    },
+    {
+      "case": "stage_9_hint_3797",
+      "error": "Script failed an OP_EQUALVERIFY operation",
+      "main_pc": 41269
+    },
+    {
+      "case": "stage_10_hint_3825",
+      "error": "Script failed an OP_EQUALVERIFY operation",
+      "main_pc": 41654
+    },
+    {
+      "case": "stage_10_hint_3812",
+      "error": "Script failed an OP_EQUALVERIFY operation",
+      "main_pc": 41489
+    },
+    {
+      "case": "stage_10_hint_3798",
+      "error": "Script failed an OP_EQUALVERIFY operation",
+      "main_pc": 41324
+    },
+    {
+      "case": "stage_11_hint_3840",
+      "error": "Script failed an OP_EQUALVERIFY operation",
+      "main_pc": 41874
+    },
+    {
+      "case": "stage_11_hint_3826",
+      "error": "Script failed an OP_EQUALVERIFY operation",
+      "main_pc": 41709
+    },
+    {
+      "case": "stage_11_hint_3853",
+      "error": "Script failed an OP_EQUALVERIFY operation",
+      "main_pc": 42039
+    },
+    {
+      "case": "stage_12_hint_3881",
+      "error": "Script failed an OP_EQUALVERIFY operation",
+      "main_pc": 42424
+    },
+    {
+      "case": "stage_12_hint_3868",
+      "error": "Script failed an OP_EQUALVERIFY operation",
+      "main_pc": 42259
+    },
+    {
+      "case": "stage_12_hint_3854",
+      "error": "Script failed an OP_EQUALVERIFY operation",
+      "main_pc": 42094
+    },
+    {
+      "case": "stage_13_hint_3896",
+      "error": "Script failed an OP_EQUALVERIFY operation",
+      "main_pc": 42644
+    },
+    {
+      "case": "stage_13_hint_3882",
+      "error": "Script failed an OP_EQUALVERIFY operation",
+      "main_pc": 42479
+    },
+    {
+      "case": "stage_13_hint_3909",
+      "error": "Script failed an OP_EQUALVERIFY operation",
+      "main_pc": 42809
+    },
+    {
+      "case": "stage_14_hint_3937",
+      "error": "Script failed an OP_EQUALVERIFY operation",
+      "main_pc": 43194
+    },
+    {
+      "case": "stage_14_hint_3924",
+      "error": "Script failed an OP_EQUALVERIFY operation",
+      "main_pc": 43029
+    },
+    {
+      "case": "stage_14_hint_3910",
+      "error": "Script failed an OP_EQUALVERIFY operation",
+      "main_pc": 42864
+    },
+    {
+      "case": "stage_15_hint_3952",
+      "error": "Script failed an OP_EQUALVERIFY operation",
+      "main_pc": 43414
+    },
+    {
+      "case": "stage_15_hint_3938",
+      "error": "Script failed an OP_EQUALVERIFY operation",
+      "main_pc": 43249
+    },
+    {
+      "case": "stage_15_hint_3965",
+      "error": "Script failed an OP_EQUALVERIFY operation",
+      "main_pc": 43579
+    },
+    {
+      "case": "stage_16_hint_3993",
+      "error": "Script failed an OP_EQUALVERIFY operation",
+      "main_pc": 43964
+    },
+    {
+      "case": "stage_16_hint_3980",
+      "error": "Script failed an OP_EQUALVERIFY operation",
+      "main_pc": 43799
+    },
+    {
+      "case": "stage_16_hint_3966",
+      "error": "Script failed an OP_EQUALVERIFY operation",
+      "main_pc": 43634
+    },
+    {
+      "case": "stage_17_hint_4008",
+      "error": "Script failed an OP_EQUALVERIFY operation",
+      "main_pc": 44184
+    },
+    {
+      "case": "stage_17_hint_3994",
+      "error": "Script failed an OP_EQUALVERIFY operation",
+      "main_pc": 44019
+    },
+    {
+      "case": "stage_17_hint_4021",
+      "error": "Script failed an OP_EQUALVERIFY operation",
+      "main_pc": 44349
+    },
+    {
+      "case": "stage_18_hint_4049",
+      "error": "Script failed an OP_EQUALVERIFY operation",
+      "main_pc": 44734
+    },
+    {
+      "case": "stage_18_hint_4036",
+      "error": "Script failed an OP_EQUALVERIFY operation",
+      "main_pc": 44569
+    },
+    {
+      "case": "stage_18_hint_4022",
+      "error": "Script failed an OP_EQUALVERIFY operation",
+      "main_pc": 44404
+    },
+    {
+      "case": "stage_19_hint_4064",
+      "error": "Script failed an OP_EQUALVERIFY operation",
+      "main_pc": 44954
+    },
+    {
+      "case": "stage_19_hint_4050",
+      "error": "Script failed an OP_EQUALVERIFY operation",
+      "main_pc": 44789
+    },
+    {
+      "case": "stage_19_hint_4077",
+      "error": "Script failed an OP_EQUALVERIFY operation",
+      "main_pc": 45119
+    },
+    {
+      "case": "stage_20_hint_4105",
+      "error": "Script failed an OP_EQUALVERIFY operation",
+      "main_pc": 45504
+    },
+    {
+      "case": "stage_20_hint_4092",
+      "error": "Script failed an OP_EQUALVERIFY operation",
+      "main_pc": 45339
+    },
+    {
+      "case": "stage_20_hint_4078",
+      "error": "Script failed an OP_EQUALVERIFY operation",
+      "main_pc": 45174
+    },
+    {
+      "case": "stage_21_hint_4120",
+      "error": "Script failed an OP_EQUALVERIFY operation",
+      "main_pc": 45724
+    },
+    {
+      "case": "stage_21_hint_4106",
+      "error": "Script failed an OP_EQUALVERIFY operation",
+      "main_pc": 45559
+    },
+    {
+      "case": "stage_21_hint_4133",
+      "error": "Script failed an OP_EQUALVERIFY operation",
+      "main_pc": 45889
+    },
+    {
+      "case": "stage_22_hint_4161",
+      "error": "Script failed an OP_EQUALVERIFY operation",
+      "main_pc": 46274
+    },
+    {
+      "case": "stage_22_hint_4148",
+      "error": "Script failed an OP_EQUALVERIFY operation",
+      "main_pc": 46109
+    },
+    {
+      "case": "stage_22_hint_4134",
+      "error": "Script failed an OP_EQUALVERIFY operation",
+      "main_pc": 45944
+    },
+    {
+      "case": "stage_23_hint_4176",
+      "error": "Script failed an OP_EQUALVERIFY operation",
+      "main_pc": 46494
+    },
+    {
+      "case": "stage_23_hint_4162",
+      "error": "Script failed an OP_EQUALVERIFY operation",
+      "main_pc": 46329
+    },
+    {
+      "case": "stage_23_hint_4189",
+      "error": "Script failed an OP_EQUALVERIFY operation",
+      "main_pc": 46659
+    },
+    {
+      "case": "stage_24_hint_4217",
+      "error": "Script failed an OP_EQUALVERIFY operation",
+      "main_pc": 47044
+    },
+    {
+      "case": "stage_24_hint_4204",
+      "error": "Script failed an OP_EQUALVERIFY operation",
+      "main_pc": 46879
+    },
+    {
+      "case": "stage_24_hint_4190",
+      "error": "Script failed an OP_EQUALVERIFY operation",
+      "main_pc": 46714
+    },
+    {
+      "case": "stage_25_hint_4232",
+      "error": "Script failed an OP_EQUALVERIFY operation",
+      "main_pc": 47264
+    },
+    {
+      "case": "stage_25_hint_4218",
+      "error": "Script failed an OP_EQUALVERIFY operation",
+      "main_pc": 47099
+    },
+    {
+      "case": "stage_25_hint_4245",
+      "error": "Script failed an OP_EQUALVERIFY operation",
+      "main_pc": 47429
+    },
+    {
+      "case": "stage_26_hint_4273",
+      "error": "Script failed an OP_EQUALVERIFY operation",
+      "main_pc": 47814
+    },
+    {
+      "case": "stage_26_hint_4260",
+      "error": "Script failed an OP_EQUALVERIFY operation",
+      "main_pc": 47649
+    },
+    {
+      "case": "stage_26_hint_4246",
+      "error": "Script failed an OP_EQUALVERIFY operation",
+      "main_pc": 47484
+    },
+    {
+      "case": "stage_27_hint_4288",
+      "error": "Script failed an OP_EQUALVERIFY operation",
+      "main_pc": 48034
+    },
+    {
+      "case": "stage_27_hint_4274",
+      "error": "Script failed an OP_EQUALVERIFY operation",
+      "main_pc": 47869
+    },
+    {
+      "case": "stage_27_hint_4301",
+      "error": "Script failed an OP_EQUALVERIFY operation",
+      "main_pc": 48199
+    },
+    {
+      "case": "stage_28_hint_4329",
+      "error": "Script failed an OP_EQUALVERIFY operation",
+      "main_pc": 48584
+    },
+    {
+      "case": "stage_28_hint_4316",
+      "error": "Script failed an OP_EQUALVERIFY operation",
+      "main_pc": 48419
+    },
+    {
+      "case": "stage_28_hint_4302",
+      "error": "Script failed an OP_EQUALVERIFY operation",
+      "main_pc": 48254
+    },
+    {
+      "case": "stage_29_hint_4344",
+      "error": "Script failed an OP_EQUALVERIFY operation",
+      "main_pc": 48804
+    },
+    {
+      "case": "stage_29_hint_4330",
+      "error": "Script failed an OP_EQUALVERIFY operation",
+      "main_pc": 48639
+    },
+    {
+      "case": "stage_29_hint_4357",
+      "error": "Script failed an OP_EQUALVERIFY operation",
+      "main_pc": 48969
+    },
+    {
+      "case": "stage_30_hint_4385",
+      "error": "Script failed an OP_EQUALVERIFY operation",
+      "main_pc": 49354
+    },
+    {
+      "case": "stage_30_hint_4372",
+      "error": "Script failed an OP_EQUALVERIFY operation",
+      "main_pc": 49189
+    },
+    {
+      "case": "stage_30_hint_4358",
+      "error": "Script failed an OP_EQUALVERIFY operation",
+      "main_pc": 49024
+    },
+    {
+      "case": "stage_31_hint_4400",
+      "error": "Script failed an OP_EQUALVERIFY operation",
+      "main_pc": 49574
+    },
+    {
+      "case": "stage_31_hint_4386",
+      "error": "Script failed an OP_EQUALVERIFY operation",
+      "main_pc": 49409
+    },
+    {
+      "case": "stage_31_hint_4413",
+      "error": "Script failed an OP_EQUALVERIFY operation",
+      "main_pc": 49739
+    },
+    {
+      "case": "stage_32_hint_4441",
+      "error": "Script failed an OP_EQUALVERIFY operation",
+      "main_pc": 50124
+    },
+    {
+      "case": "stage_32_hint_4428",
+      "error": "Script failed an OP_EQUALVERIFY operation",
+      "main_pc": 49959
+    },
+    {
+      "case": "stage_32_hint_4414",
+      "error": "Script failed an OP_EQUALVERIFY operation",
+      "main_pc": 49794
+    },
+    {
+      "case": "stage_33_hint_4456",
+      "error": "Script failed an OP_EQUALVERIFY operation",
+      "main_pc": 50344
+    },
+    {
+      "case": "stage_33_hint_4442",
+      "error": "Script failed an OP_EQUALVERIFY operation",
+      "main_pc": 50179
+    },
+    {
+      "case": "stage_33_hint_4469",
+      "error": "Script failed an OP_EQUALVERIFY operation",
+      "main_pc": 50509
+    },
+    {
+      "case": "stage_34_hint_4497",
+      "error": "Script failed an OP_EQUALVERIFY operation",
+      "main_pc": 50894
+    },
+    {
+      "case": "stage_34_hint_4484",
+      "error": "Script failed an OP_EQUALVERIFY operation",
+      "main_pc": 50729
+    },
+    {
+      "case": "stage_34_hint_4470",
+      "error": "Script failed an OP_EQUALVERIFY operation",
+      "main_pc": 50564
+    },
+    {
+      "case": "stage_35_hint_4512",
+      "error": "Script failed an OP_EQUALVERIFY operation",
+      "main_pc": 51114
+    },
+    {
+      "case": "stage_35_hint_4498",
+      "error": "Script failed an OP_EQUALVERIFY operation",
+      "main_pc": 50949
+    },
+    {
+      "case": "stage_35_hint_4525",
+      "error": "Script failed an OP_EQUALVERIFY operation",
+      "main_pc": 51279
+    },
+    {
+      "case": "stage_36_hint_4553",
+      "error": "Script failed an OP_EQUALVERIFY operation",
+      "main_pc": 51644
+    },
+    {
+      "case": "stage_36_hint_4540",
+      "error": "Script failed an OP_EQUALVERIFY operation",
+      "main_pc": 51491
+    },
+    {
+      "case": "stage_36_hint_4526",
+      "error": "Script failed an OP_EQUALVERIFY operation",
+      "main_pc": 51334
+    },
+    {
+      "case": "stage_37_hint_4568",
+      "error": "Script failed an OP_EQUALVERIFY operation",
+      "main_pc": 51848
+    },
+    {
+      "case": "stage_37_hint_4554",
+      "error": "Script failed an OP_EQUALVERIFY operation",
+      "main_pc": 51695
+    },
+    {
+      "case": "stage_37_hint_4581",
+      "error": "Script failed an OP_EQUALVERIFY operation",
+      "main_pc": 52001
+    },
+    {
+      "case": "stage_38_hint_4609",
+      "error": "Script failed an OP_EQUALVERIFY operation",
+      "main_pc": 52358
+    },
+    {
+      "case": "stage_38_hint_4596",
+      "error": "Script failed an OP_EQUALVERIFY operation",
+      "main_pc": 52205
+    },
+    {
+      "case": "stage_38_hint_4582",
+      "error": "Script failed an OP_EQUALVERIFY operation",
+      "main_pc": 52052
+    },
+    {
+      "case": "stage_39_hint_4624",
+      "error": "Script failed an OP_EQUALVERIFY operation",
+      "main_pc": 52562
+    },
+    {
+      "case": "stage_39_hint_4610",
+      "error": "Script failed an OP_EQUALVERIFY operation",
+      "main_pc": 52409
+    },
+    {
+      "case": "stage_39_hint_4637",
+      "error": "Script failed an OP_EQUALVERIFY operation",
+      "main_pc": 52715
+    },
+    {
+      "case": "stage_40_hint_4665",
+      "error": "Script failed an OP_EQUALVERIFY operation",
+      "main_pc": 53072
+    },
+    {
+      "case": "stage_40_hint_4652",
+      "error": "Script failed an OP_EQUALVERIFY operation",
+      "main_pc": 52919
+    },
+    {
+      "case": "stage_40_hint_4638",
+      "error": "Script failed an OP_EQUALVERIFY operation",
+      "main_pc": 52766
+    },
+    {
+      "case": "stage_41_hint_4680",
+      "error": "Script failed an OP_EQUALVERIFY operation",
+      "main_pc": 53276
+    },
+    {
+      "case": "stage_41_hint_4666",
+      "error": "Script failed an OP_EQUALVERIFY operation",
+      "main_pc": 53123
+    },
+    {
+      "case": "stage_41_hint_4693",
+      "error": "Script failed an OP_EQUALVERIFY operation",
+      "main_pc": 53440
+    },
+    {
+      "case": "stage_42_hint_4721",
+      "error": "Script failed an OP_EQUALVERIFY operation",
+      "main_pc": 53797
+    },
+    {
+      "case": "stage_42_hint_4708",
+      "error": "Script failed an OP_EQUALVERIFY operation",
+      "main_pc": 53644
+    },
+    {
+      "case": "stage_42_hint_4694",
+      "error": "Script failed an OP_EQUALVERIFY operation",
+      "main_pc": 53491
+    },
+    {
+      "case": "stage_43_hint_4736",
+      "error": "Script failed an OP_EQUALVERIFY operation",
+      "main_pc": 54001
+    },
+    {
+      "case": "stage_43_hint_4722",
+      "error": "Script failed an OP_EQUALVERIFY operation",
+      "main_pc": 53848
+    },
+    {
+      "case": "stage_43_hint_4749",
+      "error": "Script failed an OP_EQUALVERIFY operation",
+      "main_pc": 54154
+    },
+    {
+      "case": "stage_44_hint_4758",
+      "error": "Script failed an OP_EQUALVERIFY operation",
+      "main_pc": 54307
+    },
+    {
+      "case": "stage_44_hint_4765",
+      "error": "Script failed an OP_EQUALVERIFY operation",
+      "main_pc": 54358
+    },
+    {
+      "case": "stage_44_hint_4750",
+      "error": "Script failed an OP_EQUALVERIFY operation",
+      "main_pc": 54205
+    },
+    {
+      "case": "stage_45_hint_4939",
+      "error": "Script failed an OP_EQUALVERIFY operation",
+      "main_pc": 56641
+    },
+    {
+      "case": "stage_45_hint_4853",
+      "error": "Script failed an OP_EQUALVERIFY operation",
+      "main_pc": 56365
+    },
+    {
+      "case": "stage_45_hint_4766",
+      "error": "Script failed an OP_EQUALVERIFY operation",
+      "main_pc": 54407
+    },
+    {
+      "case": "stage_49_hint_4940",
+      "error": "Script failed an OP_EQUALVERIFY operation",
+      "main_pc": 58484
+    },
+    {
+      "case": "stage_49_hint_4942",
+      "error": "Script failed an OP_EQUALVERIFY operation",
+      "main_pc": 58484
+    },
+    {
+      "case": "stage_49_hint_4943",
+      "error": "Script failed an OP_EQUALVERIFY operation",
+      "main_pc": 58484
+    },
+    {
+      "case": "stage_51_hint_4944",
+      "error": "Script failed an OP_EQUALVERIFY operation",
+      "main_pc": 59024
+    },
+    {
+      "case": "stage_51_hint_4946",
+      "error": "Script failed an OP_EQUALVERIFY operation",
+      "main_pc": 59024
+    },
+    {
+      "case": "stage_51_hint_4947",
+      "error": "Script failed an OP_EQUALVERIFY operation",
+      "main_pc": 59024
+    },
+    {
+      "case": "stage_70_hint_4993",
+      "error": "Script failed an OP_EQUALVERIFY operation",
+      "main_pc": 64790
+    },
+    {
+      "case": "stage_70_hint_4948",
+      "error": "Script failed an OP_EQUALVERIFY operation",
+      "main_pc": 64437
+    },
+    {
+      "case": "stage_70_hint_5037",
+      "error": "Script failed an OP_EQUALVERIFY operation",
+      "main_pc": 65265
+    },
+    {
+      "case": "stage_71_hint_5056",
+      "error": "Script failed an OP_EQUALVERIFY operation",
+      "main_pc": 65663
+    },
+    {
+      "case": "stage_71_hint_5073",
+      "error": "Script failed an OP_EQUALVERIFY operation",
+      "main_pc": 65663
+    },
+    {
+      "case": "stage_71_hint_5038",
+      "error": "Script failed an OP_EQUALVERIFY operation",
+      "main_pc": 65426
+    },
+    {
+      "case": "stage_72_hint_5074",
+      "error": "Script failed an OP_EQUALVERIFY operation",
+      "main_pc": 66239
+    },
+    {
+      "case": "stage_72_hint_5093",
+      "error": "Script failed an OP_EQUALVERIFY operation",
+      "main_pc": 66239
+    },
+    {
+      "case": "stage_72_hint_5111",
+      "error": "Script failed an OP_EQUALVERIFY operation",
+      "main_pc": 66239
+    },
+    {
+      "case": "stage_75_hint_5112",
+      "error": "Script failed an OP_EQUALVERIFY operation",
+      "main_pc": 67510
+    },
+    {
+      "case": "stage_75_hint_5141",
+      "error": "Script failed an OP_EQUALVERIFY operation",
+      "main_pc": 67510
+    },
+    {
+      "case": "stage_75_hint_5127",
+      "error": "Script failed an OP_EQUALVERIFY operation",
+      "main_pc": 67510
+    },
+    {
+      "case": "stage_77_hint_5649",
+      "error": "Script failed an OP_EQUALVERIFY operation",
+      "main_pc": 72388
+    },
+    {
+      "case": "stage_77_hint_5396",
+      "error": "Script failed an OP_EQUALVERIFY operation",
+      "main_pc": 69988
+    },
+    {
+      "case": "stage_77_hint_5142",
+      "error": "Script failed an OP_EQUALVERIFY operation",
+      "main_pc": 68391
+    },
+    {
+      "case": "stage_78_hint_5657",
+      "error": "Script failed an OP_EQUALVERIFY operation",
+      "main_pc": 72875
+    },
+    {
+      "case": "stage_78_hint_5650",
+      "error": "Script failed an OP_EQUALVERIFY operation",
+      "main_pc": 72580
+    },
+    {
+      "case": "stage_78_hint_5654",
+      "error": "Script failed an OP_EQUALVERIFY operation",
+      "main_pc": 72777
+    },
+    {
+      "case": "stage_79_hint_5665",
+      "error": "Script failed an OP_EQUALVERIFY operation",
+      "main_pc": 73267
+    },
+    {
+      "case": "stage_79_hint_5658",
+      "error": "Script failed an OP_EQUALVERIFY operation",
+      "main_pc": 72973
+    },
+    {
+      "case": "stage_79_hint_5662",
+      "error": "Script failed an OP_EQUALVERIFY operation",
+      "main_pc": 73169
+    },
+    {
+      "case": "stage_80_hint_5673",
+      "error": "Script failed an OP_EQUALVERIFY operation",
+      "main_pc": 73659
+    },
+    {
+      "case": "stage_80_hint_5666",
+      "error": "Script failed an OP_EQUALVERIFY operation",
+      "main_pc": 73365
+    },
+    {
+      "case": "stage_80_hint_5670",
+      "error": "Script failed an OP_EQUALVERIFY operation",
+      "main_pc": 73561
+    },
+    {
+      "case": "stage_81_hint_5681",
+      "error": "Script failed an OP_EQUALVERIFY operation",
+      "main_pc": 74045
+    },
+    {
+      "case": "stage_81_hint_5674",
+      "error": "Script failed an OP_EQUALVERIFY operation",
+      "main_pc": 73757
+    },
+    {
+      "case": "stage_81_hint_5678",
+      "error": "Script failed an OP_EQUALVERIFY operation",
+      "main_pc": 73951
+    },
+    {
+      "case": "stage_83_hint_5682",
+      "error": "Script failed an OP_EQUALVERIFY operation",
+      "main_pc": 74521
+    },
+    {
+      "case": "stage_83_hint_5771",
+      "error": "Script failed an OP_EQUALVERIFY operation",
+      "main_pc": 75349
+    },
+    {
+      "case": "stage_83_hint_5727",
+      "error": "Script failed an OP_EQUALVERIFY operation",
+      "main_pc": 74874
+    },
+    {
+      "case": "stage_84_hint_5772",
+      "error": "Script failed an OP_EQUALVERIFY operation",
+      "main_pc": 75510
+    },
+    {
+      "case": "stage_84_hint_5790",
+      "error": "Script failed an OP_EQUALVERIFY operation",
+      "main_pc": 75747
+    },
+    {
+      "case": "stage_84_hint_5807",
+      "error": "Script failed an OP_EQUALVERIFY operation",
+      "main_pc": 75747
+    },
+    {
+      "case": "stage_85_hint_5808",
+      "error": "Script failed an OP_EQUALVERIFY operation",
+      "main_pc": 76323
+    },
+    {
+      "case": "stage_85_hint_5827",
+      "error": "Script failed an OP_EQUALVERIFY operation",
+      "main_pc": 76323
+    },
+    {
+      "case": "stage_85_hint_5845",
+      "error": "Script failed an OP_EQUALVERIFY operation",
+      "main_pc": 76323
+    },
+    {
+      "case": "stage_88_hint_5875",
+      "error": "Script failed an OP_EQUALVERIFY operation",
+      "main_pc": 77594
+    },
+    {
+      "case": "stage_88_hint_5861",
+      "error": "Script failed an OP_EQUALVERIFY operation",
+      "main_pc": 77594
+    },
+    {
+      "case": "stage_88_hint_5846",
+      "error": "Script failed an OP_EQUALVERIFY operation",
+      "main_pc": 77594
+    },
+    {
+      "case": "stage_90_hint_6130",
+      "error": "Script failed an OP_EQUALVERIFY operation",
+      "main_pc": 80072
+    },
+    {
+      "case": "stage_90_hint_5876",
+      "error": "Script failed an OP_EQUALVERIFY operation",
+      "main_pc": 78475
+    },
+    {
+      "case": "stage_90_hint_6383",
+      "error": "Script failed an OP_EQUALVERIFY operation",
+      "main_pc": 82472
+    },
+    {
+      "case": "stage_91_hint_6384",
+      "error": "Script failed an OP_EQUALVERIFY operation",
+      "main_pc": 82664
+    },
+    {
+      "case": "stage_91_hint_6388",
+      "error": "Script failed an OP_EQUALVERIFY operation",
+      "main_pc": 82861
+    },
+    {
+      "case": "stage_91_hint_6391",
+      "error": "Script failed an OP_EQUALVERIFY operation",
+      "main_pc": 82959
+    },
+    {
+      "case": "stage_92_hint_6392",
+      "error": "Script failed an OP_EQUALVERIFY operation",
+      "main_pc": 83057
+    },
+    {
+      "case": "stage_92_hint_6396",
+      "error": "Script failed an OP_EQUALVERIFY operation",
+      "main_pc": 83253
+    },
+    {
+      "case": "stage_92_hint_6399",
+      "error": "Script failed an OP_EQUALVERIFY operation",
+      "main_pc": 83351
+    },
+    {
+      "case": "stage_93_hint_6400",
+      "error": "Script failed an OP_EQUALVERIFY operation",
+      "main_pc": 83449
+    },
+    {
+      "case": "stage_93_hint_6404",
+      "error": "Script failed an OP_EQUALVERIFY operation",
+      "main_pc": 83645
+    },
+    {
+      "case": "stage_93_hint_6407",
+      "error": "Script failed an OP_EQUALVERIFY operation",
+      "main_pc": 83743
+    },
+    {
+      "case": "stage_94_hint_6408",
+      "error": "Script failed an OP_EQUALVERIFY operation",
+      "main_pc": 83841
+    },
+    {
+      "case": "stage_94_hint_6412",
+      "error": "Script failed an OP_EQUALVERIFY operation",
+      "main_pc": 84035
+    },
+    {
+      "case": "stage_94_hint_6415",
+      "error": "Script failed an OP_EQUALVERIFY operation",
+      "main_pc": 84129
+    },
+    {
+      "case": "stage_96_hint_6416",
+      "error": "Script failed an OP_EQUALVERIFY operation",
+      "main_pc": 84605
+    },
+    {
+      "case": "stage_96_hint_6505",
+      "error": "Script failed an OP_EQUALVERIFY operation",
+      "main_pc": 85433
+    },
+    {
+      "case": "stage_96_hint_6461",
+      "error": "Script failed an OP_EQUALVERIFY operation",
+      "main_pc": 84958
+    },
+    {
+      "case": "stage_97_hint_6506",
+      "error": "Script failed an OP_EQUALVERIFY operation",
+      "main_pc": 85594
+    },
+    {
+      "case": "stage_97_hint_6524",
+      "error": "Script failed an OP_EQUALVERIFY operation",
+      "main_pc": 85831
+    },
+    {
+      "case": "stage_97_hint_6541",
+      "error": "Script failed an OP_EQUALVERIFY operation",
+      "main_pc": 85831
+    },
+    {
+      "case": "stage_98_hint_6561",
+      "error": "Script failed an OP_EQUALVERIFY operation",
+      "main_pc": 86407
+    },
+    {
+      "case": "stage_98_hint_6579",
+      "error": "Script failed an OP_EQUALVERIFY operation",
+      "main_pc": 86407
+    },
+    {
+      "case": "stage_98_hint_6542",
+      "error": "Script failed an OP_EQUALVERIFY operation",
+      "main_pc": 86407
+    },
+    {
+      "case": "stage_101_hint_6609",
+      "error": "Script failed an OP_EQUALVERIFY operation",
+      "main_pc": 87678
+    },
+    {
+      "case": "stage_101_hint_6595",
+      "error": "Script failed an OP_EQUALVERIFY operation",
+      "main_pc": 87678
+    },
+    {
+      "case": "stage_101_hint_6580",
+      "error": "Script failed an OP_EQUALVERIFY operation",
+      "main_pc": 87678
+    },
+    {
+      "case": "stage_103_hint_6864",
+      "error": "Script failed an OP_EQUALVERIFY operation",
+      "main_pc": 90156
+    },
+    {
+      "case": "stage_103_hint_6610",
+      "error": "Script failed an OP_EQUALVERIFY operation",
+      "main_pc": 88559
+    },
+    {
+      "case": "stage_103_hint_7117",
+      "error": "Script failed an OP_EQUALVERIFY operation",
+      "main_pc": 92556
+    },
+    {
+      "case": "stage_104_hint_7122",
+      "error": "Script failed an OP_EQUALVERIFY operation",
+      "main_pc": 92945
+    },
+    {
+      "case": "stage_104_hint_7125",
+      "error": "Script failed an OP_EQUALVERIFY operation",
+      "main_pc": 93043
+    },
+    {
+      "case": "stage_104_hint_7118",
+      "error": "Script failed an OP_EQUALVERIFY operation",
+      "main_pc": 92748
+    },
+    {
+      "case": "stage_105_hint_7130",
+      "error": "Script failed an OP_EQUALVERIFY operation",
+      "main_pc": 93337
+    },
+    {
+      "case": "stage_105_hint_7133",
+      "error": "Script failed an OP_EQUALVERIFY operation",
+      "main_pc": 93435
+    },
+    {
+      "case": "stage_105_hint_7126",
+      "error": "Script failed an OP_EQUALVERIFY operation",
+      "main_pc": 93141
+    },
+    {
+      "case": "stage_106_hint_7138",
+      "error": "Script failed an OP_EQUALVERIFY operation",
+      "main_pc": 93729
+    },
+    {
+      "case": "stage_106_hint_7141",
+      "error": "Script failed an OP_EQUALVERIFY operation",
+      "main_pc": 93827
+    },
+    {
+      "case": "stage_106_hint_7134",
+      "error": "Script failed an OP_EQUALVERIFY operation",
+      "main_pc": 93533
+    },
+    {
+      "case": "stage_107_hint_7146",
+      "error": "Script failed an OP_EQUALVERIFY operation",
+      "main_pc": 94119
+    },
+    {
+      "case": "stage_107_hint_7149",
+      "error": "Script failed an OP_EQUALVERIFY operation",
+      "main_pc": 94213
+    },
+    {
+      "case": "stage_107_hint_7142",
+      "error": "Script failed an OP_EQUALVERIFY operation",
+      "main_pc": 93925
+    },
+    {
+      "case": "stage_109_hint_7195",
+      "error": "Script failed an OP_EQUALVERIFY operation",
+      "main_pc": 95042
+    },
+    {
+      "case": "stage_109_hint_7150",
+      "error": "Script failed an OP_EQUALVERIFY operation",
+      "main_pc": 94689
+    },
+    {
+      "case": "stage_109_hint_7239",
+      "error": "Script failed an OP_EQUALVERIFY operation",
+      "main_pc": 95517
+    },
+    {
+      "case": "stage_110_hint_7240",
+      "error": "Script failed an OP_EQUALVERIFY operation",
+      "main_pc": 95678
+    },
+    {
+      "case": "stage_110_hint_7258",
+      "error": "Script failed an OP_EQUALVERIFY operation",
+      "main_pc": 95915
+    },
+    {
+      "case": "stage_110_hint_7275",
+      "error": "Script failed an OP_EQUALVERIFY operation",
+      "main_pc": 95915
+    },
+    {
+      "case": "stage_111_hint_7313",
+      "error": "Script failed an OP_EQUALVERIFY operation",
+      "main_pc": 96491
+    },
+    {
+      "case": "stage_111_hint_7276",
+      "error": "Script failed an OP_EQUALVERIFY operation",
+      "main_pc": 96491
+    },
+    {
+      "case": "stage_111_hint_7295",
+      "error": "Script failed an OP_EQUALVERIFY operation",
+      "main_pc": 96491
+    },
+    {
+      "case": "stage_114_hint_7329",
+      "error": "Script failed an OP_EQUALVERIFY operation",
+      "main_pc": 97762
+    },
+    {
+      "case": "stage_114_hint_7314",
+      "error": "Script failed an OP_EQUALVERIFY operation",
+      "main_pc": 97762
+    },
+    {
+      "case": "stage_114_hint_7343",
+      "error": "Script failed an OP_EQUALVERIFY operation",
+      "main_pc": 97762
+    },
+    {
+      "case": "stage_116_hint_7344",
+      "error": "Script failed an OP_EQUALVERIFY operation",
+      "main_pc": 98643
+    },
+    {
+      "case": "stage_116_hint_7851",
+      "error": "Script failed an OP_EQUALVERIFY operation",
+      "main_pc": 102640
+    },
+    {
+      "case": "stage_116_hint_7598",
+      "error": "Script failed an OP_EQUALVERIFY operation",
+      "main_pc": 100240
+    },
+    {
+      "case": "stage_117_hint_7856",
+      "error": "Script failed an OP_EQUALVERIFY operation",
+      "main_pc": 103029
+    },
+    {
+      "case": "stage_117_hint_7859",
+      "error": "Script failed an OP_EQUALVERIFY operation",
+      "main_pc": 103127
+    },
+    {
+      "case": "stage_117_hint_7852",
+      "error": "Script failed an OP_EQUALVERIFY operation",
+      "main_pc": 102832
+    },
+    {
+      "case": "stage_118_hint_7864",
+      "error": "Script failed an OP_EQUALVERIFY operation",
+      "main_pc": 103421
+    },
+    {
+      "case": "stage_118_hint_7867",
+      "error": "Script failed an OP_EQUALVERIFY operation",
+      "main_pc": 103519
+    },
+    {
+      "case": "stage_118_hint_7860",
+      "error": "Script failed an OP_EQUALVERIFY operation",
+      "main_pc": 103225
+    },
+    {
+      "case": "stage_119_hint_7872",
+      "error": "Script failed an OP_EQUALVERIFY operation",
+      "main_pc": 103813
+    },
+    {
+      "case": "stage_119_hint_7875",
+      "error": "Script failed an OP_EQUALVERIFY operation",
+      "main_pc": 103911
+    },
+    {
+      "case": "stage_119_hint_7868",
+      "error": "Script failed an OP_EQUALVERIFY operation",
+      "main_pc": 103617
+    },
+    {
+      "case": "stage_120_hint_7880",
+      "error": "Script failed an OP_EQUALVERIFY operation",
+      "main_pc": 104203
+    },
+    {
+      "case": "stage_120_hint_7883",
+      "error": "Script failed an OP_EQUALVERIFY operation",
+      "main_pc": 104297
+    },
+    {
+      "case": "stage_120_hint_7876",
+      "error": "Script failed an OP_EQUALVERIFY operation",
+      "main_pc": 104009
+    },
+    {
+      "case": "stage_122_hint_7929",
+      "error": "Script failed an OP_EQUALVERIFY operation",
+      "main_pc": 105126
+    },
+    {
+      "case": "stage_122_hint_7884",
+      "error": "Script failed an OP_EQUALVERIFY operation",
+      "main_pc": 104773
+    },
+    {
+      "case": "stage_122_hint_7973",
+      "error": "Script failed an OP_EQUALVERIFY operation",
+      "main_pc": 105601
+    },
+    {
+      "case": "stage_123_hint_7992",
+      "error": "Script failed an OP_EQUALVERIFY operation",
+      "main_pc": 105999
+    },
+    {
+      "case": "stage_123_hint_8009",
+      "error": "Script failed an OP_EQUALVERIFY operation",
+      "main_pc": 105999
+    },
+    {
+      "case": "stage_123_hint_7974",
+      "error": "Script failed an OP_EQUALVERIFY operation",
+      "main_pc": 105762
+    },
+    {
+      "case": "stage_124_hint_8010",
+      "error": "Script failed an OP_EQUALVERIFY operation",
+      "main_pc": 106575
+    },
+    {
+      "case": "stage_124_hint_8029",
+      "error": "Script failed an OP_EQUALVERIFY operation",
+      "main_pc": 106575
+    },
+    {
+      "case": "stage_124_hint_8047",
+      "error": "Script failed an OP_EQUALVERIFY operation",
+      "main_pc": 106575
+    },
+    {
+      "case": "stage_127_hint_8048",
+      "error": "Script failed an OP_EQUALVERIFY operation",
+      "main_pc": 107846
+    },
+    {
+      "case": "stage_127_hint_8077",
+      "error": "Script failed an OP_EQUALVERIFY operation",
+      "main_pc": 107846
+    },
+    {
+      "case": "stage_127_hint_8063",
+      "error": "Script failed an OP_EQUALVERIFY operation",
+      "main_pc": 107846
+    },
+    {
+      "case": "stage_129_hint_8585",
+      "error": "Script failed an OP_EQUALVERIFY operation",
+      "main_pc": 112724
+    },
+    {
+      "case": "stage_129_hint_8332",
+      "error": "Script failed an OP_EQUALVERIFY operation",
+      "main_pc": 110324
+    },
+    {
+      "case": "stage_129_hint_8078",
+      "error": "Script failed an OP_EQUALVERIFY operation",
+      "main_pc": 108727
+    },
+    {
+      "case": "stage_130_hint_8593",
+      "error": "Script failed an OP_EQUALVERIFY operation",
+      "main_pc": 113211
+    },
+    {
+      "case": "stage_130_hint_8586",
+      "error": "Script failed an OP_EQUALVERIFY operation",
+      "main_pc": 112916
+    },
+    {
+      "case": "stage_130_hint_8590",
+      "error": "Script failed an OP_EQUALVERIFY operation",
+      "main_pc": 113113
+    },
+    {
+      "case": "stage_131_hint_8601",
+      "error": "Script failed an OP_EQUALVERIFY operation",
+      "main_pc": 113603
+    },
+    {
+      "case": "stage_131_hint_8594",
+      "error": "Script failed an OP_EQUALVERIFY operation",
+      "main_pc": 113309
+    },
+    {
+      "case": "stage_131_hint_8598",
+      "error": "Script failed an OP_EQUALVERIFY operation",
+      "main_pc": 113505
+    },
+    {
+      "case": "stage_132_hint_8609",
+      "error": "Script failed an OP_EQUALVERIFY operation",
+      "main_pc": 113995
+    },
+    {
+      "case": "stage_132_hint_8602",
+      "error": "Script failed an OP_EQUALVERIFY operation",
+      "main_pc": 113701
+    },
+    {
+      "case": "stage_132_hint_8606",
+      "error": "Script failed an OP_EQUALVERIFY operation",
+      "main_pc": 113897
+    },
+    {
+      "case": "stage_133_hint_8617",
+      "error": "Script failed an OP_EQUALVERIFY operation",
+      "main_pc": 114381
+    },
+    {
+      "case": "stage_133_hint_8610",
+      "error": "Script failed an OP_EQUALVERIFY operation",
+      "main_pc": 114093
+    },
+    {
+      "case": "stage_133_hint_8614",
+      "error": "Script failed an OP_EQUALVERIFY operation",
+      "main_pc": 114287
+    },
+    {
+      "case": "stage_135_hint_8618",
+      "error": "Script failed an OP_EQUALVERIFY operation",
+      "main_pc": 114857
+    },
+    {
+      "case": "stage_135_hint_8707",
+      "error": "Script failed an OP_EQUALVERIFY operation",
+      "main_pc": 115685
+    },
+    {
+      "case": "stage_135_hint_8663",
+      "error": "Script failed an OP_EQUALVERIFY operation",
+      "main_pc": 115210
+    },
+    {
+      "case": "stage_136_hint_8708",
+      "error": "Script failed an OP_EQUALVERIFY operation",
+      "main_pc": 115846
+    },
+    {
+      "case": "stage_136_hint_8726",
+      "error": "Script failed an OP_EQUALVERIFY operation",
+      "main_pc": 116083
+    },
+    {
+      "case": "stage_136_hint_8743",
+      "error": "Script failed an OP_EQUALVERIFY operation",
+      "main_pc": 116083
+    },
+    {
+      "case": "stage_137_hint_8744",
+      "error": "Script failed an OP_EQUALVERIFY operation",
+      "main_pc": 116659
+    },
+    {
+      "case": "stage_137_hint_8763",
+      "error": "Script failed an OP_EQUALVERIFY operation",
+      "main_pc": 116659
+    },
+    {
+      "case": "stage_137_hint_8781",
+      "error": "Script failed an OP_EQUALVERIFY operation",
+      "main_pc": 116659
+    },
+    {
+      "case": "stage_140_hint_8811",
+      "error": "Script failed an OP_EQUALVERIFY operation",
+      "main_pc": 117930
+    },
+    {
+      "case": "stage_140_hint_8797",
+      "error": "Script failed an OP_EQUALVERIFY operation",
+      "main_pc": 117930
+    },
+    {
+      "case": "stage_140_hint_8782",
+      "error": "Script failed an OP_EQUALVERIFY operation",
+      "main_pc": 117930
+    },
+    {
+      "case": "stage_142_hint_9066",
+      "error": "Script failed an OP_EQUALVERIFY operation",
+      "main_pc": 120408
+    },
+    {
+      "case": "stage_142_hint_8812",
+      "error": "Script failed an OP_EQUALVERIFY operation",
+      "main_pc": 118811
+    },
+    {
+      "case": "stage_142_hint_9319",
+      "error": "Script failed an OP_EQUALVERIFY operation",
+      "main_pc": 122808
+    },
+    {
+      "case": "stage_143_hint_9320",
+      "error": "Script failed an OP_EQUALVERIFY operation",
+      "main_pc": 123000
+    },
+    {
+      "case": "stage_143_hint_9324",
+      "error": "Script failed an OP_EQUALVERIFY operation",
+      "main_pc": 123197
+    },
+    {
+      "case": "stage_143_hint_9327",
+      "error": "Script failed an OP_EQUALVERIFY operation",
+      "main_pc": 123295
+    },
+    {
+      "case": "stage_144_hint_9328",
+      "error": "Script failed an OP_EQUALVERIFY operation",
+      "main_pc": 123393
+    },
+    {
+      "case": "stage_144_hint_9332",
+      "error": "Script failed an OP_EQUALVERIFY operation",
+      "main_pc": 123589
+    },
+    {
+      "case": "stage_144_hint_9335",
+      "error": "Script failed an OP_EQUALVERIFY operation",
+      "main_pc": 123687
+    },
+    {
+      "case": "stage_145_hint_9336",
+      "error": "Script failed an OP_EQUALVERIFY operation",
+      "main_pc": 123785
+    },
+    {
+      "case": "stage_145_hint_9340",
+      "error": "Script failed an OP_EQUALVERIFY operation",
+      "main_pc": 123981
+    },
+    {
+      "case": "stage_145_hint_9343",
+      "error": "Script failed an OP_EQUALVERIFY operation",
+      "main_pc": 124079
+    },
+    {
+      "case": "stage_146_hint_9344",
+      "error": "Script failed an OP_EQUALVERIFY operation",
+      "main_pc": 124177
+    },
+    {
+      "case": "stage_146_hint_9348",
+      "error": "Script failed an OP_EQUALVERIFY operation",
+      "main_pc": 124371
+    },
+    {
+      "case": "stage_146_hint_9351",
+      "error": "Script failed an OP_EQUALVERIFY operation",
+      "main_pc": 124465
+    },
+    {
+      "case": "stage_148_hint_9352",
+      "error": "Script failed an OP_EQUALVERIFY operation",
+      "main_pc": 124941
+    },
+    {
+      "case": "stage_148_hint_9441",
+      "error": "Script failed an OP_EQUALVERIFY operation",
+      "main_pc": 125769
+    },
+    {
+      "case": "stage_148_hint_9397",
+      "error": "Script failed an OP_EQUALVERIFY operation",
+      "main_pc": 125294
+    },
+    {
+      "case": "stage_149_hint_9442",
+      "error": "Script failed an OP_EQUALVERIFY operation",
+      "main_pc": 125930
+    },
+    {
+      "case": "stage_149_hint_9460",
+      "error": "Script failed an OP_EQUALVERIFY operation",
+      "main_pc": 126167
+    },
+    {
+      "case": "stage_149_hint_9477",
+      "error": "Script failed an OP_EQUALVERIFY operation",
+      "main_pc": 126167
+    },
+    {
+      "case": "stage_150_hint_9497",
+      "error": "Script failed an OP_EQUALVERIFY operation",
+      "main_pc": 126743
+    },
+    {
+      "case": "stage_150_hint_9515",
+      "error": "Script failed an OP_EQUALVERIFY operation",
+      "main_pc": 126743
+    },
+    {
+      "case": "stage_150_hint_9478",
+      "error": "Script failed an OP_EQUALVERIFY operation",
+      "main_pc": 126743
+    },
+    {
+      "case": "stage_153_hint_9545",
+      "error": "Script failed an OP_EQUALVERIFY operation",
+      "main_pc": 128014
+    },
+    {
+      "case": "stage_153_hint_9531",
+      "error": "Script failed an OP_EQUALVERIFY operation",
+      "main_pc": 128014
+    },
+    {
+      "case": "stage_153_hint_9516",
+      "error": "Script failed an OP_EQUALVERIFY operation",
+      "main_pc": 128014
+    },
+    {
+      "case": "stage_155_hint_9800",
+      "error": "Script failed an OP_EQUALVERIFY operation",
+      "main_pc": 130492
+    },
+    {
+      "case": "stage_155_hint_9546",
+      "error": "Script failed an OP_EQUALVERIFY operation",
+      "main_pc": 128895
+    },
+    {
+      "case": "stage_155_hint_10053",
+      "error": "Script failed an OP_EQUALVERIFY operation",
+      "main_pc": 132892
+    },
+    {
+      "case": "stage_156_hint_10058",
+      "error": "Script failed an OP_EQUALVERIFY operation",
+      "main_pc": 133281
+    },
+    {
+      "case": "stage_156_hint_10061",
+      "error": "Script failed an OP_EQUALVERIFY operation",
+      "main_pc": 133379
+    },
+    {
+      "case": "stage_156_hint_10054",
+      "error": "Script failed an OP_EQUALVERIFY operation",
+      "main_pc": 133084
+    },
+    {
+      "case": "stage_157_hint_10066",
+      "error": "Script failed an OP_EQUALVERIFY operation",
+      "main_pc": 133673
+    },
+    {
+      "case": "stage_157_hint_10069",
+      "error": "Script failed an OP_EQUALVERIFY operation",
+      "main_pc": 133771
+    },
+    {
+      "case": "stage_157_hint_10062",
+      "error": "Script failed an OP_EQUALVERIFY operation",
+      "main_pc": 133477
+    },
+    {
+      "case": "stage_158_hint_10074",
+      "error": "Script failed an OP_EQUALVERIFY operation",
+      "main_pc": 134065
+    },
+    {
+      "case": "stage_158_hint_10077",
+      "error": "Script failed an OP_EQUALVERIFY operation",
+      "main_pc": 134163
+    },
+    {
+      "case": "stage_158_hint_10070",
+      "error": "Script failed an OP_EQUALVERIFY operation",
+      "main_pc": 133869
+    },
+    {
+      "case": "stage_159_hint_10082",
+      "error": "Script failed an OP_EQUALVERIFY operation",
+      "main_pc": 134455
+    },
+    {
+      "case": "stage_159_hint_10085",
+      "error": "Script failed an OP_EQUALVERIFY operation",
+      "main_pc": 134549
+    },
+    {
+      "case": "stage_159_hint_10078",
+      "error": "Script failed an OP_EQUALVERIFY operation",
+      "main_pc": 134261
+    },
+    {
+      "case": "stage_161_hint_10131",
+      "error": "Script failed an OP_EQUALVERIFY operation",
+      "main_pc": 135378
+    },
+    {
+      "case": "stage_161_hint_10086",
+      "error": "Script failed an OP_EQUALVERIFY operation",
+      "main_pc": 135025
+    },
+    {
+      "case": "stage_161_hint_10175",
+      "error": "Script failed an OP_EQUALVERIFY operation",
+      "main_pc": 135853
+    },
+    {
+      "case": "stage_162_hint_10176",
+      "error": "Script failed an OP_EQUALVERIFY operation",
+      "main_pc": 136014
+    },
+    {
+      "case": "stage_162_hint_10194",
+      "error": "Script failed an OP_EQUALVERIFY operation",
+      "main_pc": 136251
+    },
+    {
+      "case": "stage_162_hint_10211",
+      "error": "Script failed an OP_EQUALVERIFY operation",
+      "main_pc": 136251
+    },
+    {
+      "case": "stage_163_hint_10249",
+      "error": "Script failed an OP_EQUALVERIFY operation",
+      "main_pc": 136890
+    },
+    {
+      "case": "stage_163_hint_10212",
+      "error": "Script failed an OP_EQUALVERIFY operation",
+      "main_pc": 136890
+    },
+    {
+      "case": "stage_163_hint_10231",
+      "error": "Script failed an OP_EQUALVERIFY operation",
+      "main_pc": 136890
+    },
+    {
+      "case": "stage_166_hint_10265",
+      "error": "Script failed an OP_EQUALVERIFY operation",
+      "main_pc": 138315
+    },
+    {
+      "case": "stage_166_hint_10250",
+      "error": "Script failed an OP_EQUALVERIFY operation",
+      "main_pc": 138315
+    },
+    {
+      "case": "stage_166_hint_10279",
+      "error": "Script failed an OP_EQUALVERIFY operation",
+      "main_pc": 138315
+    },
+    {
+      "case": "stage_168_hint_10280",
+      "error": "Script failed an OP_EQUALVERIFY operation",
+      "main_pc": 139230
+    },
+    {
+      "case": "stage_168_hint_10787",
+      "error": "Script failed an OP_EQUALVERIFY operation",
+      "main_pc": 143191
+    },
+    {
+      "case": "stage_168_hint_10534",
+      "error": "Script failed an OP_EQUALVERIFY operation",
+      "main_pc": 140814
+    },
+    {
+      "case": "stage_169_hint_10792",
+      "error": "Script failed an OP_EQUALVERIFY operation",
+      "main_pc": 143582
+    },
+    {
+      "case": "stage_169_hint_10795",
+      "error": "Script failed an OP_EQUALVERIFY operation",
+      "main_pc": 143676
+    },
+    {
+      "case": "stage_169_hint_10788",
+      "error": "Script failed an OP_EQUALVERIFY operation",
+      "main_pc": 143393
+    },
+    {
+      "case": "stage_170_hint_10800",
+      "error": "Script failed an OP_EQUALVERIFY operation",
+      "main_pc": 143958
+    },
+    {
+      "case": "stage_170_hint_10803",
+      "error": "Script failed an OP_EQUALVERIFY operation",
+      "main_pc": 144052
+    },
+    {
+      "case": "stage_170_hint_10796",
+      "error": "Script failed an OP_EQUALVERIFY operation",
+      "main_pc": 143770
+    },
+    {
+      "case": "stage_171_hint_10808",
+      "error": "Script failed an OP_EQUALVERIFY operation",
+      "main_pc": 144335
+    },
+    {
+      "case": "stage_171_hint_10811",
+      "error": "Script failed an OP_EQUALVERIFY operation",
+      "main_pc": 144429
+    },
+    {
+      "case": "stage_171_hint_10804",
+      "error": "Script failed an OP_EQUALVERIFY operation",
+      "main_pc": 144147
+    },
+    {
+      "case": "stage_172_hint_10816",
+      "error": "Script failed an OP_EQUALVERIFY operation",
+      "main_pc": 144709
+    },
+    {
+      "case": "stage_172_hint_10819",
+      "error": "Script failed an OP_EQUALVERIFY operation",
+      "main_pc": 144799
+    },
+    {
+      "case": "stage_172_hint_10812",
+      "error": "Script failed an OP_EQUALVERIFY operation",
+      "main_pc": 144523
+    },
+    {
+      "case": "noncanonical_field_2",
+      "error": "Script failed an OP_VERIFY operation",
+      "main_pc": 6058
+    },
+    {
+      "case": "oversized_field_2",
+      "error": "Script failed an OP_VERIFY operation",
+      "main_pc": 6058
+    },
+    {
+      "case": "noncanonical_field_4826",
+      "error": "Script failed an OP_VERIFY operation",
+      "main_pc": 54679
+    },
+    {
+      "case": "oversized_field_4826",
+      "error": "Script failed an OP_VERIFY operation",
+      "main_pc": 54679
+    },
+    {
+      "case": "noncanonical_field_10819",
+      "error": "Script failed an OP_VERIFY operation",
+      "main_pc": 144785
+    },
+    {
+      "case": "oversized_field_10819",
+      "error": "Script failed an OP_VERIFY operation",
+      "main_pc": 144785
+    },
+    {
+      "case": "truncated_section_0",
+      "error": "Script failed an OP_EQUALVERIFY operation",
+      "main_pc": 5928
+    },
+    {
+      "case": "surplus_section_byte_0",
+      "error": "Script failed an OP_EQUALVERIFY operation",
+      "main_pc": 5928
+    },
+    {
+      "case": "truncated_section_28",
+      "error": "Script failed an OP_EQUALVERIFY operation",
+      "main_pc": 74155
+    },
+    {
+      "case": "surplus_section_byte_28",
+      "error": "Script failed an OP_EQUALVERIFY operation",
+      "main_pc": 74155
+    },
+    {
+      "case": "truncated_section_55",
+      "error": "Script failed an OP_EQUALVERIFY operation",
+      "main_pc": 141247
+    },
+    {
+      "case": "surplus_section_byte_55",
+      "error": "Script failed an OP_EQUALVERIFY operation",
+      "main_pc": 141247
+    },
+    {
+      "case": "surplus_witness_element",
+      "error": "Script failed an OP_EQUALVERIFY operation",
+      "main_pc": 144904
+    },
+    {
+      "case": "missing_witness_element",
+      "error": "Script failed an OP_EQUALVERIFY operation",
+      "main_pc": 141247
+    },
+    {
+      "case": "hybrid_incorrect_expected_circuit_commitment",
+      "error": "Script failed an OP_EQUALVERIFY operation",
+      "main_pc": 5967
+    },
+    {
+      "case": "final_incorrect_expected_circuit_commitment",
+      "error": "Script failed an OP_EQUALVERIFY operation",
+      "main_pc": 39518
+    },
+    {
+      "case": "incorrect_basis_public_input",
+      "error": "Script failed an OP_EQUALVERIFY operation",
+      "main_pc": 39628
+    }
+  ],
+  "scope": "Post-preparation mutations; Core executes the verifier for each case."
+}

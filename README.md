@@ -44,6 +44,7 @@ See the [Recursive Stwo build and usage instructions](recursive-stwo/README.md),
 These describe candidate systems and measurements, not implemented verifiers.
 
 - [`next-verifiers.md`](next-verifiers.md) — priced GSR cost model for candidate primitives, and the resulting ranking of which verifier to add next.
+- [`openvm-measurement.md`](openvm-measurement.md) — measured proof bytes and Poseidon2 verifier cost of a real OpenVM v2.0.2 aggregated proof, priced against a standard spend.
 - [`potential-starks.md`](potential-starks.md) — survey of candidate STARK and post-quantum proof systems against GSR limits.
 - [`recursive-proof-system-decision.md`](recursive-proof-system-decision.md) — the recorded choice of OpenVM for the next recursive computation stack.
 - [`gsr-opcodes.md`](gsr-opcodes.md) — the opcodes GSR adds and restores.

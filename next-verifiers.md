@@ -50,11 +50,11 @@ One detail decides whether the priced SHA-256 row applies. `p3-sha256` exposes b
 
 Acceptance: a Plonky3 STARK whose commitment scheme and Fiat-Shamir transcript are the padded SHA-256 throughout, verifying a fixed inner statement, with a raw canonical proof under 200 KB and a query count and blowup chosen at a stated security level. This cannot be obtained by substituting hash calls in an already-serialized proof; it is a different proving configuration and has to be proved that way. Caveat: generic Plonky3 recursion is less mature than the vendor-maintained recursion in OpenVM or RISC Zero, and is unaudited.
 
-### 2. OpenVM v2.0.2, SWIRL/WHIR — keep it, but measure the stock profile first
+### 2. OpenVM v2.0.2, SWIRL/WHIR — measured, and blocked on item 1
 
 The existing decision to target OpenVM stands. It is the only candidate that combines a maintained multi-level recursive aggregation pipeline, a transparent hash-based commitment, and WHIR, whose whole point is a small proof and a low query count. Its verifier algebra is BabyBear with a degree-four extension, which the second finding above says is cheap.
 
-The risk is entirely in the hash. Stock OpenVM commits with Poseidon2 over BabyBear at width 16, and the table gives about 92 affordable permutations in a maximal spend. The first experiment should therefore be cheap and decisive: produce one real multi-segment proof with at least two aggregation levels, count its Poseidon2 permutations and its raw canonical proof bytes, and compare against 92 and against 250 KB. Either result is useful — it either clears OpenVM for a direct port or converts item 1 from a recommendation into a hard dependency.
+The risk is entirely in the hash, and that risk has now been measured rather than modelled. [`openvm-measurement.md`](openvm-measurement.md) records a real 35-segment proof with two aggregation levels above the leaf layer: 315,319 raw canonical bytes, and 14,737 Poseidon2 permutations in the host verifier, against the 92 this table affords. That is 40x a maximal standard spend on the primitive lower bound and 161x after the overhead factor, so item 1 is a hard dependency for OpenVM. The same proof shape verified with padded SHA-256 parents would spend 8.8% of the budget instead, which leaves proof size as the binding constraint: 315 KB of witness already consumes 79% of a 400,000 WU spend.
 
 Acceptance criteria for the eventual port are unchanged from [`recursive-proof-system-decision.md`](recursive-proof-system-decision.md): bind public values, executable identity, successful termination, the aggregation verifying keys, recursion metadata and a trusted baseline, then serialize and execute the complete spend under activated GSR rules within 400,000 WU. Note that OpenVM's documented security profile is about 100 bits and must not be relabelled as 128-bit.
 
@@ -112,4 +112,4 @@ A post-quantum proof inside a Tapscript v2 leaf does not make the spend post-qua
 
 ## Recommendation
 
-Do item 2's measurement first, because it is a few days of proving and counting and it determines whether item 1 is a nice-to-have or a hard dependency for everything general-purpose. Do item 1 next if the count comes back above the affordable range, which the model says it will. Start the item 3 feasibility study in parallel, since it shares no code with the rest and its proof-size claim is the only one on the list that would comfortably fit a complete spend.
+Item 2's measurement is done and is recorded in [`openvm-measurement.md`](openvm-measurement.md): the count came back 40x to 161x above the affordable range, so item 1 is a hard dependency and is now the next piece of work, with the proof-size target it has to hit set by that measurement. Start the item 3 feasibility study in parallel, since it shares no code with the rest and its proof-size claim is the only one on the list that would comfortably fit a complete spend.

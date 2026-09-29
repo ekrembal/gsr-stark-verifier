@@ -1,0 +1,22 @@
+diff --git a/poseidon2/src/lib.rs b/poseidon2/src/lib.rs
+index e4b1ebe..b1d56a1 100644
+--- a/poseidon2/src/lib.rs
++++ b/poseidon2/src/lib.rs
+@@ -26,6 +26,9 @@ pub use round_numbers::poseidon2_round_numbers_128;
+ 
+ const SUPPORTED_WIDTHS: [usize; 8] = [2, 3, 4, 8, 12, 16, 20, 24];
+ 
++/// Instrumentation for GSR cost research: counts every Poseidon2 permutation.
++pub static PERMUTE_COUNT: core::sync::atomic::AtomicU64 = core::sync::atomic::AtomicU64::new(0);
++
+ /// The Poseidon2 permutation.
+ #[derive(Clone, Debug)]
+ pub struct Poseidon2<F, ExternalPerm, InternalPerm, const WIDTH: usize, const D: u64> {
+@@ -105,6 +108,7 @@ where
+     InternalPerm: InternalLayer<A, WIDTH, D>,
+ {
+     fn permute_mut(&self, state: &mut [A; WIDTH]) {
++        PERMUTE_COUNT.fetch_add(1, core::sync::atomic::Ordering::Relaxed);
+         self.external_layer.permute_state_initial(state);
+         self.internal_layer.permute_state(state);
+         self.external_layer.permute_state_terminal(state);

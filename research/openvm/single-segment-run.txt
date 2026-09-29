@@ -1,0 +1,11 @@
+prove took 51.305444414s
+internal recursive layer : 2, node idx 2
+fib n                    : 100
+raw canonical proof bytes: 267271
+zstd-compressed bytes    : 232534
+inner proof airs         : 42
+user pvs                 : 32
+verify took              : 15.154127ms
+poseidon2 permutations   : 13643
+  of which pvs/merkle    : 39
+  of which stark verify  : 13604

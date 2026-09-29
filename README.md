@@ -39,6 +39,15 @@ The current milestone uses the original `hybrid_hash.bin` and `bitcoin_proof.bin
 
 See the [Recursive Stwo build and usage instructions](recursive-stwo/README.md), [machine-readable cost report](recursive-stwo/reports/cost-report.json), and [regtest acceptance evidence](recursive-stwo/reports/regtest-acceptance.json).
 
+## Research notes
+
+These describe candidate systems and measurements, not implemented verifiers.
+
+- [`next-verifiers.md`](next-verifiers.md) — priced GSR cost model for candidate primitives, and the resulting ranking of which verifier to add next.
+- [`potential-starks.md`](potential-starks.md) — survey of candidate STARK and post-quantum proof systems against GSR limits.
+- [`recursive-proof-system-decision.md`](recursive-proof-system-decision.md) — the recorded choice of OpenVM for the next recursive computation stack.
+- [`gsr-opcodes.md`](gsr-opcodes.md) — the opcodes GSR adds and restores.
+
 ## Build and reproduce
 
 From the repository root:

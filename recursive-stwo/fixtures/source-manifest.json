@@ -1,0 +1,8 @@
+{
+  "repository": "https://github.com/Bitcoin-Wildlife-Sanctuary/recursive-stwo-bitcoin",
+  "commit": "083df955a7588ae1bb5e4e251dbf7df6733a08bc",
+  "sha256": {
+    "hybrid_hash.bin": "9c4026acc92e86d59c52a2eae4ea7c9966fa1220948ad34739c521aee4e66c96",
+    "bitcoin_proof.bin": "a7add69c2025bf42d9b9490db99b8d9570f75400776231c67e84466d319afcb7"
+  }
+}

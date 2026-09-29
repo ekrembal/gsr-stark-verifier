@@ -1,0 +1,4986 @@
+[
+  {
+    "name": "initial",
+    "script_bytes": 581339,
+    "witness_payload_bytes": 224896,
+    "execution": {
+      "ok": true,
+      "error": "No error",
+      "immediate_success": false,
+      "varops": 1144875946,
+      "budget": 40000000000,
+      "main_pc": 581339,
+      "pc": 581339,
+      "sha256_calls": 9491,
+      "sha256_input_bytes": 513141,
+      "function_calls": 11838,
+      "invoked_body_bytes": 359766,
+      "peak_entries": 1370,
+      "peak_payload_bytes": 236034,
+      "peak_element_bytes": 4096,
+      "final_stack_entries": 0,
+      "opcodes": {
+        "0_0": 20140,
+        "OP_UNKNOWN_1": 29148,
+        "OP_UNKNOWN_2": 23403,
+        "OP_UNKNOWN_3": 3624,
+        "OP_UNKNOWN_4": 52694,
+        "OP_UNKNOWN_8": 40,
+        "OP_UNKNOWN_12": 1,
+        "OP_UNKNOWN_13": 2,
+        "OP_UNKNOWN_15": 1,
+        "OP_UNKNOWN_16": 2,
+        "OP_UNKNOWN_24": 2,
+        "OP_UNKNOWN_32": 23,
+        "OP_UNKNOWN_58": 1,
+        "OP_UNKNOWN_61": 1,
+        "OP_UNKNOWN_65": 1,
+        "OP_PUSHDATA1_76": 8,
+        "OP_PUSHDATA2_77": 3,
+        "1_81": 7751,
+        "2_82": 5873,
+        "3_83": 9808,
+        "4_84": 14201,
+        "5_85": 3615,
+        "6_86": 3346,
+        "7_87": 4110,
+        "8_88": 3541,
+        "9_89": 1890,
+        "10_90": 1496,
+        "11_91": 2301,
+        "12_92": 1022,
+        "13_93": 1074,
+        "14_94": 704,
+        "15_95": 550,
+        "16_96": 1206,
+        "OP_IF_99": 16248,
+        "OP_NOTIF_100": 1640,
+        "OP_ELSE_103": 8256,
+        "OP_ENDIF_104": 17888,
+        "OP_VERIFY_105": 5004,
+        "OP_TOALTSTACK_107": 19347,
+        "OP_FROMALTSTACK_108": 19347,
+        "OP_2DROP_109": 10,
+        "OP_DEPTH_116": 56,
+        "OP_DROP_117": 1999,
+        "OP_DUP_118": 27701,
+        "OP_OVER_120": 978,
+        "OP_PICK_121": 35896,
+        "OP_ROLL_122": 38749,
+        "OP_ROT_123": 4864,
+        "OP_SWAP_124": 51448,
+        "OP_CAT_126": 9079,
+        "OP_SUBSTR_127": 10998,
+        "OP_RIGHT_129": 2784,
+        "OP_SIZE_130": 97,
+        "OP_AND_132": 176,
+        "OP_EQUALVERIFY_136": 2418,
+        "OP_1SUB_140": 55,
+        "OP_ADD_147": 31201,
+        "OP_SUB_148": 14937,
+        "OP_MUL_149": 8667,
+        "OP_MOD_151": 35214,
+        "OP_LESSTHAN_159": 4332,
+        "OP_LESSTHANOREQUAL_161": 336,
+        "OP_GREATERTHANOREQUAL_162": 11376,
+        "OP_SHA256_168": 9491,
+        "OP_DEFINE_187": 18,
+        "OP_INVOKE_188": 11838,
+        "OP_BYTEREV_207": 2
+      },
+      "stack_top": []
+    },
+    "stage_measurements_available": false
+  },
+  {
+    "name": "compact_extension_routines",
+    "script_bytes": 214153,
+    "witness_payload_bytes": 224896,
+    "execution": {
+      "ok": true,
+      "error": "No error",
+      "immediate_success": false,
+      "transaction_weight": 439632,
+      "varops": 1366082488,
+      "budget": 4396320000,
+      "main_pc": 214153,
+      "pc": 214153,
+      "sha256_calls": 9491,
+      "sha256_input_bytes": 513141,
+      "function_calls": 21560,
+      "invoked_body_bytes": 870078,
+      "peak_entries": 1393,
+      "peak_payload_bytes": 237090,
+      "peak_element_bytes": 4096,
+      "final_stack_entries": 1,
+      "final_stack_exact_true": true,
+      "opcodes": {
+        "0_0": 13945,
+        "OP_UNKNOWN_1": 27497,
+        "OP_UNKNOWN_2": 21386,
+        "OP_UNKNOWN_3": 3624,
+        "OP_UNKNOWN_4": 52695,
+        "OP_UNKNOWN_5": 1,
+        "OP_UNKNOWN_6": 2,
+        "OP_UNKNOWN_7": 4,
+        "OP_UNKNOWN_8": 42,
+        "OP_UNKNOWN_10": 1,
+        "OP_UNKNOWN_11": 4,
+        "OP_UNKNOWN_12": 1,
+        "OP_UNKNOWN_13": 2,
+        "OP_UNKNOWN_15": 1,
+        "OP_UNKNOWN_16": 2,
+        "OP_UNKNOWN_17": 1,
+        "OP_UNKNOWN_24": 2,
+        "OP_UNKNOWN_28": 1,
+        "OP_UNKNOWN_32": 23,
+        "OP_UNKNOWN_44": 1,
+        "OP_UNKNOWN_58": 1,
+        "OP_UNKNOWN_59": 1,
+        "OP_UNKNOWN_61": 1,
+        "OP_UNKNOWN_62": 1,
+        "OP_UNKNOWN_65": 1,
+        "OP_PUSHDATA1_76": 10,
+        "OP_PUSHDATA2_77": 4,
+        "1_81": 13142,
+        "2_82": 9599,
+        "3_83": 23205,
+        "4_84": 23144,
+        "5_85": 5517,
+        "6_86": 5575,
+        "7_87": 13366,
+        "8_88": 9411,
+        "9_89": 3069,
+        "10_90": 2335,
+        "11_91": 9527,
+        "12_92": 1353,
+        "13_93": 420,
+        "14_94": 763,
+        "15_95": 905,
+        "16_96": 1044,
+        "OP_IF_99": 16248,
+        "OP_NOTIF_100": 1640,
+        "OP_ELSE_103": 8256,
+        "OP_ENDIF_104": 17888,
+        "OP_VERIFY_105": 5004,
+        "OP_TOALTSTACK_107": 33771,
+        "OP_FROMALTSTACK_108": 33771,
+        "OP_2DROP_109": 7222,
+        "OP_DEPTH_116": 56,
+        "OP_DROP_117": 1999,
+        "OP_DUP_118": 27306,
+        "OP_OVER_120": 2559,
+        "OP_PICK_121": 49134,
+        "OP_ROLL_122": 65790,
+        "OP_ROT_123": 15313,
+        "OP_SWAP_124": 51433,
+        "OP_CAT_126": 9079,
+        "OP_SUBSTR_127": 10998,
+        "OP_RIGHT_129": 2784,
+        "OP_SIZE_130": 97,
+        "OP_AND_132": 176,
+        "OP_EQUALVERIFY_136": 2418,
+        "OP_1SUB_140": 55,
+        "OP_ADD_147": 31201,
+        "OP_SUB_148": 14937,
+        "OP_MUL_149": 8667,
+        "OP_MOD_151": 35214,
+        "OP_LESSTHAN_159": 4332,
+        "OP_LESSTHANOREQUAL_161": 336,
+        "OP_GREATERTHANOREQUAL_162": 11376,
+        "OP_SHA256_168": 9491,
+        "OP_DEFINE_187": 41,
+        "OP_INVOKE_188": 21560,
+        "OP_BYTEREV_207": 2
+      },
+      "stack_top": [],
+      "stages": [
+        {
+          "index": 0,
+          "varops": 37706389,
+          "sha256_calls": 576,
+          "function_calls": 645,
+          "invoked_body_bytes": 19356
+        },
+        {
+          "index": 1,
+          "varops": 54945027,
+          "sha256_calls": 848,
+          "function_calls": 1136,
+          "invoked_body_bytes": 25768
+        },
+        {
+          "index": 2,
+          "varops": 58948286,
+          "sha256_calls": 848,
+          "function_calls": 1504,
+          "invoked_body_bytes": 30224
+        },
+        {
+          "index": 3,
+          "varops": 48868231,
+          "sha256_calls": 720,
+          "function_calls": 1296,
+          "invoked_body_bytes": 23760
+        },
+        {
+          "index": 4,
+          "varops": 52832509,
+          "sha256_calls": 792,
+          "function_calls": 1440,
+          "invoked_body_bytes": 24696
+        },
+        {
+          "index": 5,
+          "varops": 3279671,
+          "sha256_calls": 4,
+          "function_calls": 29,
+          "invoked_body_bytes": 2592
+        },
+        {
+          "index": 6,
+          "varops": 8250664,
+          "sha256_calls": 0,
+          "function_calls": 56,
+          "invoked_body_bytes": 5411
+        },
+        {
+          "index": 7,
+          "varops": 8209588,
+          "sha256_calls": 0,
+          "function_calls": 56,
+          "invoked_body_bytes": 5411
+        },
+        {
+          "index": 8,
+          "varops": 8188840,
+          "sha256_calls": 0,
+          "function_calls": 56,
+          "invoked_body_bytes": 5411
+        },
+        {
+          "index": 9,
+          "varops": 8151208,
+          "sha256_calls": 0,
+          "function_calls": 56,
+          "invoked_body_bytes": 5411
+        },
+        {
+          "index": 10,
+          "varops": 8113555,
+          "sha256_calls": 0,
+          "function_calls": 56,
+          "invoked_body_bytes": 5411
+        },
+        {
+          "index": 11,
+          "varops": 8075188,
+          "sha256_calls": 0,
+          "function_calls": 56,
+          "invoked_body_bytes": 5411
+        },
+        {
+          "index": 12,
+          "varops": 8036974,
+          "sha256_calls": 0,
+          "function_calls": 56,
+          "invoked_body_bytes": 5411
+        },
+        {
+          "index": 13,
+          "varops": 7998961,
+          "sha256_calls": 0,
+          "function_calls": 56,
+          "invoked_body_bytes": 5411
+        },
+        {
+          "index": 14,
+          "varops": 8016867,
+          "sha256_calls": 0,
+          "function_calls": 56,
+          "invoked_body_bytes": 5411
+        },
+        {
+          "index": 15,
+          "varops": 7922653,
+          "sha256_calls": 0,
+          "function_calls": 56,
+          "invoked_body_bytes": 5411
+        },
+        {
+          "index": 16,
+          "varops": 7883692,
+          "sha256_calls": 0,
+          "function_calls": 56,
+          "invoked_body_bytes": 5411
+        },
+        {
+          "index": 17,
+          "varops": 7846699,
+          "sha256_calls": 0,
+          "function_calls": 56,
+          "invoked_body_bytes": 5411
+        },
+        {
+          "index": 18,
+          "varops": 7809163,
+          "sha256_calls": 0,
+          "function_calls": 56,
+          "invoked_body_bytes": 5411
+        },
+        {
+          "index": 19,
+          "varops": 7771504,
+          "sha256_calls": 0,
+          "function_calls": 56,
+          "invoked_body_bytes": 5411
+        },
+        {
+          "index": 20,
+          "varops": 7733893,
+          "sha256_calls": 0,
+          "function_calls": 56,
+          "invoked_body_bytes": 5411
+        },
+        {
+          "index": 21,
+          "varops": 7696264,
+          "sha256_calls": 0,
+          "function_calls": 56,
+          "invoked_body_bytes": 5411
+        },
+        {
+          "index": 22,
+          "varops": 7658632,
+          "sha256_calls": 0,
+          "function_calls": 56,
+          "invoked_body_bytes": 5411
+        },
+        {
+          "index": 23,
+          "varops": 7621000,
+          "sha256_calls": 0,
+          "function_calls": 56,
+          "invoked_body_bytes": 5411
+        },
+        {
+          "index": 24,
+          "varops": 7583377,
+          "sha256_calls": 0,
+          "function_calls": 56,
+          "invoked_body_bytes": 5411
+        },
+        {
+          "index": 25,
+          "varops": 7545742,
+          "sha256_calls": 0,
+          "function_calls": 56,
+          "invoked_body_bytes": 5411
+        },
+        {
+          "index": 26,
+          "varops": 7508107,
+          "sha256_calls": 0,
+          "function_calls": 56,
+          "invoked_body_bytes": 5411
+        },
+        {
+          "index": 27,
+          "varops": 7470484,
+          "sha256_calls": 0,
+          "function_calls": 56,
+          "invoked_body_bytes": 5411
+        },
+        {
+          "index": 28,
+          "varops": 7432846,
+          "sha256_calls": 0,
+          "function_calls": 56,
+          "invoked_body_bytes": 5411
+        },
+        {
+          "index": 29,
+          "varops": 7395214,
+          "sha256_calls": 0,
+          "function_calls": 56,
+          "invoked_body_bytes": 5411
+        },
+        {
+          "index": 30,
+          "varops": 7357582,
+          "sha256_calls": 0,
+          "function_calls": 56,
+          "invoked_body_bytes": 5411
+        },
+        {
+          "index": 31,
+          "varops": 7319956,
+          "sha256_calls": 0,
+          "function_calls": 56,
+          "invoked_body_bytes": 5411
+        },
+        {
+          "index": 32,
+          "varops": 7282321,
+          "sha256_calls": 0,
+          "function_calls": 56,
+          "invoked_body_bytes": 5411
+        },
+        {
+          "index": 33,
+          "varops": 7244683,
+          "sha256_calls": 0,
+          "function_calls": 56,
+          "invoked_body_bytes": 5411
+        },
+        {
+          "index": 34,
+          "varops": 7207048,
+          "sha256_calls": 0,
+          "function_calls": 56,
+          "invoked_body_bytes": 5411
+        },
+        {
+          "index": 35,
+          "varops": 7169416,
+          "sha256_calls": 0,
+          "function_calls": 56,
+          "invoked_body_bytes": 5411
+        },
+        {
+          "index": 36,
+          "varops": 7131730,
+          "sha256_calls": 0,
+          "function_calls": 56,
+          "invoked_body_bytes": 5411
+        },
+        {
+          "index": 37,
+          "varops": 7094068,
+          "sha256_calls": 0,
+          "function_calls": 56,
+          "invoked_body_bytes": 5411
+        },
+        {
+          "index": 38,
+          "varops": 7056445,
+          "sha256_calls": 0,
+          "function_calls": 56,
+          "invoked_body_bytes": 5411
+        },
+        {
+          "index": 39,
+          "varops": 7018816,
+          "sha256_calls": 0,
+          "function_calls": 56,
+          "invoked_body_bytes": 5411
+        },
+        {
+          "index": 40,
+          "varops": 6981184,
+          "sha256_calls": 0,
+          "function_calls": 56,
+          "invoked_body_bytes": 5411
+        },
+        {
+          "index": 41,
+          "varops": 6943537,
+          "sha256_calls": 0,
+          "function_calls": 56,
+          "invoked_body_bytes": 5411
+        },
+        {
+          "index": 42,
+          "varops": 6905917,
+          "sha256_calls": 0,
+          "function_calls": 56,
+          "invoked_body_bytes": 5411
+        },
+        {
+          "index": 43,
+          "varops": 6868288,
+          "sha256_calls": 0,
+          "function_calls": 56,
+          "invoked_body_bytes": 5411
+        },
+        {
+          "index": 44,
+          "varops": 3907834,
+          "sha256_calls": 0,
+          "function_calls": 32,
+          "invoked_body_bytes": 3092
+        },
+        {
+          "index": 45,
+          "varops": 20463063,
+          "sha256_calls": 215,
+          "function_calls": 368,
+          "invoked_body_bytes": 14223
+        },
+        {
+          "index": 46,
+          "varops": 4578612,
+          "sha256_calls": 0,
+          "function_calls": 12,
+          "invoked_body_bytes": 4464
+        },
+        {
+          "index": 47,
+          "varops": 8281028,
+          "sha256_calls": 0,
+          "function_calls": 76,
+          "invoked_body_bytes": 6896
+        },
+        {
+          "index": 48,
+          "varops": 4506868,
+          "sha256_calls": 0,
+          "function_calls": 15,
+          "invoked_body_bytes": 4289
+        },
+        {
+          "index": 49,
+          "varops": 4371024,
+          "sha256_calls": 0,
+          "function_calls": 27,
+          "invoked_body_bytes": 3856
+        },
+        {
+          "index": 50,
+          "varops": 5166533,
+          "sha256_calls": 0,
+          "function_calls": 24,
+          "invoked_body_bytes": 4768
+        },
+        {
+          "index": 51,
+          "varops": 4560559,
+          "sha256_calls": 0,
+          "function_calls": 23,
+          "invoked_body_bytes": 4163
+        },
+        {
+          "index": 52,
+          "varops": 4696651,
+          "sha256_calls": 0,
+          "function_calls": 15,
+          "invoked_body_bytes": 4225
+        },
+        {
+          "index": 53,
+          "varops": 3352960,
+          "sha256_calls": 0,
+          "function_calls": 30,
+          "invoked_body_bytes": 2648
+        },
+        {
+          "index": 54,
+          "varops": 3263823,
+          "sha256_calls": 0,
+          "function_calls": 20,
+          "invoked_body_bytes": 2950
+        },
+        {
+          "index": 55,
+          "varops": 3266793,
+          "sha256_calls": 0,
+          "function_calls": 20,
+          "invoked_body_bytes": 2950
+        },
+        {
+          "index": 56,
+          "varops": 3307560,
+          "sha256_calls": 0,
+          "function_calls": 20,
+          "invoked_body_bytes": 2950
+        },
+        {
+          "index": 57,
+          "varops": 3313704,
+          "sha256_calls": 0,
+          "function_calls": 20,
+          "invoked_body_bytes": 2950
+        },
+        {
+          "index": 58,
+          "varops": 3319851,
+          "sha256_calls": 0,
+          "function_calls": 20,
+          "invoked_body_bytes": 2950
+        },
+        {
+          "index": 59,
+          "varops": 3326016,
+          "sha256_calls": 0,
+          "function_calls": 20,
+          "invoked_body_bytes": 2950
+        },
+        {
+          "index": 60,
+          "varops": 3332151,
+          "sha256_calls": 0,
+          "function_calls": 20,
+          "invoked_body_bytes": 2950
+        },
+        {
+          "index": 61,
+          "varops": 3338268,
+          "sha256_calls": 0,
+          "function_calls": 20,
+          "invoked_body_bytes": 2950
+        },
+        {
+          "index": 62,
+          "varops": 3344433,
+          "sha256_calls": 0,
+          "function_calls": 20,
+          "invoked_body_bytes": 2950
+        },
+        {
+          "index": 63,
+          "varops": 3350613,
+          "sha256_calls": 0,
+          "function_calls": 20,
+          "invoked_body_bytes": 2950
+        },
+        {
+          "index": 64,
+          "varops": 3356784,
+          "sha256_calls": 0,
+          "function_calls": 20,
+          "invoked_body_bytes": 2950
+        },
+        {
+          "index": 65,
+          "varops": 3362928,
+          "sha256_calls": 0,
+          "function_calls": 20,
+          "invoked_body_bytes": 2950
+        },
+        {
+          "index": 66,
+          "varops": 3369069,
+          "sha256_calls": 0,
+          "function_calls": 20,
+          "invoked_body_bytes": 2950
+        },
+        {
+          "index": 67,
+          "varops": 3375213,
+          "sha256_calls": 0,
+          "function_calls": 20,
+          "invoked_body_bytes": 2950
+        },
+        {
+          "index": 68,
+          "varops": 3446025,
+          "sha256_calls": 0,
+          "function_calls": 20,
+          "invoked_body_bytes": 2950
+        },
+        {
+          "index": 69,
+          "varops": 3485811,
+          "sha256_calls": 0,
+          "function_calls": 20,
+          "invoked_body_bytes": 2950
+        },
+        {
+          "index": 70,
+          "varops": 7606331,
+          "sha256_calls": 61,
+          "function_calls": 145,
+          "invoked_body_bytes": 4352
+        },
+        {
+          "index": 71,
+          "varops": 4770909,
+          "sha256_calls": 34,
+          "function_calls": 68,
+          "invoked_body_bytes": 2963
+        },
+        {
+          "index": 72,
+          "varops": 4764717,
+          "sha256_calls": 38,
+          "function_calls": 66,
+          "invoked_body_bytes": 2871
+        },
+        {
+          "index": 73,
+          "varops": 2818708,
+          "sha256_calls": 0,
+          "function_calls": 29,
+          "invoked_body_bytes": 1954
+        },
+        {
+          "index": 74,
+          "varops": 2917824,
+          "sha256_calls": 0,
+          "function_calls": 30,
+          "invoked_body_bytes": 2016
+        },
+        {
+          "index": 75,
+          "varops": 4110448,
+          "sha256_calls": 30,
+          "function_calls": 56,
+          "invoked_body_bytes": 2561
+        },
+        {
+          "index": 76,
+          "varops": 2189225,
+          "sha256_calls": 0,
+          "function_calls": 22,
+          "invoked_body_bytes": 1572
+        },
+        {
+          "index": 77,
+          "varops": 40312825,
+          "sha256_calls": 523,
+          "function_calls": 963,
+          "invoked_body_bytes": 22699
+        },
+        {
+          "index": 78,
+          "varops": 4655242,
+          "sha256_calls": 0,
+          "function_calls": 44,
+          "invoked_body_bytes": 3448
+        },
+        {
+          "index": 79,
+          "varops": 4588496,
+          "sha256_calls": 0,
+          "function_calls": 44,
+          "invoked_body_bytes": 3448
+        },
+        {
+          "index": 80,
+          "varops": 4533146,
+          "sha256_calls": 0,
+          "function_calls": 44,
+          "invoked_body_bytes": 3448
+        },
+        {
+          "index": 81,
+          "varops": 4472859,
+          "sha256_calls": 0,
+          "function_calls": 44,
+          "invoked_body_bytes": 3448
+        },
+        {
+          "index": 82,
+          "varops": 0,
+          "sha256_calls": 0,
+          "function_calls": 0,
+          "invoked_body_bytes": 0
+        },
+        {
+          "index": 83,
+          "varops": 7591058,
+          "sha256_calls": 61,
+          "function_calls": 145,
+          "invoked_body_bytes": 4352
+        },
+        {
+          "index": 84,
+          "varops": 4769551,
+          "sha256_calls": 34,
+          "function_calls": 68,
+          "invoked_body_bytes": 2963
+        },
+        {
+          "index": 85,
+          "varops": 4763053,
+          "sha256_calls": 38,
+          "function_calls": 66,
+          "invoked_body_bytes": 2871
+        },
+        {
+          "index": 86,
+          "varops": 2818699,
+          "sha256_calls": 0,
+          "function_calls": 29,
+          "invoked_body_bytes": 1954
+        },
+        {
+          "index": 87,
+          "varops": 2917824,
+          "sha256_calls": 0,
+          "function_calls": 30,
+          "invoked_body_bytes": 2016
+        },
+        {
+          "index": 88,
+          "varops": 4109078,
+          "sha256_calls": 30,
+          "function_calls": 56,
+          "invoked_body_bytes": 2561
+        },
+        {
+          "index": 89,
+          "varops": 2189216,
+          "sha256_calls": 0,
+          "function_calls": 22,
+          "invoked_body_bytes": 1572
+        },
+        {
+          "index": 90,
+          "varops": 40129193,
+          "sha256_calls": 523,
+          "function_calls": 963,
+          "invoked_body_bytes": 22699
+        },
+        {
+          "index": 91,
+          "varops": 4621537,
+          "sha256_calls": 0,
+          "function_calls": 44,
+          "invoked_body_bytes": 3448
+        },
+        {
+          "index": 92,
+          "varops": 4600503,
+          "sha256_calls": 0,
+          "function_calls": 44,
+          "invoked_body_bytes": 3448
+        },
+        {
+          "index": 93,
+          "varops": 4545158,
+          "sha256_calls": 0,
+          "function_calls": 44,
+          "invoked_body_bytes": 3448
+        },
+        {
+          "index": 94,
+          "varops": 4496331,
+          "sha256_calls": 0,
+          "function_calls": 44,
+          "invoked_body_bytes": 3448
+        },
+        {
+          "index": 95,
+          "varops": 0,
+          "sha256_calls": 0,
+          "function_calls": 0,
+          "invoked_body_bytes": 0
+        },
+        {
+          "index": 96,
+          "varops": 7612895,
+          "sha256_calls": 61,
+          "function_calls": 145,
+          "invoked_body_bytes": 4352
+        },
+        {
+          "index": 97,
+          "varops": 4776022,
+          "sha256_calls": 34,
+          "function_calls": 68,
+          "invoked_body_bytes": 2963
+        },
+        {
+          "index": 98,
+          "varops": 4765836,
+          "sha256_calls": 38,
+          "function_calls": 66,
+          "invoked_body_bytes": 2871
+        },
+        {
+          "index": 99,
+          "varops": 2818705,
+          "sha256_calls": 0,
+          "function_calls": 29,
+          "invoked_body_bytes": 1954
+        },
+        {
+          "index": 100,
+          "varops": 2917824,
+          "sha256_calls": 0,
+          "function_calls": 30,
+          "invoked_body_bytes": 2016
+        },
+        {
+          "index": 101,
+          "varops": 4108291,
+          "sha256_calls": 30,
+          "function_calls": 56,
+          "invoked_body_bytes": 2561
+        },
+        {
+          "index": 102,
+          "varops": 2189222,
+          "sha256_calls": 0,
+          "function_calls": 22,
+          "invoked_body_bytes": 1572
+        },
+        {
+          "index": 103,
+          "varops": 40342692,
+          "sha256_calls": 523,
+          "function_calls": 963,
+          "invoked_body_bytes": 22699
+        },
+        {
+          "index": 104,
+          "varops": 4632754,
+          "sha256_calls": 0,
+          "function_calls": 44,
+          "invoked_body_bytes": 3448
+        },
+        {
+          "index": 105,
+          "varops": 4577441,
+          "sha256_calls": 0,
+          "function_calls": 44,
+          "invoked_body_bytes": 3448
+        },
+        {
+          "index": 106,
+          "varops": 4510658,
+          "sha256_calls": 0,
+          "function_calls": 44,
+          "invoked_body_bytes": 3448
+        },
+        {
+          "index": 107,
+          "varops": 4507575,
+          "sha256_calls": 0,
+          "function_calls": 44,
+          "invoked_body_bytes": 3448
+        },
+        {
+          "index": 108,
+          "varops": 0,
+          "sha256_calls": 0,
+          "function_calls": 0,
+          "invoked_body_bytes": 0
+        },
+        {
+          "index": 109,
+          "varops": 7600477,
+          "sha256_calls": 61,
+          "function_calls": 145,
+          "invoked_body_bytes": 4352
+        },
+        {
+          "index": 110,
+          "varops": 4773854,
+          "sha256_calls": 34,
+          "function_calls": 68,
+          "invoked_body_bytes": 2963
+        },
+        {
+          "index": 111,
+          "varops": 4723509,
+          "sha256_calls": 38,
+          "function_calls": 66,
+          "invoked_body_bytes": 2871
+        },
+        {
+          "index": 112,
+          "varops": 2818705,
+          "sha256_calls": 0,
+          "function_calls": 29,
+          "invoked_body_bytes": 1954
+        },
+        {
+          "index": 113,
+          "varops": 2917824,
+          "sha256_calls": 0,
+          "function_calls": 30,
+          "invoked_body_bytes": 2016
+        },
+        {
+          "index": 114,
+          "varops": 4151624,
+          "sha256_calls": 30,
+          "function_calls": 56,
+          "invoked_body_bytes": 2561
+        },
+        {
+          "index": 115,
+          "varops": 2189225,
+          "sha256_calls": 0,
+          "function_calls": 22,
+          "invoked_body_bytes": 1572
+        },
+        {
+          "index": 116,
+          "varops": 40161181,
+          "sha256_calls": 523,
+          "function_calls": 963,
+          "invoked_body_bytes": 22699
+        },
+        {
+          "index": 117,
+          "varops": 4655615,
+          "sha256_calls": 0,
+          "function_calls": 44,
+          "invoked_body_bytes": 3448
+        },
+        {
+          "index": 118,
+          "varops": 4588830,
+          "sha256_calls": 0,
+          "function_calls": 44,
+          "invoked_body_bytes": 3448
+        },
+        {
+          "index": 119,
+          "varops": 4533498,
+          "sha256_calls": 0,
+          "function_calls": 44,
+          "invoked_body_bytes": 3448
+        },
+        {
+          "index": 120,
+          "varops": 4507530,
+          "sha256_calls": 0,
+          "function_calls": 44,
+          "invoked_body_bytes": 3448
+        },
+        {
+          "index": 121,
+          "varops": 0,
+          "sha256_calls": 0,
+          "function_calls": 0,
+          "invoked_body_bytes": 0
+        },
+        {
+          "index": 122,
+          "varops": 7590276,
+          "sha256_calls": 61,
+          "function_calls": 145,
+          "invoked_body_bytes": 4352
+        },
+        {
+          "index": 123,
+          "varops": 4768707,
+          "sha256_calls": 34,
+          "function_calls": 68,
+          "invoked_body_bytes": 2963
+        },
+        {
+          "index": 124,
+          "varops": 4718377,
+          "sha256_calls": 38,
+          "function_calls": 66,
+          "invoked_body_bytes": 2871
+        },
+        {
+          "index": 125,
+          "varops": 2818708,
+          "sha256_calls": 0,
+          "function_calls": 29,
+          "invoked_body_bytes": 1954
+        },
+        {
+          "index": 126,
+          "varops": 2917821,
+          "sha256_calls": 0,
+          "function_calls": 30,
+          "invoked_body_bytes": 2016
+        },
+        {
+          "index": 127,
+          "varops": 4147671,
+          "sha256_calls": 30,
+          "function_calls": 56,
+          "invoked_body_bytes": 2561
+        },
+        {
+          "index": 128,
+          "varops": 2189228,
+          "sha256_calls": 0,
+          "function_calls": 22,
+          "invoked_body_bytes": 1572
+        },
+        {
+          "index": 129,
+          "varops": 40076636,
+          "sha256_calls": 523,
+          "function_calls": 963,
+          "invoked_body_bytes": 22699
+        },
+        {
+          "index": 130,
+          "varops": 4644185,
+          "sha256_calls": 0,
+          "function_calls": 44,
+          "invoked_body_bytes": 3448
+        },
+        {
+          "index": 131,
+          "varops": 4565958,
+          "sha256_calls": 0,
+          "function_calls": 44,
+          "invoked_body_bytes": 3448
+        },
+        {
+          "index": 132,
+          "varops": 4510621,
+          "sha256_calls": 0,
+          "function_calls": 44,
+          "invoked_body_bytes": 3448
+        },
+        {
+          "index": 133,
+          "varops": 4507516,
+          "sha256_calls": 0,
+          "function_calls": 44,
+          "invoked_body_bytes": 3448
+        },
+        {
+          "index": 134,
+          "varops": 0,
+          "sha256_calls": 0,
+          "function_calls": 0,
+          "invoked_body_bytes": 0
+        },
+        {
+          "index": 135,
+          "varops": 7600426,
+          "sha256_calls": 61,
+          "function_calls": 145,
+          "invoked_body_bytes": 4352
+        },
+        {
+          "index": 136,
+          "varops": 4770041,
+          "sha256_calls": 34,
+          "function_calls": 68,
+          "invoked_body_bytes": 2963
+        },
+        {
+          "index": 137,
+          "varops": 4719702,
+          "sha256_calls": 38,
+          "function_calls": 66,
+          "invoked_body_bytes": 2871
+        },
+        {
+          "index": 138,
+          "varops": 2818708,
+          "sha256_calls": 0,
+          "function_calls": 29,
+          "invoked_body_bytes": 1954
+        },
+        {
+          "index": 139,
+          "varops": 2917821,
+          "sha256_calls": 0,
+          "function_calls": 30,
+          "invoked_body_bytes": 2016
+        },
+        {
+          "index": 140,
+          "varops": 4147778,
+          "sha256_calls": 30,
+          "function_calls": 56,
+          "invoked_body_bytes": 2561
+        },
+        {
+          "index": 141,
+          "varops": 2189222,
+          "sha256_calls": 0,
+          "function_calls": 22,
+          "invoked_body_bytes": 1572
+        },
+        {
+          "index": 142,
+          "varops": 40162828,
+          "sha256_calls": 523,
+          "function_calls": 963,
+          "invoked_body_bytes": 22699
+        },
+        {
+          "index": 143,
+          "varops": 4632959,
+          "sha256_calls": 0,
+          "function_calls": 44,
+          "invoked_body_bytes": 3448
+        },
+        {
+          "index": 144,
+          "varops": 4566197,
+          "sha256_calls": 0,
+          "function_calls": 44,
+          "invoked_body_bytes": 3448
+        },
+        {
+          "index": 145,
+          "varops": 4563967,
+          "sha256_calls": 0,
+          "function_calls": 44,
+          "invoked_body_bytes": 3448
+        },
+        {
+          "index": 146,
+          "varops": 4507551,
+          "sha256_calls": 0,
+          "function_calls": 44,
+          "invoked_body_bytes": 3448
+        },
+        {
+          "index": 147,
+          "varops": 0,
+          "sha256_calls": 0,
+          "function_calls": 0,
+          "invoked_body_bytes": 0
+        },
+        {
+          "index": 148,
+          "varops": 7595318,
+          "sha256_calls": 61,
+          "function_calls": 145,
+          "invoked_body_bytes": 4352
+        },
+        {
+          "index": 149,
+          "varops": 4771279,
+          "sha256_calls": 34,
+          "function_calls": 68,
+          "invoked_body_bytes": 2963
+        },
+        {
+          "index": 150,
+          "varops": 4720931,
+          "sha256_calls": 38,
+          "function_calls": 66,
+          "invoked_body_bytes": 2871
+        },
+        {
+          "index": 151,
+          "varops": 2818705,
+          "sha256_calls": 0,
+          "function_calls": 29,
+          "invoked_body_bytes": 1954
+        },
+        {
+          "index": 152,
+          "varops": 2917824,
+          "sha256_calls": 0,
+          "function_calls": 30,
+          "invoked_body_bytes": 2016
+        },
+        {
+          "index": 153,
+          "varops": 4148986,
+          "sha256_calls": 30,
+          "function_calls": 56,
+          "invoked_body_bytes": 2561
+        },
+        {
+          "index": 154,
+          "varops": 2189228,
+          "sha256_calls": 0,
+          "function_calls": 22,
+          "invoked_body_bytes": 1572
+        },
+        {
+          "index": 155,
+          "varops": 40076262,
+          "sha256_calls": 523,
+          "function_calls": 963,
+          "invoked_body_bytes": 22699
+        },
+        {
+          "index": 156,
+          "varops": 4632959,
+          "sha256_calls": 0,
+          "function_calls": 44,
+          "invoked_body_bytes": 3448
+        },
+        {
+          "index": 157,
+          "varops": 4566186,
+          "sha256_calls": 0,
+          "function_calls": 44,
+          "invoked_body_bytes": 3448
+        },
+        {
+          "index": 158,
+          "varops": 4533722,
+          "sha256_calls": 0,
+          "function_calls": 44,
+          "invoked_body_bytes": 3448
+        },
+        {
+          "index": 159,
+          "varops": 4496328,
+          "sha256_calls": 0,
+          "function_calls": 44,
+          "invoked_body_bytes": 3448
+        },
+        {
+          "index": 160,
+          "varops": 0,
+          "sha256_calls": 0,
+          "function_calls": 0,
+          "invoked_body_bytes": 0
+        },
+        {
+          "index": 161,
+          "varops": 8059659,
+          "sha256_calls": 61,
+          "function_calls": 145,
+          "invoked_body_bytes": 4352
+        },
+        {
+          "index": 162,
+          "varops": 5414631,
+          "sha256_calls": 34,
+          "function_calls": 68,
+          "invoked_body_bytes": 2963
+        },
+        {
+          "index": 163,
+          "varops": 5572401,
+          "sha256_calls": 38,
+          "function_calls": 66,
+          "invoked_body_bytes": 2871
+        },
+        {
+          "index": 164,
+          "varops": 3571657,
+          "sha256_calls": 0,
+          "function_calls": 29,
+          "invoked_body_bytes": 1954
+        },
+        {
+          "index": 165,
+          "varops": 3415179,
+          "sha256_calls": 0,
+          "function_calls": 30,
+          "invoked_body_bytes": 2016
+        },
+        {
+          "index": 166,
+          "varops": 4327126,
+          "sha256_calls": 30,
+          "function_calls": 56,
+          "invoked_body_bytes": 2561
+        },
+        {
+          "index": 167,
+          "varops": 2354588,
+          "sha256_calls": 0,
+          "function_calls": 22,
+          "invoked_body_bytes": 1572
+        },
+        {
+          "index": 168,
+          "varops": 40037246,
+          "sha256_calls": 523,
+          "function_calls": 963,
+          "invoked_body_bytes": 22699
+        },
+        {
+          "index": 169,
+          "varops": 4773157,
+          "sha256_calls": 0,
+          "function_calls": 44,
+          "invoked_body_bytes": 3448
+        },
+        {
+          "index": 170,
+          "varops": 4677881,
+          "sha256_calls": 0,
+          "function_calls": 44,
+          "invoked_body_bytes": 3448
+        },
+        {
+          "index": 171,
+          "varops": 4594046,
+          "sha256_calls": 0,
+          "function_calls": 44,
+          "invoked_body_bytes": 3448
+        },
+        {
+          "index": 172,
+          "varops": 4542408,
+          "sha256_calls": 0,
+          "function_calls": 44,
+          "invoked_body_bytes": 3448
+        },
+        {
+          "index": 173,
+          "varops": 0,
+          "sha256_calls": 0,
+          "function_calls": 0,
+          "invoked_body_bytes": 0
+        },
+        {
+          "index": 174,
+          "varops": 0,
+          "sha256_calls": 0,
+          "function_calls": 0,
+          "invoked_body_bytes": 0
+        }
+      ]
+    },
+    "stage_measurements_available": true
+  },
+  {
+    "name": "sequential_readers_and_shared_stack_routines",
+    "script_bytes": 144894,
+    "witness_payload_bytes": 224896,
+    "execution": {
+      "ok": true,
+      "error": "No error",
+      "immediate_success": false,
+      "transaction_weight": 370373,
+      "varops": 1405444202,
+      "budget": 3703730000,
+      "main_pc": 144894,
+      "pc": 144894,
+      "sha256_calls": 9491,
+      "sha256_input_bytes": 513141,
+      "function_calls": 26625,
+      "invoked_body_bytes": 973854,
+      "peak_entries": 1480,
+      "peak_payload_bytes": 234614,
+      "peak_element_bytes": 4096,
+      "final_stack_entries": 1,
+      "final_stack_exact_true": true,
+      "opcodes": {
+        "0_0": 13890,
+        "OP_UNKNOWN_1": 37727,
+        "OP_UNKNOWN_2": 22153,
+        "OP_UNKNOWN_3": 3624,
+        "OP_UNKNOWN_4": 52699,
+        "OP_UNKNOWN_5": 12,
+        "OP_UNKNOWN_6": 7,
+        "OP_UNKNOWN_7": 1,
+        "OP_UNKNOWN_8": 41,
+        "OP_UNKNOWN_10": 3,
+        "OP_UNKNOWN_11": 4,
+        "OP_UNKNOWN_12": 15,
+        "OP_UNKNOWN_13": 2,
+        "OP_UNKNOWN_15": 1,
+        "OP_UNKNOWN_16": 14,
+        "OP_UNKNOWN_20": 1,
+        "OP_UNKNOWN_21": 1,
+        "OP_UNKNOWN_24": 24,
+        "OP_UNKNOWN_26": 18,
+        "OP_UNKNOWN_28": 1,
+        "OP_UNKNOWN_32": 23,
+        "OP_UNKNOWN_34": 1,
+        "OP_UNKNOWN_36": 1,
+        "OP_UNKNOWN_44": 1,
+        "OP_UNKNOWN_58": 1,
+        "OP_UNKNOWN_59": 1,
+        "OP_UNKNOWN_61": 1,
+        "OP_UNKNOWN_62": 1,
+        "OP_UNKNOWN_65": 1,
+        "OP_PUSHDATA1_76": 10,
+        "OP_PUSHDATA2_77": 4,
+        "1_81": 13142,
+        "2_82": 9599,
+        "3_83": 23205,
+        "4_84": 33836,
+        "5_85": 5261,
+        "6_86": 5514,
+        "7_87": 13122,
+        "8_88": 3602,
+        "9_89": 3069,
+        "10_90": 2335,
+        "11_91": 9527,
+        "12_92": 1347,
+        "13_93": 671,
+        "14_94": 763,
+        "15_95": 1142,
+        "16_96": 1270,
+        "OP_IF_99": 16248,
+        "OP_NOTIF_100": 1640,
+        "OP_ELSE_103": 8256,
+        "OP_ENDIF_104": 17888,
+        "OP_VERIFY_105": 5004,
+        "OP_TOALTSTACK_107": 33771,
+        "OP_FROMALTSTACK_108": 33771,
+        "OP_2DROP_109": 7222,
+        "OP_DEPTH_116": 56,
+        "OP_DROP_117": 1999,
+        "OP_DUP_118": 27306,
+        "OP_OVER_120": 2559,
+        "OP_PICK_121": 49134,
+        "OP_ROLL_122": 65790,
+        "OP_ROT_123": 4493,
+        "OP_SWAP_124": 51433,
+        "OP_CAT_126": 9079,
+        "OP_SUBSTR_127": 10998,
+        "OP_LEFT_128": 10820,
+        "OP_RIGHT_129": 2784,
+        "OP_SIZE_130": 97,
+        "OP_AND_132": 176,
+        "OP_EQUALVERIFY_136": 2418,
+        "OP_1SUB_140": 55,
+        "OP_ADD_147": 31201,
+        "OP_SUB_148": 14937,
+        "OP_MUL_149": 8667,
+        "OP_MOD_151": 35214,
+        "OP_LESSTHAN_159": 4332,
+        "OP_LESSTHANOREQUAL_161": 336,
+        "OP_GREATERTHANOREQUAL_162": 11376,
+        "OP_SHA256_168": 9491,
+        "OP_DEFINE_187": 128,
+        "OP_INVOKE_188": 26625,
+        "OP_BYTEREV_207": 2
+      },
+      "stack_top": [],
+      "stages": [
+        {
+          "index": 0,
+          "varops": 39228182,
+          "sha256_calls": 576,
+          "function_calls": 637,
+          "invoked_body_bytes": 21911
+        },
+        {
+          "index": 1,
+          "varops": 55817156,
+          "sha256_calls": 848,
+          "function_calls": 1121,
+          "invoked_body_bytes": 29588
+        },
+        {
+          "index": 2,
+          "varops": 59749452,
+          "sha256_calls": 848,
+          "function_calls": 1570,
+          "invoked_body_bytes": 34376
+        },
+        {
+          "index": 3,
+          "varops": 50031774,
+          "sha256_calls": 720,
+          "function_calls": 1356,
+          "invoked_body_bytes": 27357
+        },
+        {
+          "index": 4,
+          "varops": 54122681,
+          "sha256_calls": 792,
+          "function_calls": 1503,
+          "invoked_body_bytes": 28671
+        },
+        {
+          "index": 5,
+          "varops": 3252191,
+          "sha256_calls": 4,
+          "function_calls": 38,
+          "invoked_body_bytes": 2794
+        },
+        {
+          "index": 6,
+          "varops": 8197135,
+          "sha256_calls": 0,
+          "function_calls": 77,
+          "invoked_body_bytes": 5859
+        },
+        {
+          "index": 7,
+          "varops": 8137243,
+          "sha256_calls": 0,
+          "function_calls": 77,
+          "invoked_body_bytes": 5859
+        },
+        {
+          "index": 8,
+          "varops": 8097679,
+          "sha256_calls": 0,
+          "function_calls": 77,
+          "invoked_body_bytes": 5859
+        },
+        {
+          "index": 9,
+          "varops": 8041231,
+          "sha256_calls": 0,
+          "function_calls": 77,
+          "invoked_body_bytes": 5859
+        },
+        {
+          "index": 10,
+          "varops": 7984762,
+          "sha256_calls": 0,
+          "function_calls": 77,
+          "invoked_body_bytes": 5859
+        },
+        {
+          "index": 11,
+          "varops": 7927579,
+          "sha256_calls": 0,
+          "function_calls": 77,
+          "invoked_body_bytes": 5859
+        },
+        {
+          "index": 12,
+          "varops": 7870549,
+          "sha256_calls": 0,
+          "function_calls": 77,
+          "invoked_body_bytes": 5859
+        },
+        {
+          "index": 13,
+          "varops": 7813720,
+          "sha256_calls": 0,
+          "function_calls": 77,
+          "invoked_body_bytes": 5859
+        },
+        {
+          "index": 14,
+          "varops": 8402737,
+          "sha256_calls": 0,
+          "function_calls": 77,
+          "invoked_body_bytes": 5859
+        },
+        {
+          "index": 15,
+          "varops": 8387992,
+          "sha256_calls": 0,
+          "function_calls": 77,
+          "invoked_body_bytes": 5859
+        },
+        {
+          "index": 16,
+          "varops": 8330167,
+          "sha256_calls": 0,
+          "function_calls": 77,
+          "invoked_body_bytes": 5859
+        },
+        {
+          "index": 17,
+          "varops": 8274322,
+          "sha256_calls": 0,
+          "function_calls": 77,
+          "invoked_body_bytes": 5859
+        },
+        {
+          "index": 18,
+          "varops": 8217970,
+          "sha256_calls": 0,
+          "function_calls": 77,
+          "invoked_body_bytes": 5859
+        },
+        {
+          "index": 19,
+          "varops": 8161495,
+          "sha256_calls": 0,
+          "function_calls": 77,
+          "invoked_body_bytes": 5859
+        },
+        {
+          "index": 20,
+          "varops": 8105068,
+          "sha256_calls": 0,
+          "function_calls": 77,
+          "invoked_body_bytes": 5859
+        },
+        {
+          "index": 21,
+          "varops": 8048623,
+          "sha256_calls": 0,
+          "function_calls": 77,
+          "invoked_body_bytes": 5859
+        },
+        {
+          "index": 22,
+          "varops": 7992175,
+          "sha256_calls": 0,
+          "function_calls": 77,
+          "invoked_body_bytes": 5859
+        },
+        {
+          "index": 23,
+          "varops": 7935727,
+          "sha256_calls": 0,
+          "function_calls": 77,
+          "invoked_body_bytes": 5859
+        },
+        {
+          "index": 24,
+          "varops": 7879288,
+          "sha256_calls": 0,
+          "function_calls": 77,
+          "invoked_body_bytes": 5859
+        },
+        {
+          "index": 25,
+          "varops": 7822837,
+          "sha256_calls": 0,
+          "function_calls": 77,
+          "invoked_body_bytes": 5859
+        },
+        {
+          "index": 26,
+          "varops": 7766386,
+          "sha256_calls": 0,
+          "function_calls": 77,
+          "invoked_body_bytes": 5859
+        },
+        {
+          "index": 27,
+          "varops": 7709947,
+          "sha256_calls": 0,
+          "function_calls": 77,
+          "invoked_body_bytes": 5859
+        },
+        {
+          "index": 28,
+          "varops": 7653493,
+          "sha256_calls": 0,
+          "function_calls": 77,
+          "invoked_body_bytes": 5859
+        },
+        {
+          "index": 29,
+          "varops": 7597045,
+          "sha256_calls": 0,
+          "function_calls": 77,
+          "invoked_body_bytes": 5859
+        },
+        {
+          "index": 30,
+          "varops": 7540597,
+          "sha256_calls": 0,
+          "function_calls": 77,
+          "invoked_body_bytes": 5859
+        },
+        {
+          "index": 31,
+          "varops": 7484155,
+          "sha256_calls": 0,
+          "function_calls": 77,
+          "invoked_body_bytes": 5859
+        },
+        {
+          "index": 32,
+          "varops": 7427704,
+          "sha256_calls": 0,
+          "function_calls": 77,
+          "invoked_body_bytes": 5859
+        },
+        {
+          "index": 33,
+          "varops": 7371250,
+          "sha256_calls": 0,
+          "function_calls": 77,
+          "invoked_body_bytes": 5859
+        },
+        {
+          "index": 34,
+          "varops": 7314799,
+          "sha256_calls": 0,
+          "function_calls": 77,
+          "invoked_body_bytes": 5859
+        },
+        {
+          "index": 35,
+          "varops": 7258351,
+          "sha256_calls": 0,
+          "function_calls": 77,
+          "invoked_body_bytes": 5859
+        },
+        {
+          "index": 36,
+          "varops": 7201849,
+          "sha256_calls": 0,
+          "function_calls": 77,
+          "invoked_body_bytes": 5859
+        },
+        {
+          "index": 37,
+          "varops": 7145371,
+          "sha256_calls": 0,
+          "function_calls": 77,
+          "invoked_body_bytes": 5859
+        },
+        {
+          "index": 38,
+          "varops": 7088932,
+          "sha256_calls": 0,
+          "function_calls": 77,
+          "invoked_body_bytes": 5859
+        },
+        {
+          "index": 39,
+          "varops": 7032487,
+          "sha256_calls": 0,
+          "function_calls": 77,
+          "invoked_body_bytes": 5859
+        },
+        {
+          "index": 40,
+          "varops": 6976039,
+          "sha256_calls": 0,
+          "function_calls": 77,
+          "invoked_body_bytes": 5859
+        },
+        {
+          "index": 41,
+          "varops": 6919576,
+          "sha256_calls": 0,
+          "function_calls": 77,
+          "invoked_body_bytes": 5859
+        },
+        {
+          "index": 42,
+          "varops": 6863140,
+          "sha256_calls": 0,
+          "function_calls": 77,
+          "invoked_body_bytes": 5859
+        },
+        {
+          "index": 43,
+          "varops": 6806695,
+          "sha256_calls": 0,
+          "function_calls": 77,
+          "invoked_body_bytes": 5859
+        },
+        {
+          "index": 44,
+          "varops": 3864190,
+          "sha256_calls": 0,
+          "function_calls": 44,
+          "invoked_body_bytes": 3348
+        },
+        {
+          "index": 45,
+          "varops": 19587904,
+          "sha256_calls": 215,
+          "function_calls": 356,
+          "invoked_body_bytes": 14964
+        },
+        {
+          "index": 46,
+          "varops": 4599816,
+          "sha256_calls": 0,
+          "function_calls": 16,
+          "invoked_body_bytes": 4528
+        },
+        {
+          "index": 47,
+          "varops": 8313005,
+          "sha256_calls": 0,
+          "function_calls": 82,
+          "invoked_body_bytes": 7050
+        },
+        {
+          "index": 48,
+          "varops": 4533361,
+          "sha256_calls": 0,
+          "function_calls": 20,
+          "invoked_body_bytes": 4369
+        },
+        {
+          "index": 49,
+          "varops": 4436916,
+          "sha256_calls": 0,
+          "function_calls": 32,
+          "invoked_body_bytes": 3970
+        },
+        {
+          "index": 50,
+          "varops": 5251349,
+          "sha256_calls": 0,
+          "function_calls": 40,
+          "invoked_body_bytes": 5024
+        },
+        {
+          "index": 51,
+          "varops": 4668421,
+          "sha256_calls": 0,
+          "function_calls": 36,
+          "invoked_body_bytes": 4387
+        },
+        {
+          "index": 52,
+          "varops": 4717852,
+          "sha256_calls": 0,
+          "function_calls": 19,
+          "invoked_body_bytes": 4289
+        },
+        {
+          "index": 53,
+          "varops": 3379516,
+          "sha256_calls": 0,
+          "function_calls": 35,
+          "invoked_body_bytes": 2746
+        },
+        {
+          "index": 54,
+          "varops": 3284943,
+          "sha256_calls": 0,
+          "function_calls": 24,
+          "invoked_body_bytes": 2986
+        },
+        {
+          "index": 55,
+          "varops": 3298479,
+          "sha256_calls": 0,
+          "function_calls": 26,
+          "invoked_body_bytes": 3006
+        },
+        {
+          "index": 56,
+          "varops": 3339246,
+          "sha256_calls": 0,
+          "function_calls": 26,
+          "invoked_body_bytes": 3006
+        },
+        {
+          "index": 57,
+          "varops": 3345390,
+          "sha256_calls": 0,
+          "function_calls": 26,
+          "invoked_body_bytes": 3006
+        },
+        {
+          "index": 58,
+          "varops": 3351537,
+          "sha256_calls": 0,
+          "function_calls": 26,
+          "invoked_body_bytes": 3006
+        },
+        {
+          "index": 59,
+          "varops": 3357702,
+          "sha256_calls": 0,
+          "function_calls": 26,
+          "invoked_body_bytes": 3006
+        },
+        {
+          "index": 60,
+          "varops": 3363837,
+          "sha256_calls": 0,
+          "function_calls": 26,
+          "invoked_body_bytes": 3006
+        },
+        {
+          "index": 61,
+          "varops": 3369954,
+          "sha256_calls": 0,
+          "function_calls": 26,
+          "invoked_body_bytes": 3006
+        },
+        {
+          "index": 62,
+          "varops": 3376119,
+          "sha256_calls": 0,
+          "function_calls": 26,
+          "invoked_body_bytes": 3006
+        },
+        {
+          "index": 63,
+          "varops": 3382299,
+          "sha256_calls": 0,
+          "function_calls": 26,
+          "invoked_body_bytes": 3006
+        },
+        {
+          "index": 64,
+          "varops": 3388470,
+          "sha256_calls": 0,
+          "function_calls": 26,
+          "invoked_body_bytes": 3006
+        },
+        {
+          "index": 65,
+          "varops": 3394614,
+          "sha256_calls": 0,
+          "function_calls": 26,
+          "invoked_body_bytes": 3006
+        },
+        {
+          "index": 66,
+          "varops": 3400755,
+          "sha256_calls": 0,
+          "function_calls": 26,
+          "invoked_body_bytes": 3006
+        },
+        {
+          "index": 67,
+          "varops": 3406899,
+          "sha256_calls": 0,
+          "function_calls": 26,
+          "invoked_body_bytes": 3006
+        },
+        {
+          "index": 68,
+          "varops": 3467145,
+          "sha256_calls": 0,
+          "function_calls": 24,
+          "invoked_body_bytes": 2986
+        },
+        {
+          "index": 69,
+          "varops": 3517497,
+          "sha256_calls": 0,
+          "function_calls": 26,
+          "invoked_body_bytes": 3006
+        },
+        {
+          "index": 70,
+          "varops": 8051084,
+          "sha256_calls": 61,
+          "function_calls": 151,
+          "invoked_body_bytes": 4840
+        },
+        {
+          "index": 71,
+          "varops": 4641855,
+          "sha256_calls": 34,
+          "function_calls": 77,
+          "invoked_body_bytes": 3333
+        },
+        {
+          "index": 72,
+          "varops": 4892143,
+          "sha256_calls": 38,
+          "function_calls": 82,
+          "invoked_body_bytes": 3377
+        },
+        {
+          "index": 73,
+          "varops": 2903662,
+          "sha256_calls": 0,
+          "function_calls": 45,
+          "invoked_body_bytes": 2262
+        },
+        {
+          "index": 74,
+          "varops": 2976153,
+          "sha256_calls": 0,
+          "function_calls": 41,
+          "invoked_body_bytes": 2204
+        },
+        {
+          "index": 75,
+          "varops": 4434484,
+          "sha256_calls": 30,
+          "function_calls": 65,
+          "invoked_body_bytes": 2851
+        },
+        {
+          "index": 76,
+          "varops": 2247620,
+          "sha256_calls": 0,
+          "function_calls": 33,
+          "invoked_body_bytes": 1780
+        },
+        {
+          "index": 77,
+          "varops": 42551044,
+          "sha256_calls": 523,
+          "function_calls": 1301,
+          "invoked_body_bytes": 27230
+        },
+        {
+          "index": 78,
+          "varops": 4848766,
+          "sha256_calls": 0,
+          "function_calls": 64,
+          "invoked_body_bytes": 3800
+        },
+        {
+          "index": 79,
+          "varops": 4780460,
+          "sha256_calls": 0,
+          "function_calls": 64,
+          "invoked_body_bytes": 3792
+        },
+        {
+          "index": 80,
+          "varops": 4723574,
+          "sha256_calls": 0,
+          "function_calls": 64,
+          "invoked_body_bytes": 3792
+        },
+        {
+          "index": 81,
+          "varops": 4656420,
+          "sha256_calls": 0,
+          "function_calls": 63,
+          "invoked_body_bytes": 3766
+        },
+        {
+          "index": 82,
+          "varops": 0,
+          "sha256_calls": 0,
+          "function_calls": 0,
+          "invoked_body_bytes": 0
+        },
+        {
+          "index": 83,
+          "varops": 8087651,
+          "sha256_calls": 61,
+          "function_calls": 151,
+          "invoked_body_bytes": 4840
+        },
+        {
+          "index": 84,
+          "varops": 4661233,
+          "sha256_calls": 34,
+          "function_calls": 77,
+          "invoked_body_bytes": 3333
+        },
+        {
+          "index": 85,
+          "varops": 4838846,
+          "sha256_calls": 38,
+          "function_calls": 82,
+          "invoked_body_bytes": 3377
+        },
+        {
+          "index": 86,
+          "varops": 2903653,
+          "sha256_calls": 0,
+          "function_calls": 45,
+          "invoked_body_bytes": 2262
+        },
+        {
+          "index": 87,
+          "varops": 2976153,
+          "sha256_calls": 0,
+          "function_calls": 41,
+          "invoked_body_bytes": 2204
+        },
+        {
+          "index": 88,
+          "varops": 4450403,
+          "sha256_calls": 30,
+          "function_calls": 65,
+          "invoked_body_bytes": 2851
+        },
+        {
+          "index": 89,
+          "varops": 2247611,
+          "sha256_calls": 0,
+          "function_calls": 33,
+          "invoked_body_bytes": 1780
+        },
+        {
+          "index": 90,
+          "varops": 42269087,
+          "sha256_calls": 523,
+          "function_calls": 1301,
+          "invoked_body_bytes": 27230
+        },
+        {
+          "index": 91,
+          "varops": 4820245,
+          "sha256_calls": 0,
+          "function_calls": 64,
+          "invoked_body_bytes": 3800
+        },
+        {
+          "index": 92,
+          "varops": 4797651,
+          "sha256_calls": 0,
+          "function_calls": 64,
+          "invoked_body_bytes": 3792
+        },
+        {
+          "index": 93,
+          "varops": 4740770,
+          "sha256_calls": 0,
+          "function_calls": 64,
+          "invoked_body_bytes": 3792
+        },
+        {
+          "index": 94,
+          "varops": 4685076,
+          "sha256_calls": 0,
+          "function_calls": 63,
+          "invoked_body_bytes": 3766
+        },
+        {
+          "index": 95,
+          "varops": 0,
+          "sha256_calls": 0,
+          "function_calls": 0,
+          "invoked_body_bytes": 0
+        },
+        {
+          "index": 96,
+          "varops": 8167808,
+          "sha256_calls": 61,
+          "function_calls": 151,
+          "invoked_body_bytes": 4840
+        },
+        {
+          "index": 97,
+          "varops": 4691032,
+          "sha256_calls": 34,
+          "function_calls": 77,
+          "invoked_body_bytes": 3333
+        },
+        {
+          "index": 98,
+          "varops": 4645702,
+          "sha256_calls": 38,
+          "function_calls": 82,
+          "invoked_body_bytes": 3377
+        },
+        {
+          "index": 99,
+          "varops": 2903659,
+          "sha256_calls": 0,
+          "function_calls": 45,
+          "invoked_body_bytes": 2262
+        },
+        {
+          "index": 100,
+          "varops": 2976153,
+          "sha256_calls": 0,
+          "function_calls": 41,
+          "invoked_body_bytes": 2204
+        },
+        {
+          "index": 101,
+          "varops": 4469068,
+          "sha256_calls": 30,
+          "function_calls": 65,
+          "invoked_body_bytes": 2851
+        },
+        {
+          "index": 102,
+          "varops": 2247617,
+          "sha256_calls": 0,
+          "function_calls": 33,
+          "invoked_body_bytes": 1780
+        },
+        {
+          "index": 103,
+          "varops": 42562845,
+          "sha256_calls": 523,
+          "function_calls": 1301,
+          "invoked_body_bytes": 27230
+        },
+        {
+          "index": 104,
+          "varops": 4835902,
+          "sha256_calls": 0,
+          "function_calls": 64,
+          "invoked_body_bytes": 3800
+        },
+        {
+          "index": 105,
+          "varops": 4779011,
+          "sha256_calls": 0,
+          "function_calls": 64,
+          "invoked_body_bytes": 3792
+        },
+        {
+          "index": 106,
+          "varops": 4710686,
+          "sha256_calls": 0,
+          "function_calls": 64,
+          "invoked_body_bytes": 3792
+        },
+        {
+          "index": 107,
+          "varops": 4700736,
+          "sha256_calls": 0,
+          "function_calls": 63,
+          "invoked_body_bytes": 3766
+        },
+        {
+          "index": 108,
+          "varops": 0,
+          "sha256_calls": 0,
+          "function_calls": 0,
+          "invoked_body_bytes": 0
+        },
+        {
+          "index": 109,
+          "varops": 8205070,
+          "sha256_calls": 61,
+          "function_calls": 151,
+          "invoked_body_bytes": 4840
+        },
+        {
+          "index": 110,
+          "varops": 4708736,
+          "sha256_calls": 34,
+          "function_calls": 77,
+          "invoked_body_bytes": 3333
+        },
+        {
+          "index": 111,
+          "varops": 4477278,
+          "sha256_calls": 38,
+          "function_calls": 82,
+          "invoked_body_bytes": 3377
+        },
+        {
+          "index": 112,
+          "varops": 2903659,
+          "sha256_calls": 0,
+          "function_calls": 45,
+          "invoked_body_bytes": 2262
+        },
+        {
+          "index": 113,
+          "varops": 2976153,
+          "sha256_calls": 0,
+          "function_calls": 41,
+          "invoked_body_bytes": 2204
+        },
+        {
+          "index": 114,
+          "varops": 4479972,
+          "sha256_calls": 30,
+          "function_calls": 65,
+          "invoked_body_bytes": 2851
+        },
+        {
+          "index": 115,
+          "varops": 2247620,
+          "sha256_calls": 0,
+          "function_calls": 33,
+          "invoked_body_bytes": 1780
+        },
+        {
+          "index": 116,
+          "varops": 42449893,
+          "sha256_calls": 523,
+          "function_calls": 1301,
+          "invoked_body_bytes": 27230
+        },
+        {
+          "index": 117,
+          "varops": 4863371,
+          "sha256_calls": 0,
+          "function_calls": 64,
+          "invoked_body_bytes": 3800
+        },
+        {
+          "index": 118,
+          "varops": 4795026,
+          "sha256_calls": 0,
+          "function_calls": 64,
+          "invoked_body_bytes": 3792
+        },
+        {
+          "index": 119,
+          "varops": 4738158,
+          "sha256_calls": 0,
+          "function_calls": 64,
+          "invoked_body_bytes": 3792
+        },
+        {
+          "index": 120,
+          "varops": 4705323,
+          "sha256_calls": 0,
+          "function_calls": 63,
+          "invoked_body_bytes": 3766
+        },
+        {
+          "index": 121,
+          "varops": 0,
+          "sha256_calls": 0,
+          "function_calls": 0,
+          "invoked_body_bytes": 0
+        },
+        {
+          "index": 122,
+          "varops": 8246715,
+          "sha256_calls": 61,
+          "function_calls": 151,
+          "invoked_body_bytes": 4840
+        },
+        {
+          "index": 123,
+          "varops": 4724325,
+          "sha256_calls": 34,
+          "function_calls": 77,
+          "invoked_body_bytes": 3333
+        },
+        {
+          "index": 124,
+          "varops": 4494034,
+          "sha256_calls": 38,
+          "function_calls": 82,
+          "invoked_body_bytes": 3377
+        },
+        {
+          "index": 125,
+          "varops": 2903662,
+          "sha256_calls": 0,
+          "function_calls": 45,
+          "invoked_body_bytes": 2262
+        },
+        {
+          "index": 126,
+          "varops": 2976150,
+          "sha256_calls": 0,
+          "function_calls": 41,
+          "invoked_body_bytes": 2204
+        },
+        {
+          "index": 127,
+          "varops": 4420987,
+          "sha256_calls": 30,
+          "function_calls": 65,
+          "invoked_body_bytes": 2851
+        },
+        {
+          "index": 128,
+          "varops": 2247623,
+          "sha256_calls": 0,
+          "function_calls": 33,
+          "invoked_body_bytes": 1780
+        },
+        {
+          "index": 129,
+          "varops": 42181589,
+          "sha256_calls": 523,
+          "function_calls": 1301,
+          "invoked_body_bytes": 27230
+        },
+        {
+          "index": 130,
+          "varops": 4856549,
+          "sha256_calls": 0,
+          "function_calls": 64,
+          "invoked_body_bytes": 3800
+        },
+        {
+          "index": 131,
+          "varops": 4776762,
+          "sha256_calls": 0,
+          "function_calls": 64,
+          "invoked_body_bytes": 3792
+        },
+        {
+          "index": 132,
+          "varops": 4719889,
+          "sha256_calls": 0,
+          "function_calls": 64,
+          "invoked_body_bytes": 3792
+        },
+        {
+          "index": 133,
+          "varops": 4709917,
+          "sha256_calls": 0,
+          "function_calls": 63,
+          "invoked_body_bytes": 3766
+        },
+        {
+          "index": 134,
+          "varops": 0,
+          "sha256_calls": 0,
+          "function_calls": 0,
+          "invoked_body_bytes": 0
+        },
+        {
+          "index": 135,
+          "varops": 8308774,
+          "sha256_calls": 61,
+          "function_calls": 151,
+          "invoked_body_bytes": 4840
+        },
+        {
+          "index": 136,
+          "varops": 4746395,
+          "sha256_calls": 34,
+          "function_calls": 77,
+          "invoked_body_bytes": 3333
+        },
+        {
+          "index": 137,
+          "varops": 4517247,
+          "sha256_calls": 38,
+          "function_calls": 82,
+          "invoked_body_bytes": 3377
+        },
+        {
+          "index": 138,
+          "varops": 2903662,
+          "sha256_calls": 0,
+          "function_calls": 45,
+          "invoked_body_bytes": 2262
+        },
+        {
+          "index": 139,
+          "varops": 2976150,
+          "sha256_calls": 0,
+          "function_calls": 41,
+          "invoked_body_bytes": 2204
+        },
+        {
+          "index": 140,
+          "varops": 4363662,
+          "sha256_calls": 30,
+          "function_calls": 65,
+          "invoked_body_bytes": 2851
+        },
+        {
+          "index": 141,
+          "varops": 2247617,
+          "sha256_calls": 0,
+          "function_calls": 33,
+          "invoked_body_bytes": 1780
+        },
+        {
+          "index": 142,
+          "varops": 42005463,
+          "sha256_calls": 523,
+          "function_calls": 1301,
+          "invoked_body_bytes": 27230
+        },
+        {
+          "index": 143,
+          "varops": 4653491,
+          "sha256_calls": 0,
+          "function_calls": 64,
+          "invoked_body_bytes": 3800
+        },
+        {
+          "index": 144,
+          "varops": 4585169,
+          "sha256_calls": 0,
+          "function_calls": 64,
+          "invoked_body_bytes": 3792
+        },
+        {
+          "index": 145,
+          "varops": 4728764,
+          "sha256_calls": 0,
+          "function_calls": 64,
+          "invoked_body_bytes": 3792
+        },
+        {
+          "index": 146,
+          "varops": 4714560,
+          "sha256_calls": 0,
+          "function_calls": 63,
+          "invoked_body_bytes": 3766
+        },
+        {
+          "index": 147,
+          "varops": 0,
+          "sha256_calls": 0,
+          "function_calls": 0,
+          "invoked_body_bytes": 0
+        },
+        {
+          "index": 148,
+          "varops": 8355515,
+          "sha256_calls": 61,
+          "function_calls": 151,
+          "invoked_body_bytes": 4840
+        },
+        {
+          "index": 149,
+          "varops": 4768369,
+          "sha256_calls": 34,
+          "function_calls": 77,
+          "invoked_body_bytes": 3333
+        },
+        {
+          "index": 150,
+          "varops": 4540364,
+          "sha256_calls": 38,
+          "function_calls": 82,
+          "invoked_body_bytes": 3377
+        },
+        {
+          "index": 151,
+          "varops": 2903659,
+          "sha256_calls": 0,
+          "function_calls": 45,
+          "invoked_body_bytes": 2262
+        },
+        {
+          "index": 152,
+          "varops": 2976153,
+          "sha256_calls": 0,
+          "function_calls": 41,
+          "invoked_body_bytes": 2204
+        },
+        {
+          "index": 153,
+          "varops": 4308638,
+          "sha256_calls": 30,
+          "function_calls": 65,
+          "invoked_body_bytes": 2851
+        },
+        {
+          "index": 154,
+          "varops": 2247623,
+          "sha256_calls": 0,
+          "function_calls": 33,
+          "invoked_body_bytes": 1780
+        },
+        {
+          "index": 155,
+          "varops": 42064193,
+          "sha256_calls": 523,
+          "function_calls": 1301,
+          "invoked_body_bytes": 27230
+        },
+        {
+          "index": 156,
+          "varops": 4658099,
+          "sha256_calls": 0,
+          "function_calls": 64,
+          "invoked_body_bytes": 3800
+        },
+        {
+          "index": 157,
+          "varops": 4589766,
+          "sha256_calls": 0,
+          "function_calls": 64,
+          "invoked_body_bytes": 3792
+        },
+        {
+          "index": 158,
+          "varops": 4555766,
+          "sha256_calls": 0,
+          "function_calls": 64,
+          "invoked_body_bytes": 3792
+        },
+        {
+          "index": 159,
+          "varops": 4511505,
+          "sha256_calls": 0,
+          "function_calls": 63,
+          "invoked_body_bytes": 3766
+        },
+        {
+          "index": 160,
+          "varops": 0,
+          "sha256_calls": 0,
+          "function_calls": 0,
+          "invoked_body_bytes": 0
+        },
+        {
+          "index": 161,
+          "varops": 8626186,
+          "sha256_calls": 61,
+          "function_calls": 151,
+          "invoked_body_bytes": 4840
+        },
+        {
+          "index": 162,
+          "varops": 5416482,
+          "sha256_calls": 34,
+          "function_calls": 74,
+          "invoked_body_bytes": 3261
+        },
+        {
+          "index": 163,
+          "varops": 5387097,
+          "sha256_calls": 38,
+          "function_calls": 77,
+          "invoked_body_bytes": 3257
+        },
+        {
+          "index": 164,
+          "varops": 3629986,
+          "sha256_calls": 0,
+          "function_calls": 40,
+          "invoked_body_bytes": 2142
+        },
+        {
+          "index": 165,
+          "varops": 3473508,
+          "sha256_calls": 0,
+          "function_calls": 41,
+          "invoked_body_bytes": 2204
+        },
+        {
+          "index": 166,
+          "varops": 4430546,
+          "sha256_calls": 30,
+          "function_calls": 65,
+          "invoked_body_bytes": 2851
+        },
+        {
+          "index": 167,
+          "varops": 2391683,
+          "sha256_calls": 0,
+          "function_calls": 29,
+          "invoked_body_bytes": 1684
+        },
+        {
+          "index": 168,
+          "varops": 42088444,
+          "sha256_calls": 523,
+          "function_calls": 1300,
+          "invoked_body_bytes": 27206
+        },
+        {
+          "index": 169,
+          "varops": 4799641,
+          "sha256_calls": 0,
+          "function_calls": 64,
+          "invoked_body_bytes": 3800
+        },
+        {
+          "index": 170,
+          "varops": 4702805,
+          "sha256_calls": 0,
+          "function_calls": 64,
+          "invoked_body_bytes": 3792
+        },
+        {
+          "index": 171,
+          "varops": 4617434,
+          "sha256_calls": 0,
+          "function_calls": 64,
+          "invoked_body_bytes": 3792
+        },
+        {
+          "index": 172,
+          "varops": 4558929,
+          "sha256_calls": 0,
+          "function_calls": 63,
+          "invoked_body_bytes": 3766
+        },
+        {
+          "index": 173,
+          "varops": 0,
+          "sha256_calls": 0,
+          "function_calls": 0,
+          "invoked_body_bytes": 0
+        },
+        {
+          "index": 174,
+          "varops": 0,
+          "sha256_calls": 0,
+          "function_calls": 0,
+          "invoked_body_bytes": 0
+        }
+      ]
+    },
+    "stage_measurements_available": true
+  },
+  {
+    "name": "partitioned_global_and_query_sections",
+    "script_bytes": 144905,
+    "witness_payload_bytes": 224896,
+    "execution": {
+      "ok": true,
+      "error": "No error",
+      "immediate_success": false,
+      "transaction_weight": 370387,
+      "varops": 1399895948,
+      "budget": 3703870000,
+      "main_pc": 144905,
+      "pc": 144905,
+      "sha256_calls": 9491,
+      "sha256_input_bytes": 513141,
+      "function_calls": 26625,
+      "invoked_body_bytes": 973854,
+      "peak_entries": 1481,
+      "peak_payload_bytes": 234614,
+      "peak_element_bytes": 4096,
+      "final_stack_entries": 1,
+      "final_stack_exact_true": true,
+      "opcodes": {
+        "0_0": 13890,
+        "OP_UNKNOWN_1": 37727,
+        "OP_UNKNOWN_2": 22154,
+        "OP_UNKNOWN_3": 3624,
+        "OP_UNKNOWN_4": 52699,
+        "OP_UNKNOWN_5": 12,
+        "OP_UNKNOWN_6": 7,
+        "OP_UNKNOWN_7": 1,
+        "OP_UNKNOWN_8": 41,
+        "OP_UNKNOWN_10": 3,
+        "OP_UNKNOWN_11": 4,
+        "OP_UNKNOWN_12": 15,
+        "OP_UNKNOWN_13": 2,
+        "OP_UNKNOWN_15": 1,
+        "OP_UNKNOWN_16": 14,
+        "OP_UNKNOWN_20": 1,
+        "OP_UNKNOWN_21": 1,
+        "OP_UNKNOWN_24": 24,
+        "OP_UNKNOWN_26": 18,
+        "OP_UNKNOWN_28": 1,
+        "OP_UNKNOWN_32": 23,
+        "OP_UNKNOWN_34": 1,
+        "OP_UNKNOWN_36": 1,
+        "OP_UNKNOWN_44": 1,
+        "OP_UNKNOWN_58": 1,
+        "OP_UNKNOWN_59": 1,
+        "OP_UNKNOWN_61": 1,
+        "OP_UNKNOWN_62": 1,
+        "OP_UNKNOWN_65": 1,
+        "OP_PUSHDATA1_76": 10,
+        "OP_PUSHDATA2_77": 4,
+        "1_81": 13142,
+        "2_82": 9599,
+        "3_83": 23205,
+        "4_84": 33836,
+        "5_85": 5261,
+        "6_86": 5514,
+        "7_87": 13122,
+        "8_88": 3602,
+        "9_89": 3069,
+        "10_90": 2335,
+        "11_91": 9527,
+        "12_92": 1347,
+        "13_93": 671,
+        "14_94": 763,
+        "15_95": 1142,
+        "16_96": 1270,
+        "OP_IF_99": 16248,
+        "OP_NOTIF_100": 1640,
+        "OP_ELSE_103": 8256,
+        "OP_ENDIF_104": 17888,
+        "OP_VERIFY_105": 5004,
+        "OP_TOALTSTACK_107": 33772,
+        "OP_FROMALTSTACK_108": 33772,
+        "OP_2DROP_109": 7222,
+        "OP_DEPTH_116": 57,
+        "OP_DROP_117": 2000,
+        "OP_DUP_118": 27306,
+        "OP_OVER_120": 2559,
+        "OP_PICK_121": 49134,
+        "OP_ROLL_122": 65791,
+        "OP_ROT_123": 4493,
+        "OP_SWAP_124": 51433,
+        "OP_CAT_126": 9079,
+        "OP_SUBSTR_127": 10998,
+        "OP_LEFT_128": 10820,
+        "OP_RIGHT_129": 2784,
+        "OP_SIZE_130": 98,
+        "OP_AND_132": 176,
+        "OP_EQUALVERIFY_136": 2419,
+        "OP_1SUB_140": 56,
+        "OP_ADD_147": 31201,
+        "OP_SUB_148": 14937,
+        "OP_MUL_149": 8667,
+        "OP_MOD_151": 35214,
+        "OP_LESSTHAN_159": 4332,
+        "OP_LESSTHANOREQUAL_161": 336,
+        "OP_GREATERTHANOREQUAL_162": 11376,
+        "OP_SHA256_168": 9491,
+        "OP_DEFINE_187": 128,
+        "OP_INVOKE_188": 26625,
+        "OP_BYTEREV_207": 2
+      },
+      "stack_top": [],
+      "stages": [
+        {
+          "index": 0,
+          "varops": 39228374,
+          "sha256_calls": 576,
+          "function_calls": 637,
+          "invoked_body_bytes": 21911,
+          "semantic_field_operations": {}
+        },
+        {
+          "index": 1,
+          "varops": 55817396,
+          "sha256_calls": 848,
+          "function_calls": 1121,
+          "invoked_body_bytes": 29588,
+          "semantic_field_operations": {}
+        },
+        {
+          "index": 2,
+          "varops": 59749644,
+          "sha256_calls": 848,
+          "function_calls": 1570,
+          "invoked_body_bytes": 34376,
+          "semantic_field_operations": {}
+        },
+        {
+          "index": 3,
+          "varops": 50032014,
+          "sha256_calls": 720,
+          "function_calls": 1356,
+          "invoked_body_bytes": 27357,
+          "semantic_field_operations": {}
+        },
+        {
+          "index": 4,
+          "varops": 53361017,
+          "sha256_calls": 792,
+          "function_calls": 1503,
+          "invoked_body_bytes": 28671,
+          "semantic_field_operations": {}
+        },
+        {
+          "index": 5,
+          "varops": 3576977,
+          "sha256_calls": 4,
+          "function_calls": 38,
+          "invoked_body_bytes": 2794,
+          "semantic_field_operations": {
+            "qm31_add": 9,
+            "qm31_mul": 3,
+            "qm31_sub": 1
+          }
+        },
+        {
+          "index": 6,
+          "varops": 8713231,
+          "sha256_calls": 0,
+          "function_calls": 77,
+          "invoked_body_bytes": 5859,
+          "semantic_field_operations": {
+            "qm31_add": 21,
+            "qm31_mul": 7
+          }
+        },
+        {
+          "index": 7,
+          "varops": 8653339,
+          "sha256_calls": 0,
+          "function_calls": 77,
+          "invoked_body_bytes": 5859,
+          "semantic_field_operations": {
+            "qm31_add": 21,
+            "qm31_mul": 7
+          }
+        },
+        {
+          "index": 8,
+          "varops": 8613775,
+          "sha256_calls": 0,
+          "function_calls": 77,
+          "invoked_body_bytes": 5859,
+          "semantic_field_operations": {
+            "qm31_add": 21,
+            "qm31_mul": 7
+          }
+        },
+        {
+          "index": 9,
+          "varops": 8557327,
+          "sha256_calls": 0,
+          "function_calls": 77,
+          "invoked_body_bytes": 5859,
+          "semantic_field_operations": {
+            "qm31_add": 21,
+            "qm31_mul": 7
+          }
+        },
+        {
+          "index": 10,
+          "varops": 8500858,
+          "sha256_calls": 0,
+          "function_calls": 77,
+          "invoked_body_bytes": 5859,
+          "semantic_field_operations": {
+            "qm31_add": 21,
+            "qm31_mul": 7
+          }
+        },
+        {
+          "index": 11,
+          "varops": 8443675,
+          "sha256_calls": 0,
+          "function_calls": 77,
+          "invoked_body_bytes": 5859,
+          "semantic_field_operations": {
+            "qm31_add": 21,
+            "qm31_mul": 7
+          }
+        },
+        {
+          "index": 12,
+          "varops": 8386645,
+          "sha256_calls": 0,
+          "function_calls": 77,
+          "invoked_body_bytes": 5859,
+          "semantic_field_operations": {
+            "qm31_add": 21,
+            "qm31_mul": 7
+          }
+        },
+        {
+          "index": 13,
+          "varops": 8329816,
+          "sha256_calls": 0,
+          "function_calls": 77,
+          "invoked_body_bytes": 5859,
+          "semantic_field_operations": {
+            "qm31_add": 21,
+            "qm31_mul": 7
+          }
+        },
+        {
+          "index": 14,
+          "varops": 8272399,
+          "sha256_calls": 0,
+          "function_calls": 77,
+          "invoked_body_bytes": 5859,
+          "semantic_field_operations": {
+            "qm31_add": 21,
+            "qm31_mul": 7
+          }
+        },
+        {
+          "index": 15,
+          "varops": 8215960,
+          "sha256_calls": 0,
+          "function_calls": 77,
+          "invoked_body_bytes": 5859,
+          "semantic_field_operations": {
+            "qm31_add": 21,
+            "qm31_mul": 7
+          }
+        },
+        {
+          "index": 16,
+          "varops": 8158135,
+          "sha256_calls": 0,
+          "function_calls": 77,
+          "invoked_body_bytes": 5859,
+          "semantic_field_operations": {
+            "qm31_add": 21,
+            "qm31_mul": 7
+          }
+        },
+        {
+          "index": 17,
+          "varops": 8102290,
+          "sha256_calls": 0,
+          "function_calls": 77,
+          "invoked_body_bytes": 5859,
+          "semantic_field_operations": {
+            "qm31_add": 21,
+            "qm31_mul": 7
+          }
+        },
+        {
+          "index": 18,
+          "varops": 8045938,
+          "sha256_calls": 0,
+          "function_calls": 77,
+          "invoked_body_bytes": 5859,
+          "semantic_field_operations": {
+            "qm31_add": 21,
+            "qm31_mul": 7
+          }
+        },
+        {
+          "index": 19,
+          "varops": 7989463,
+          "sha256_calls": 0,
+          "function_calls": 77,
+          "invoked_body_bytes": 5859,
+          "semantic_field_operations": {
+            "qm31_add": 21,
+            "qm31_mul": 7
+          }
+        },
+        {
+          "index": 20,
+          "varops": 7933036,
+          "sha256_calls": 0,
+          "function_calls": 77,
+          "invoked_body_bytes": 5859,
+          "semantic_field_operations": {
+            "qm31_add": 21,
+            "qm31_mul": 7
+          }
+        },
+        {
+          "index": 21,
+          "varops": 7876591,
+          "sha256_calls": 0,
+          "function_calls": 77,
+          "invoked_body_bytes": 5859,
+          "semantic_field_operations": {
+            "qm31_add": 21,
+            "qm31_mul": 7
+          }
+        },
+        {
+          "index": 22,
+          "varops": 7820143,
+          "sha256_calls": 0,
+          "function_calls": 77,
+          "invoked_body_bytes": 5859,
+          "semantic_field_operations": {
+            "qm31_add": 21,
+            "qm31_mul": 7
+          }
+        },
+        {
+          "index": 23,
+          "varops": 7763695,
+          "sha256_calls": 0,
+          "function_calls": 77,
+          "invoked_body_bytes": 5859,
+          "semantic_field_operations": {
+            "qm31_add": 21,
+            "qm31_mul": 7
+          }
+        },
+        {
+          "index": 24,
+          "varops": 7707256,
+          "sha256_calls": 0,
+          "function_calls": 77,
+          "invoked_body_bytes": 5859,
+          "semantic_field_operations": {
+            "qm31_add": 21,
+            "qm31_mul": 7
+          }
+        },
+        {
+          "index": 25,
+          "varops": 7650805,
+          "sha256_calls": 0,
+          "function_calls": 77,
+          "invoked_body_bytes": 5859,
+          "semantic_field_operations": {
+            "qm31_add": 21,
+            "qm31_mul": 7
+          }
+        },
+        {
+          "index": 26,
+          "varops": 7594354,
+          "sha256_calls": 0,
+          "function_calls": 77,
+          "invoked_body_bytes": 5859,
+          "semantic_field_operations": {
+            "qm31_add": 21,
+            "qm31_mul": 7
+          }
+        },
+        {
+          "index": 27,
+          "varops": 7537915,
+          "sha256_calls": 0,
+          "function_calls": 77,
+          "invoked_body_bytes": 5859,
+          "semantic_field_operations": {
+            "qm31_add": 21,
+            "qm31_mul": 7
+          }
+        },
+        {
+          "index": 28,
+          "varops": 7481461,
+          "sha256_calls": 0,
+          "function_calls": 77,
+          "invoked_body_bytes": 5859,
+          "semantic_field_operations": {
+            "qm31_add": 21,
+            "qm31_mul": 7
+          }
+        },
+        {
+          "index": 29,
+          "varops": 7425013,
+          "sha256_calls": 0,
+          "function_calls": 77,
+          "invoked_body_bytes": 5859,
+          "semantic_field_operations": {
+            "qm31_add": 21,
+            "qm31_mul": 7
+          }
+        },
+        {
+          "index": 30,
+          "varops": 7368565,
+          "sha256_calls": 0,
+          "function_calls": 77,
+          "invoked_body_bytes": 5859,
+          "semantic_field_operations": {
+            "qm31_add": 21,
+            "qm31_mul": 7
+          }
+        },
+        {
+          "index": 31,
+          "varops": 7312123,
+          "sha256_calls": 0,
+          "function_calls": 77,
+          "invoked_body_bytes": 5859,
+          "semantic_field_operations": {
+            "qm31_add": 21,
+            "qm31_mul": 7
+          }
+        },
+        {
+          "index": 32,
+          "varops": 7255672,
+          "sha256_calls": 0,
+          "function_calls": 77,
+          "invoked_body_bytes": 5859,
+          "semantic_field_operations": {
+            "qm31_add": 21,
+            "qm31_mul": 7
+          }
+        },
+        {
+          "index": 33,
+          "varops": 7199218,
+          "sha256_calls": 0,
+          "function_calls": 77,
+          "invoked_body_bytes": 5859,
+          "semantic_field_operations": {
+            "qm31_add": 21,
+            "qm31_mul": 7
+          }
+        },
+        {
+          "index": 34,
+          "varops": 7142767,
+          "sha256_calls": 0,
+          "function_calls": 77,
+          "invoked_body_bytes": 5859,
+          "semantic_field_operations": {
+            "qm31_add": 21,
+            "qm31_mul": 7
+          }
+        },
+        {
+          "index": 35,
+          "varops": 7086319,
+          "sha256_calls": 0,
+          "function_calls": 77,
+          "invoked_body_bytes": 5859,
+          "semantic_field_operations": {
+            "qm31_add": 21,
+            "qm31_mul": 7
+          }
+        },
+        {
+          "index": 36,
+          "varops": 7029817,
+          "sha256_calls": 0,
+          "function_calls": 77,
+          "invoked_body_bytes": 5859,
+          "semantic_field_operations": {
+            "qm31_add": 21,
+            "qm31_mul": 7
+          }
+        },
+        {
+          "index": 37,
+          "varops": 6973339,
+          "sha256_calls": 0,
+          "function_calls": 77,
+          "invoked_body_bytes": 5859,
+          "semantic_field_operations": {
+            "qm31_add": 21,
+            "qm31_mul": 7
+          }
+        },
+        {
+          "index": 38,
+          "varops": 6916900,
+          "sha256_calls": 0,
+          "function_calls": 77,
+          "invoked_body_bytes": 5859,
+          "semantic_field_operations": {
+            "qm31_add": 21,
+            "qm31_mul": 7
+          }
+        },
+        {
+          "index": 39,
+          "varops": 6860455,
+          "sha256_calls": 0,
+          "function_calls": 77,
+          "invoked_body_bytes": 5859,
+          "semantic_field_operations": {
+            "qm31_add": 21,
+            "qm31_mul": 7
+          }
+        },
+        {
+          "index": 40,
+          "varops": 6804007,
+          "sha256_calls": 0,
+          "function_calls": 77,
+          "invoked_body_bytes": 5859,
+          "semantic_field_operations": {
+            "qm31_add": 21,
+            "qm31_mul": 7
+          }
+        },
+        {
+          "index": 41,
+          "varops": 6886522,
+          "sha256_calls": 0,
+          "function_calls": 77,
+          "invoked_body_bytes": 5859,
+          "semantic_field_operations": {
+            "qm31_add": 21,
+            "qm31_mul": 7
+          }
+        },
+        {
+          "index": 42,
+          "varops": 6969316,
+          "sha256_calls": 0,
+          "function_calls": 77,
+          "invoked_body_bytes": 5859,
+          "semantic_field_operations": {
+            "qm31_add": 21,
+            "qm31_mul": 7
+          }
+        },
+        {
+          "index": 43,
+          "varops": 6912871,
+          "sha256_calls": 0,
+          "function_calls": 77,
+          "invoked_body_bytes": 5859,
+          "semantic_field_operations": {
+            "qm31_add": 21,
+            "qm31_mul": 7
+          }
+        },
+        {
+          "index": 44,
+          "varops": 3924862,
+          "sha256_calls": 0,
+          "function_calls": 44,
+          "invoked_body_bytes": 3348,
+          "semantic_field_operations": {
+            "qm31_add": 12,
+            "qm31_mul": 4
+          }
+        },
+        {
+          "index": 45,
+          "varops": 19319374,
+          "sha256_calls": 215,
+          "function_calls": 356,
+          "invoked_body_bytes": 14964,
+          "semantic_field_operations": {
+            "cm31_add": 12,
+            "m31_add": 12,
+            "m31_neg": 24,
+            "m31_sub": 12,
+            "qm31_add": 21,
+            "qm31_mul": 8,
+            "qm31_sub": 2
+          }
+        },
+        {
+          "index": 46,
+          "varops": 4599816,
+          "sha256_calls": 0,
+          "function_calls": 16,
+          "invoked_body_bytes": 4528,
+          "semantic_field_operations": {
+            "qm31_add": 2,
+            "qm31_mul": 8,
+            "qm31_sub": 2
+          }
+        },
+        {
+          "index": 47,
+          "varops": 8313005,
+          "sha256_calls": 0,
+          "function_calls": 82,
+          "invoked_body_bytes": 7050,
+          "semantic_field_operations": {
+            "cm31_add": 6,
+            "m31_add": 6,
+            "m31_neg": 16,
+            "m31_sub": 6,
+            "qm31_add": 30,
+            "qm31_mul": 8,
+            "qm31_sub": 4
+          }
+        },
+        {
+          "index": 48,
+          "varops": 4533361,
+          "sha256_calls": 0,
+          "function_calls": 20,
+          "invoked_body_bytes": 4369,
+          "semantic_field_operations": {
+            "qm31_add": 3,
+            "qm31_mul": 7,
+            "qm31_sub": 5
+          }
+        },
+        {
+          "index": 49,
+          "varops": 4354356,
+          "sha256_calls": 0,
+          "function_calls": 32,
+          "invoked_body_bytes": 3970,
+          "semantic_field_operations": {
+            "m31_add": 2,
+            "m31_neg": 4,
+            "m31_sub": 2,
+            "qm31_add": 4,
+            "qm31_mul": 6,
+            "qm31_scalar_mul": 4,
+            "qm31_sub": 1
+          }
+        },
+        {
+          "index": 50,
+          "varops": 5251349,
+          "sha256_calls": 0,
+          "function_calls": 40,
+          "invoked_body_bytes": 5024,
+          "semantic_field_operations": {
+            "m31_sub": 8,
+            "qm31_add": 8,
+            "qm31_mul": 8
+          }
+        },
+        {
+          "index": 51,
+          "varops": 4585861,
+          "sha256_calls": 0,
+          "function_calls": 36,
+          "invoked_body_bytes": 4387,
+          "semantic_field_operations": {
+            "m31_sub": 6,
+            "qm31_add": 6,
+            "qm31_mul": 7
+          }
+        },
+        {
+          "index": 52,
+          "varops": 4717852,
+          "sha256_calls": 0,
+          "function_calls": 19,
+          "invoked_body_bytes": 4289,
+          "semantic_field_operations": {
+            "qm31_add": 5,
+            "qm31_mul": 7,
+            "qm31_sub": 3
+          }
+        },
+        {
+          "index": 53,
+          "varops": 3379516,
+          "sha256_calls": 0,
+          "function_calls": 35,
+          "invoked_body_bytes": 2746,
+          "semantic_field_operations": {
+            "cm31_add": 2,
+            "m31_add": 2,
+            "m31_neg": 8,
+            "m31_sub": 2,
+            "qm31_add": 5,
+            "qm31_mul": 3,
+            "qm31_scalar_mul": 5,
+            "qm31_sub": 3
+          }
+        },
+        {
+          "index": 54,
+          "varops": 3284943,
+          "sha256_calls": 0,
+          "function_calls": 24,
+          "invoked_body_bytes": 2986,
+          "semantic_field_operations": {
+            "cm31_mul": 16,
+            "cm31_sub": 2,
+            "qm31_mul": 2
+          }
+        },
+        {
+          "index": 55,
+          "varops": 3298479,
+          "sha256_calls": 0,
+          "function_calls": 26,
+          "invoked_body_bytes": 3006,
+          "semantic_field_operations": {
+            "cm31_mul": 16,
+            "cm31_sub": 2,
+            "qm31_mul": 2
+          }
+        },
+        {
+          "index": 56,
+          "varops": 3339246,
+          "sha256_calls": 0,
+          "function_calls": 26,
+          "invoked_body_bytes": 3006,
+          "semantic_field_operations": {
+            "cm31_mul": 16,
+            "cm31_sub": 2,
+            "qm31_mul": 2
+          }
+        },
+        {
+          "index": 57,
+          "varops": 3345390,
+          "sha256_calls": 0,
+          "function_calls": 26,
+          "invoked_body_bytes": 3006,
+          "semantic_field_operations": {
+            "cm31_mul": 16,
+            "cm31_sub": 2,
+            "qm31_mul": 2
+          }
+        },
+        {
+          "index": 58,
+          "varops": 3351537,
+          "sha256_calls": 0,
+          "function_calls": 26,
+          "invoked_body_bytes": 3006,
+          "semantic_field_operations": {
+            "cm31_mul": 16,
+            "cm31_sub": 2,
+            "qm31_mul": 2
+          }
+        },
+        {
+          "index": 59,
+          "varops": 3357702,
+          "sha256_calls": 0,
+          "function_calls": 26,
+          "invoked_body_bytes": 3006,
+          "semantic_field_operations": {
+            "cm31_mul": 16,
+            "cm31_sub": 2,
+            "qm31_mul": 2
+          }
+        },
+        {
+          "index": 60,
+          "varops": 3363837,
+          "sha256_calls": 0,
+          "function_calls": 26,
+          "invoked_body_bytes": 3006,
+          "semantic_field_operations": {
+            "cm31_mul": 16,
+            "cm31_sub": 2,
+            "qm31_mul": 2
+          }
+        },
+        {
+          "index": 61,
+          "varops": 3369954,
+          "sha256_calls": 0,
+          "function_calls": 26,
+          "invoked_body_bytes": 3006,
+          "semantic_field_operations": {
+            "cm31_mul": 16,
+            "cm31_sub": 2,
+            "qm31_mul": 2
+          }
+        },
+        {
+          "index": 62,
+          "varops": 3376119,
+          "sha256_calls": 0,
+          "function_calls": 26,
+          "invoked_body_bytes": 3006,
+          "semantic_field_operations": {
+            "cm31_mul": 16,
+            "cm31_sub": 2,
+            "qm31_mul": 2
+          }
+        },
+        {
+          "index": 63,
+          "varops": 3382299,
+          "sha256_calls": 0,
+          "function_calls": 26,
+          "invoked_body_bytes": 3006,
+          "semantic_field_operations": {
+            "cm31_mul": 16,
+            "cm31_sub": 2,
+            "qm31_mul": 2
+          }
+        },
+        {
+          "index": 64,
+          "varops": 3388470,
+          "sha256_calls": 0,
+          "function_calls": 26,
+          "invoked_body_bytes": 3006,
+          "semantic_field_operations": {
+            "cm31_mul": 16,
+            "cm31_sub": 2,
+            "qm31_mul": 2
+          }
+        },
+        {
+          "index": 65,
+          "varops": 3394614,
+          "sha256_calls": 0,
+          "function_calls": 26,
+          "invoked_body_bytes": 3006,
+          "semantic_field_operations": {
+            "cm31_mul": 16,
+            "cm31_sub": 2,
+            "qm31_mul": 2
+          }
+        },
+        {
+          "index": 66,
+          "varops": 3400755,
+          "sha256_calls": 0,
+          "function_calls": 26,
+          "invoked_body_bytes": 3006,
+          "semantic_field_operations": {
+            "cm31_mul": 16,
+            "cm31_sub": 2,
+            "qm31_mul": 2
+          }
+        },
+        {
+          "index": 67,
+          "varops": 3406899,
+          "sha256_calls": 0,
+          "function_calls": 26,
+          "invoked_body_bytes": 3006,
+          "semantic_field_operations": {
+            "cm31_mul": 16,
+            "cm31_sub": 2,
+            "qm31_mul": 2
+          }
+        },
+        {
+          "index": 68,
+          "varops": 3467145,
+          "sha256_calls": 0,
+          "function_calls": 24,
+          "invoked_body_bytes": 2986,
+          "semantic_field_operations": {
+            "cm31_mul": 16,
+            "cm31_sub": 2,
+            "qm31_mul": 2
+          }
+        },
+        {
+          "index": 69,
+          "varops": 3517497,
+          "sha256_calls": 0,
+          "function_calls": 26,
+          "invoked_body_bytes": 3006,
+          "semantic_field_operations": {
+            "cm31_mul": 16,
+            "cm31_sub": 2,
+            "qm31_mul": 2
+          }
+        },
+        {
+          "index": 70,
+          "varops": 8445566,
+          "sha256_calls": 61,
+          "function_calls": 151,
+          "invoked_body_bytes": 4840,
+          "semantic_field_operations": {
+            "cm31_mul": 9,
+            "cm31_sub": 3,
+            "m31_sub": 6,
+            "qm31_add": 3,
+            "qm31_scalar_mul": 4,
+            "qm31_sub": 2
+          }
+        },
+        {
+          "index": 71,
+          "varops": 4783551,
+          "sha256_calls": 34,
+          "function_calls": 77,
+          "invoked_body_bytes": 3333,
+          "semantic_field_operations": {
+            "cm31_mul": 2,
+            "qm31_add": 9,
+            "qm31_scalar_mul": 10,
+            "qm31_sub": 5
+          }
+        },
+        {
+          "index": 72,
+          "varops": 4556317,
+          "sha256_calls": 38,
+          "function_calls": 82,
+          "invoked_body_bytes": 3377,
+          "semantic_field_operations": {
+            "qm31_add": 10,
+            "qm31_scalar_mul": 10,
+            "qm31_sub": 5
+          }
+        },
+        {
+          "index": 73,
+          "varops": 2903662,
+          "sha256_calls": 0,
+          "function_calls": 45,
+          "invoked_body_bytes": 2262,
+          "semantic_field_operations": {
+            "qm31_add": 11,
+            "qm31_scalar_mul": 12,
+            "qm31_sub": 6
+          }
+        },
+        {
+          "index": 74,
+          "varops": 2976153,
+          "sha256_calls": 0,
+          "function_calls": 41,
+          "invoked_body_bytes": 2204,
+          "semantic_field_operations": {
+            "qm31_add": 12,
+            "qm31_scalar_mul": 12,
+            "qm31_sub": 6
+          }
+        },
+        {
+          "index": 75,
+          "varops": 4274086,
+          "sha256_calls": 30,
+          "function_calls": 65,
+          "invoked_body_bytes": 2851,
+          "semantic_field_operations": {
+            "cm31_mul": 2,
+            "qm31_add": 9,
+            "qm31_scalar_mul": 8,
+            "qm31_sub": 4
+          }
+        },
+        {
+          "index": 76,
+          "varops": 2247620,
+          "sha256_calls": 0,
+          "function_calls": 33,
+          "invoked_body_bytes": 1780,
+          "semantic_field_operations": {
+            "cm31_mul": 2,
+            "qm31_add": 8,
+            "qm31_scalar_mul": 8,
+            "qm31_sub": 4
+          }
+        },
+        {
+          "index": 77,
+          "varops": 42226738,
+          "sha256_calls": 523,
+          "function_calls": 1301,
+          "invoked_body_bytes": 27230,
+          "semantic_field_operations": {
+            "qm31_add": 9,
+            "qm31_mul": 5,
+            "qm31_scalar_mul": 4,
+            "qm31_sub": 4
+          }
+        },
+        {
+          "index": 78,
+          "varops": 4679038,
+          "sha256_calls": 0,
+          "function_calls": 64,
+          "invoked_body_bytes": 3800,
+          "semantic_field_operations": {
+            "qm31_add": 8,
+            "qm31_mul": 4,
+            "qm31_scalar_mul": 4,
+            "qm31_sub": 4
+          }
+        },
+        {
+          "index": 79,
+          "varops": 4610732,
+          "sha256_calls": 0,
+          "function_calls": 64,
+          "invoked_body_bytes": 3792,
+          "semantic_field_operations": {
+            "qm31_add": 8,
+            "qm31_mul": 4,
+            "qm31_scalar_mul": 4,
+            "qm31_sub": 4
+          }
+        },
+        {
+          "index": 80,
+          "varops": 4553846,
+          "sha256_calls": 0,
+          "function_calls": 64,
+          "invoked_body_bytes": 3792,
+          "semantic_field_operations": {
+            "qm31_add": 8,
+            "qm31_mul": 4,
+            "qm31_scalar_mul": 4,
+            "qm31_sub": 4
+          }
+        },
+        {
+          "index": 81,
+          "varops": 4486692,
+          "sha256_calls": 0,
+          "function_calls": 63,
+          "invoked_body_bytes": 3766,
+          "semantic_field_operations": {
+            "qm31_add": 8,
+            "qm31_mul": 4,
+            "qm31_scalar_mul": 4,
+            "qm31_sub": 4
+          }
+        },
+        {
+          "index": 82,
+          "varops": 0,
+          "sha256_calls": 0,
+          "function_calls": 0,
+          "invoked_body_bytes": 0,
+          "semantic_field_operations": {}
+        },
+        {
+          "index": 83,
+          "varops": 8430053,
+          "sha256_calls": 61,
+          "function_calls": 151,
+          "invoked_body_bytes": 4840,
+          "semantic_field_operations": {
+            "cm31_mul": 9,
+            "cm31_sub": 3,
+            "m31_sub": 6,
+            "qm31_add": 3,
+            "qm31_scalar_mul": 4,
+            "qm31_sub": 2
+          }
+        },
+        {
+          "index": 84,
+          "varops": 4782193,
+          "sha256_calls": 34,
+          "function_calls": 77,
+          "invoked_body_bytes": 3333,
+          "semantic_field_operations": {
+            "cm31_mul": 2,
+            "qm31_add": 9,
+            "qm31_scalar_mul": 10,
+            "qm31_sub": 5
+          }
+        },
+        {
+          "index": 85,
+          "varops": 4554956,
+          "sha256_calls": 38,
+          "function_calls": 82,
+          "invoked_body_bytes": 3377,
+          "semantic_field_operations": {
+            "qm31_add": 10,
+            "qm31_scalar_mul": 10,
+            "qm31_sub": 5
+          }
+        },
+        {
+          "index": 86,
+          "varops": 2903653,
+          "sha256_calls": 0,
+          "function_calls": 45,
+          "invoked_body_bytes": 2262,
+          "semantic_field_operations": {
+            "qm31_add": 11,
+            "qm31_scalar_mul": 12,
+            "qm31_sub": 6
+          }
+        },
+        {
+          "index": 87,
+          "varops": 2976153,
+          "sha256_calls": 0,
+          "function_calls": 41,
+          "invoked_body_bytes": 2204,
+          "semantic_field_operations": {
+            "qm31_add": 12,
+            "qm31_scalar_mul": 12,
+            "qm31_sub": 6
+          }
+        },
+        {
+          "index": 88,
+          "varops": 4272485,
+          "sha256_calls": 30,
+          "function_calls": 65,
+          "invoked_body_bytes": 2851,
+          "semantic_field_operations": {
+            "cm31_mul": 2,
+            "qm31_add": 9,
+            "qm31_scalar_mul": 8,
+            "qm31_sub": 4
+          }
+        },
+        {
+          "index": 89,
+          "varops": 2247611,
+          "sha256_calls": 0,
+          "function_calls": 33,
+          "invoked_body_bytes": 1780,
+          "semantic_field_operations": {
+            "cm31_mul": 2,
+            "qm31_add": 8,
+            "qm31_scalar_mul": 8,
+            "qm31_sub": 4
+          }
+        },
+        {
+          "index": 90,
+          "varops": 42040733,
+          "sha256_calls": 523,
+          "function_calls": 1301,
+          "invoked_body_bytes": 27230,
+          "semantic_field_operations": {
+            "qm31_add": 9,
+            "qm31_mul": 5,
+            "qm31_scalar_mul": 4,
+            "qm31_sub": 4
+          }
+        },
+        {
+          "index": 91,
+          "varops": 4644757,
+          "sha256_calls": 0,
+          "function_calls": 64,
+          "invoked_body_bytes": 3800,
+          "semantic_field_operations": {
+            "qm31_add": 8,
+            "qm31_mul": 4,
+            "qm31_scalar_mul": 4,
+            "qm31_sub": 4
+          }
+        },
+        {
+          "index": 92,
+          "varops": 4622163,
+          "sha256_calls": 0,
+          "function_calls": 64,
+          "invoked_body_bytes": 3792,
+          "semantic_field_operations": {
+            "qm31_add": 8,
+            "qm31_mul": 4,
+            "qm31_scalar_mul": 4,
+            "qm31_sub": 4
+          }
+        },
+        {
+          "index": 93,
+          "varops": 4565282,
+          "sha256_calls": 0,
+          "function_calls": 64,
+          "invoked_body_bytes": 3792,
+          "semantic_field_operations": {
+            "qm31_add": 8,
+            "qm31_mul": 4,
+            "qm31_scalar_mul": 4,
+            "qm31_sub": 4
+          }
+        },
+        {
+          "index": 94,
+          "varops": 4509588,
+          "sha256_calls": 0,
+          "function_calls": 63,
+          "invoked_body_bytes": 3766,
+          "semantic_field_operations": {
+            "qm31_add": 8,
+            "qm31_mul": 4,
+            "qm31_scalar_mul": 4,
+            "qm31_sub": 4
+          }
+        },
+        {
+          "index": 95,
+          "varops": 0,
+          "sha256_calls": 0,
+          "function_calls": 0,
+          "invoked_body_bytes": 0,
+          "semantic_field_operations": {}
+        },
+        {
+          "index": 96,
+          "varops": 8445170,
+          "sha256_calls": 61,
+          "function_calls": 151,
+          "invoked_body_bytes": 4840,
+          "semantic_field_operations": {
+            "cm31_mul": 9,
+            "cm31_sub": 3,
+            "m31_sub": 6,
+            "qm31_add": 3,
+            "qm31_scalar_mul": 4,
+            "qm31_sub": 2
+          }
+        },
+        {
+          "index": 97,
+          "varops": 4786072,
+          "sha256_calls": 34,
+          "function_calls": 77,
+          "invoked_body_bytes": 3333,
+          "semantic_field_operations": {
+            "cm31_mul": 2,
+            "qm31_add": 9,
+            "qm31_scalar_mul": 10,
+            "qm31_sub": 5
+          }
+        },
+        {
+          "index": 98,
+          "varops": 4556308,
+          "sha256_calls": 38,
+          "function_calls": 82,
+          "invoked_body_bytes": 3377,
+          "semantic_field_operations": {
+            "qm31_add": 10,
+            "qm31_scalar_mul": 10,
+            "qm31_sub": 5
+          }
+        },
+        {
+          "index": 99,
+          "varops": 2903659,
+          "sha256_calls": 0,
+          "function_calls": 45,
+          "invoked_body_bytes": 2262,
+          "semantic_field_operations": {
+            "qm31_add": 11,
+            "qm31_scalar_mul": 12,
+            "qm31_sub": 6
+          }
+        },
+        {
+          "index": 100,
+          "varops": 2976153,
+          "sha256_calls": 0,
+          "function_calls": 41,
+          "invoked_body_bytes": 2204,
+          "semantic_field_operations": {
+            "qm31_add": 12,
+            "qm31_scalar_mul": 12,
+            "qm31_sub": 6
+          }
+        },
+        {
+          "index": 101,
+          "varops": 4273630,
+          "sha256_calls": 30,
+          "function_calls": 65,
+          "invoked_body_bytes": 2851,
+          "semantic_field_operations": {
+            "cm31_mul": 2,
+            "qm31_add": 9,
+            "qm31_scalar_mul": 8,
+            "qm31_sub": 4
+          }
+        },
+        {
+          "index": 102,
+          "varops": 2247617,
+          "sha256_calls": 0,
+          "function_calls": 33,
+          "invoked_body_bytes": 1780,
+          "semantic_field_operations": {
+            "cm31_mul": 2,
+            "qm31_add": 8,
+            "qm31_scalar_mul": 8,
+            "qm31_sub": 4
+          }
+        },
+        {
+          "index": 103,
+          "varops": 42263787,
+          "sha256_calls": 523,
+          "function_calls": 1301,
+          "invoked_body_bytes": 27230,
+          "semantic_field_operations": {
+            "qm31_add": 9,
+            "qm31_mul": 5,
+            "qm31_scalar_mul": 4,
+            "qm31_sub": 4
+          }
+        },
+        {
+          "index": 104,
+          "varops": 4656190,
+          "sha256_calls": 0,
+          "function_calls": 64,
+          "invoked_body_bytes": 3800,
+          "semantic_field_operations": {
+            "qm31_add": 8,
+            "qm31_mul": 4,
+            "qm31_scalar_mul": 4,
+            "qm31_sub": 4
+          }
+        },
+        {
+          "index": 105,
+          "varops": 4599299,
+          "sha256_calls": 0,
+          "function_calls": 64,
+          "invoked_body_bytes": 3792,
+          "semantic_field_operations": {
+            "qm31_add": 8,
+            "qm31_mul": 4,
+            "qm31_scalar_mul": 4,
+            "qm31_sub": 4
+          }
+        },
+        {
+          "index": 106,
+          "varops": 4530974,
+          "sha256_calls": 0,
+          "function_calls": 64,
+          "invoked_body_bytes": 3792,
+          "semantic_field_operations": {
+            "qm31_add": 8,
+            "qm31_mul": 4,
+            "qm31_scalar_mul": 4,
+            "qm31_sub": 4
+          }
+        },
+        {
+          "index": 107,
+          "varops": 4521024,
+          "sha256_calls": 0,
+          "function_calls": 63,
+          "invoked_body_bytes": 3766,
+          "semantic_field_operations": {
+            "qm31_add": 8,
+            "qm31_mul": 4,
+            "qm31_scalar_mul": 4,
+            "qm31_sub": 4
+          }
+        },
+        {
+          "index": 108,
+          "varops": 0,
+          "sha256_calls": 0,
+          "function_calls": 0,
+          "invoked_body_bytes": 0,
+          "semantic_field_operations": {}
+        },
+        {
+          "index": 109,
+          "varops": 8434672,
+          "sha256_calls": 61,
+          "function_calls": 151,
+          "invoked_body_bytes": 4840,
+          "semantic_field_operations": {
+            "cm31_mul": 9,
+            "cm31_sub": 3,
+            "m31_sub": 6,
+            "qm31_add": 3,
+            "qm31_scalar_mul": 4,
+            "qm31_sub": 2
+          }
+        },
+        {
+          "index": 110,
+          "varops": 4784768,
+          "sha256_calls": 34,
+          "function_calls": 77,
+          "invoked_body_bytes": 3333,
+          "semantic_field_operations": {
+            "cm31_mul": 2,
+            "qm31_add": 9,
+            "qm31_scalar_mul": 10,
+            "qm31_sub": 5
+          }
+        },
+        {
+          "index": 111,
+          "varops": 4557534,
+          "sha256_calls": 38,
+          "function_calls": 82,
+          "invoked_body_bytes": 3377,
+          "semantic_field_operations": {
+            "qm31_add": 10,
+            "qm31_scalar_mul": 10,
+            "qm31_sub": 5
+          }
+        },
+        {
+          "index": 112,
+          "varops": 2903659,
+          "sha256_calls": 0,
+          "function_calls": 45,
+          "invoked_body_bytes": 2262,
+          "semantic_field_operations": {
+            "qm31_add": 11,
+            "qm31_scalar_mul": 12,
+            "qm31_sub": 6
+          }
+        },
+        {
+          "index": 113,
+          "varops": 2976153,
+          "sha256_calls": 0,
+          "function_calls": 41,
+          "invoked_body_bytes": 2204,
+          "semantic_field_operations": {
+            "qm31_add": 12,
+            "qm31_scalar_mul": 12,
+            "qm31_sub": 6
+          }
+        },
+        {
+          "index": 114,
+          "varops": 4274580,
+          "sha256_calls": 30,
+          "function_calls": 65,
+          "invoked_body_bytes": 2851,
+          "semantic_field_operations": {
+            "cm31_mul": 2,
+            "qm31_add": 9,
+            "qm31_scalar_mul": 8,
+            "qm31_sub": 4
+          }
+        },
+        {
+          "index": 115,
+          "varops": 2247620,
+          "sha256_calls": 0,
+          "function_calls": 33,
+          "invoked_body_bytes": 1780,
+          "semantic_field_operations": {
+            "cm31_mul": 2,
+            "qm31_add": 8,
+            "qm31_scalar_mul": 8,
+            "qm31_sub": 4
+          }
+        },
+        {
+          "index": 116,
+          "varops": 42079075,
+          "sha256_calls": 523,
+          "function_calls": 1301,
+          "invoked_body_bytes": 27230,
+          "semantic_field_operations": {
+            "qm31_add": 9,
+            "qm31_mul": 5,
+            "qm31_scalar_mul": 4,
+            "qm31_sub": 4
+          }
+        },
+        {
+          "index": 117,
+          "varops": 4679051,
+          "sha256_calls": 0,
+          "function_calls": 64,
+          "invoked_body_bytes": 3800,
+          "semantic_field_operations": {
+            "qm31_add": 8,
+            "qm31_mul": 4,
+            "qm31_scalar_mul": 4,
+            "qm31_sub": 4
+          }
+        },
+        {
+          "index": 118,
+          "varops": 4610706,
+          "sha256_calls": 0,
+          "function_calls": 64,
+          "invoked_body_bytes": 3792,
+          "semantic_field_operations": {
+            "qm31_add": 8,
+            "qm31_mul": 4,
+            "qm31_scalar_mul": 4,
+            "qm31_sub": 4
+          }
+        },
+        {
+          "index": 119,
+          "varops": 4553838,
+          "sha256_calls": 0,
+          "function_calls": 64,
+          "invoked_body_bytes": 3792,
+          "semantic_field_operations": {
+            "qm31_add": 8,
+            "qm31_mul": 4,
+            "qm31_scalar_mul": 4,
+            "qm31_sub": 4
+          }
+        },
+        {
+          "index": 120,
+          "varops": 4521003,
+          "sha256_calls": 0,
+          "function_calls": 63,
+          "invoked_body_bytes": 3766,
+          "semantic_field_operations": {
+            "qm31_add": 8,
+            "qm31_mul": 4,
+            "qm31_scalar_mul": 4,
+            "qm31_sub": 4
+          }
+        },
+        {
+          "index": 121,
+          "varops": 0,
+          "sha256_calls": 0,
+          "function_calls": 0,
+          "invoked_body_bytes": 0,
+          "semantic_field_operations": {}
+        },
+        {
+          "index": 122,
+          "varops": 8424237,
+          "sha256_calls": 61,
+          "function_calls": 151,
+          "invoked_body_bytes": 4840,
+          "semantic_field_operations": {
+            "cm31_mul": 9,
+            "cm31_sub": 3,
+            "m31_sub": 6,
+            "qm31_add": 3,
+            "qm31_scalar_mul": 4,
+            "qm31_sub": 2
+          }
+        },
+        {
+          "index": 123,
+          "varops": 4779621,
+          "sha256_calls": 34,
+          "function_calls": 77,
+          "invoked_body_bytes": 3333,
+          "semantic_field_operations": {
+            "cm31_mul": 2,
+            "qm31_add": 9,
+            "qm31_scalar_mul": 10,
+            "qm31_sub": 5
+          }
+        },
+        {
+          "index": 124,
+          "varops": 4552402,
+          "sha256_calls": 38,
+          "function_calls": 82,
+          "invoked_body_bytes": 3377,
+          "semantic_field_operations": {
+            "qm31_add": 10,
+            "qm31_scalar_mul": 10,
+            "qm31_sub": 5
+          }
+        },
+        {
+          "index": 125,
+          "varops": 2903662,
+          "sha256_calls": 0,
+          "function_calls": 45,
+          "invoked_body_bytes": 2262,
+          "semantic_field_operations": {
+            "qm31_add": 11,
+            "qm31_scalar_mul": 12,
+            "qm31_sub": 6
+          }
+        },
+        {
+          "index": 126,
+          "varops": 2976150,
+          "sha256_calls": 0,
+          "function_calls": 41,
+          "invoked_body_bytes": 2204,
+          "semantic_field_operations": {
+            "qm31_add": 12,
+            "qm31_scalar_mul": 12,
+            "qm31_sub": 6
+          }
+        },
+        {
+          "index": 127,
+          "varops": 4269211,
+          "sha256_calls": 30,
+          "function_calls": 65,
+          "invoked_body_bytes": 2851,
+          "semantic_field_operations": {
+            "cm31_mul": 2,
+            "qm31_add": 9,
+            "qm31_scalar_mul": 8,
+            "qm31_sub": 4
+          }
+        },
+        {
+          "index": 128,
+          "varops": 2247623,
+          "sha256_calls": 0,
+          "function_calls": 33,
+          "invoked_body_bytes": 1780,
+          "semantic_field_operations": {
+            "cm31_mul": 2,
+            "qm31_add": 8,
+            "qm31_scalar_mul": 8,
+            "qm31_sub": 4
+          }
+        },
+        {
+          "index": 129,
+          "varops": 41995859,
+          "sha256_calls": 523,
+          "function_calls": 1301,
+          "invoked_body_bytes": 27230,
+          "semantic_field_operations": {
+            "qm31_add": 9,
+            "qm31_mul": 5,
+            "qm31_scalar_mul": 4,
+            "qm31_sub": 4
+          }
+        },
+        {
+          "index": 130,
+          "varops": 4667621,
+          "sha256_calls": 0,
+          "function_calls": 64,
+          "invoked_body_bytes": 3800,
+          "semantic_field_operations": {
+            "qm31_add": 8,
+            "qm31_mul": 4,
+            "qm31_scalar_mul": 4,
+            "qm31_sub": 4
+          }
+        },
+        {
+          "index": 131,
+          "varops": 4587834,
+          "sha256_calls": 0,
+          "function_calls": 64,
+          "invoked_body_bytes": 3792,
+          "semantic_field_operations": {
+            "qm31_add": 8,
+            "qm31_mul": 4,
+            "qm31_scalar_mul": 4,
+            "qm31_sub": 4
+          }
+        },
+        {
+          "index": 132,
+          "varops": 4530961,
+          "sha256_calls": 0,
+          "function_calls": 64,
+          "invoked_body_bytes": 3792,
+          "semantic_field_operations": {
+            "qm31_add": 8,
+            "qm31_mul": 4,
+            "qm31_scalar_mul": 4,
+            "qm31_sub": 4
+          }
+        },
+        {
+          "index": 133,
+          "varops": 4520989,
+          "sha256_calls": 0,
+          "function_calls": 63,
+          "invoked_body_bytes": 3766,
+          "semantic_field_operations": {
+            "qm31_add": 8,
+            "qm31_mul": 4,
+            "qm31_scalar_mul": 4,
+            "qm31_sub": 4
+          }
+        },
+        {
+          "index": 134,
+          "varops": 0,
+          "sha256_calls": 0,
+          "function_calls": 0,
+          "invoked_body_bytes": 0,
+          "semantic_field_operations": {}
+        },
+        {
+          "index": 135,
+          "varops": 8434216,
+          "sha256_calls": 61,
+          "function_calls": 151,
+          "invoked_body_bytes": 4840,
+          "semantic_field_operations": {
+            "cm31_mul": 9,
+            "cm31_sub": 3,
+            "m31_sub": 6,
+            "qm31_add": 3,
+            "qm31_scalar_mul": 4,
+            "qm31_sub": 2
+          }
+        },
+        {
+          "index": 136,
+          "varops": 4780955,
+          "sha256_calls": 34,
+          "function_calls": 77,
+          "invoked_body_bytes": 3333,
+          "semantic_field_operations": {
+            "cm31_mul": 2,
+            "qm31_add": 9,
+            "qm31_scalar_mul": 10,
+            "qm31_sub": 5
+          }
+        },
+        {
+          "index": 137,
+          "varops": 4553727,
+          "sha256_calls": 38,
+          "function_calls": 82,
+          "invoked_body_bytes": 3377,
+          "semantic_field_operations": {
+            "qm31_add": 10,
+            "qm31_scalar_mul": 10,
+            "qm31_sub": 5
+          }
+        },
+        {
+          "index": 138,
+          "varops": 2903662,
+          "sha256_calls": 0,
+          "function_calls": 45,
+          "invoked_body_bytes": 2262,
+          "semantic_field_operations": {
+            "qm31_add": 11,
+            "qm31_scalar_mul": 12,
+            "qm31_sub": 6
+          }
+        },
+        {
+          "index": 139,
+          "varops": 2976150,
+          "sha256_calls": 0,
+          "function_calls": 41,
+          "invoked_body_bytes": 2204,
+          "semantic_field_operations": {
+            "qm31_add": 12,
+            "qm31_scalar_mul": 12,
+            "qm31_sub": 6
+          }
+        },
+        {
+          "index": 140,
+          "varops": 4270302,
+          "sha256_calls": 30,
+          "function_calls": 65,
+          "invoked_body_bytes": 2851,
+          "semantic_field_operations": {
+            "cm31_mul": 2,
+            "qm31_add": 9,
+            "qm31_scalar_mul": 8,
+            "qm31_sub": 4
+          }
+        },
+        {
+          "index": 141,
+          "varops": 2247617,
+          "sha256_calls": 0,
+          "function_calls": 33,
+          "invoked_body_bytes": 1780,
+          "semantic_field_operations": {
+            "cm31_mul": 2,
+            "qm31_add": 8,
+            "qm31_scalar_mul": 8,
+            "qm31_sub": 4
+          }
+        },
+        {
+          "index": 142,
+          "varops": 42129927,
+          "sha256_calls": 523,
+          "function_calls": 1301,
+          "invoked_body_bytes": 27230,
+          "semantic_field_operations": {
+            "qm31_add": 9,
+            "qm31_mul": 5,
+            "qm31_scalar_mul": 4,
+            "qm31_sub": 4
+          }
+        },
+        {
+          "index": 143,
+          "varops": 4656179,
+          "sha256_calls": 0,
+          "function_calls": 64,
+          "invoked_body_bytes": 3800,
+          "semantic_field_operations": {
+            "qm31_add": 8,
+            "qm31_mul": 4,
+            "qm31_scalar_mul": 4,
+            "qm31_sub": 4
+          }
+        },
+        {
+          "index": 144,
+          "varops": 4587857,
+          "sha256_calls": 0,
+          "function_calls": 64,
+          "invoked_body_bytes": 3792,
+          "semantic_field_operations": {
+            "qm31_add": 8,
+            "qm31_mul": 4,
+            "qm31_scalar_mul": 4,
+            "qm31_sub": 4
+          }
+        },
+        {
+          "index": 145,
+          "varops": 4542410,
+          "sha256_calls": 0,
+          "function_calls": 64,
+          "invoked_body_bytes": 3792,
+          "semantic_field_operations": {
+            "qm31_add": 8,
+            "qm31_mul": 4,
+            "qm31_scalar_mul": 4,
+            "qm31_sub": 4
+          }
+        },
+        {
+          "index": 146,
+          "varops": 4521024,
+          "sha256_calls": 0,
+          "function_calls": 63,
+          "invoked_body_bytes": 3766,
+          "semantic_field_operations": {
+            "qm31_add": 8,
+            "qm31_mul": 4,
+            "qm31_scalar_mul": 4,
+            "qm31_sub": 4
+          }
+        },
+        {
+          "index": 147,
+          "varops": 0,
+          "sha256_calls": 0,
+          "function_calls": 0,
+          "invoked_body_bytes": 0,
+          "semantic_field_operations": {}
+        },
+        {
+          "index": 148,
+          "varops": 8428877,
+          "sha256_calls": 61,
+          "function_calls": 151,
+          "invoked_body_bytes": 4840,
+          "semantic_field_operations": {
+            "cm31_mul": 9,
+            "cm31_sub": 3,
+            "m31_sub": 6,
+            "qm31_add": 3,
+            "qm31_scalar_mul": 4,
+            "qm31_sub": 2
+          }
+        },
+        {
+          "index": 149,
+          "varops": 4782193,
+          "sha256_calls": 34,
+          "function_calls": 77,
+          "invoked_body_bytes": 3333,
+          "semantic_field_operations": {
+            "cm31_mul": 2,
+            "qm31_add": 9,
+            "qm31_scalar_mul": 10,
+            "qm31_sub": 5
+          }
+        },
+        {
+          "index": 150,
+          "varops": 4554956,
+          "sha256_calls": 38,
+          "function_calls": 82,
+          "invoked_body_bytes": 3377,
+          "semantic_field_operations": {
+            "qm31_add": 10,
+            "qm31_scalar_mul": 10,
+            "qm31_sub": 5
+          }
+        },
+        {
+          "index": 151,
+          "varops": 2903659,
+          "sha256_calls": 0,
+          "function_calls": 45,
+          "invoked_body_bytes": 2262,
+          "semantic_field_operations": {
+            "qm31_add": 11,
+            "qm31_scalar_mul": 12,
+            "qm31_sub": 6
+          }
+        },
+        {
+          "index": 152,
+          "varops": 2976153,
+          "sha256_calls": 0,
+          "function_calls": 41,
+          "invoked_body_bytes": 2204,
+          "semantic_field_operations": {
+            "qm31_add": 12,
+            "qm31_scalar_mul": 12,
+            "qm31_sub": 6
+          }
+        },
+        {
+          "index": 153,
+          "varops": 4271294,
+          "sha256_calls": 30,
+          "function_calls": 65,
+          "invoked_body_bytes": 2851,
+          "semantic_field_operations": {
+            "cm31_mul": 2,
+            "qm31_add": 9,
+            "qm31_scalar_mul": 8,
+            "qm31_sub": 4
+          }
+        },
+        {
+          "index": 154,
+          "varops": 2247623,
+          "sha256_calls": 0,
+          "function_calls": 33,
+          "invoked_body_bytes": 1780,
+          "semantic_field_operations": {
+            "cm31_mul": 2,
+            "qm31_add": 8,
+            "qm31_scalar_mul": 8,
+            "qm31_sub": 4
+          }
+        },
+        {
+          "index": 155,
+          "varops": 42043217,
+          "sha256_calls": 523,
+          "function_calls": 1301,
+          "invoked_body_bytes": 27230,
+          "semantic_field_operations": {
+            "qm31_add": 9,
+            "qm31_mul": 5,
+            "qm31_scalar_mul": 4,
+            "qm31_sub": 4
+          }
+        },
+        {
+          "index": 156,
+          "varops": 4656179,
+          "sha256_calls": 0,
+          "function_calls": 64,
+          "invoked_body_bytes": 3800,
+          "semantic_field_operations": {
+            "qm31_add": 8,
+            "qm31_mul": 4,
+            "qm31_scalar_mul": 4,
+            "qm31_sub": 4
+          }
+        },
+        {
+          "index": 157,
+          "varops": 4587846,
+          "sha256_calls": 0,
+          "function_calls": 64,
+          "invoked_body_bytes": 3792,
+          "semantic_field_operations": {
+            "qm31_add": 8,
+            "qm31_mul": 4,
+            "qm31_scalar_mul": 4,
+            "qm31_sub": 4
+          }
+        },
+        {
+          "index": 158,
+          "varops": 4553846,
+          "sha256_calls": 0,
+          "function_calls": 64,
+          "invoked_body_bytes": 3792,
+          "semantic_field_operations": {
+            "qm31_add": 8,
+            "qm31_mul": 4,
+            "qm31_scalar_mul": 4,
+            "qm31_sub": 4
+          }
+        },
+        {
+          "index": 159,
+          "varops": 4509585,
+          "sha256_calls": 0,
+          "function_calls": 63,
+          "invoked_body_bytes": 3766,
+          "semantic_field_operations": {
+            "qm31_add": 8,
+            "qm31_mul": 4,
+            "qm31_scalar_mul": 4,
+            "qm31_sub": 4
+          }
+        },
+        {
+          "index": 160,
+          "varops": 0,
+          "sha256_calls": 0,
+          "function_calls": 0,
+          "invoked_body_bytes": 0,
+          "semantic_field_operations": {}
+        },
+        {
+          "index": 161,
+          "varops": 8853706,
+          "sha256_calls": 61,
+          "function_calls": 151,
+          "invoked_body_bytes": 4840,
+          "semantic_field_operations": {
+            "cm31_mul": 9,
+            "cm31_sub": 3,
+            "m31_sub": 6,
+            "qm31_add": 3,
+            "qm31_scalar_mul": 4,
+            "qm31_sub": 2
+          }
+        },
+        {
+          "index": 162,
+          "varops": 5409570,
+          "sha256_calls": 34,
+          "function_calls": 74,
+          "invoked_body_bytes": 3261,
+          "semantic_field_operations": {
+            "cm31_mul": 2,
+            "qm31_add": 9,
+            "qm31_scalar_mul": 10,
+            "qm31_sub": 5
+          }
+        },
+        {
+          "index": 163,
+          "varops": 5379801,
+          "sha256_calls": 38,
+          "function_calls": 77,
+          "invoked_body_bytes": 3257,
+          "semantic_field_operations": {
+            "qm31_add": 10,
+            "qm31_scalar_mul": 10,
+            "qm31_sub": 5
+          }
+        },
+        {
+          "index": 164,
+          "varops": 3629986,
+          "sha256_calls": 0,
+          "function_calls": 40,
+          "invoked_body_bytes": 2142,
+          "semantic_field_operations": {
+            "qm31_add": 11,
+            "qm31_scalar_mul": 12,
+            "qm31_sub": 6
+          }
+        },
+        {
+          "index": 165,
+          "varops": 3473508,
+          "sha256_calls": 0,
+          "function_calls": 41,
+          "invoked_body_bytes": 2204,
+          "semantic_field_operations": {
+            "qm31_add": 12,
+            "qm31_scalar_mul": 12,
+            "qm31_sub": 6
+          }
+        },
+        {
+          "index": 166,
+          "varops": 4449218,
+          "sha256_calls": 30,
+          "function_calls": 65,
+          "invoked_body_bytes": 2851,
+          "semantic_field_operations": {
+            "cm31_mul": 2,
+            "qm31_add": 9,
+            "qm31_scalar_mul": 8,
+            "qm31_sub": 4
+          }
+        },
+        {
+          "index": 167,
+          "varops": 2391683,
+          "sha256_calls": 0,
+          "function_calls": 29,
+          "invoked_body_bytes": 1684,
+          "semantic_field_operations": {
+            "cm31_mul": 2,
+            "qm31_add": 8,
+            "qm31_scalar_mul": 8,
+            "qm31_sub": 4
+          }
+        },
+        {
+          "index": 168,
+          "varops": 42075436,
+          "sha256_calls": 523,
+          "function_calls": 1300,
+          "invoked_body_bytes": 27206,
+          "semantic_field_operations": {
+            "qm31_add": 9,
+            "qm31_mul": 5,
+            "qm31_scalar_mul": 4,
+            "qm31_sub": 4
+          }
+        },
+        {
+          "index": 169,
+          "varops": 4799641,
+          "sha256_calls": 0,
+          "function_calls": 64,
+          "invoked_body_bytes": 3800,
+          "semantic_field_operations": {
+            "qm31_add": 8,
+            "qm31_mul": 4,
+            "qm31_scalar_mul": 4,
+            "qm31_sub": 4
+          }
+        },
+        {
+          "index": 170,
+          "varops": 4702805,
+          "sha256_calls": 0,
+          "function_calls": 64,
+          "invoked_body_bytes": 3792,
+          "semantic_field_operations": {
+            "qm31_add": 8,
+            "qm31_mul": 4,
+            "qm31_scalar_mul": 4,
+            "qm31_sub": 4
+          }
+        },
+        {
+          "index": 171,
+          "varops": 4617434,
+          "sha256_calls": 0,
+          "function_calls": 64,
+          "invoked_body_bytes": 3792,
+          "semantic_field_operations": {
+            "qm31_add": 8,
+            "qm31_mul": 4,
+            "qm31_scalar_mul": 4,
+            "qm31_sub": 4
+          }
+        },
+        {
+          "index": 172,
+          "varops": 4558929,
+          "sha256_calls": 0,
+          "function_calls": 63,
+          "invoked_body_bytes": 3766,
+          "semantic_field_operations": {
+            "qm31_add": 8,
+            "qm31_mul": 4,
+            "qm31_scalar_mul": 4,
+            "qm31_sub": 4
+          }
+        },
+        {
+          "index": 173,
+          "varops": 0,
+          "sha256_calls": 0,
+          "function_calls": 0,
+          "invoked_body_bytes": 0,
+          "semantic_field_operations": {}
+        },
+        {
+          "index": 174,
+          "varops": 0,
+          "sha256_calls": 0,
+          "function_calls": 0,
+          "invoked_body_bytes": 0,
+          "semantic_field_operations": {}
+        }
+      ]
+    },
+    "stage_measurements_available": true
+  }
+]

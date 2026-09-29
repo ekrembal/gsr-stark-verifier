@@ -1,0 +1,57 @@
+[workspace]
+members = ["bitcoin_dsl", "delegation", "last", "primitives", "covenant"]
+resolver = "2"
+
+[workspace.dependencies]
+indexmap = "2.7.0"
+rand = "0.9.3"
+rand_chacha = "0.9.0"
+bitcoin-script = { git = "https://github.com/Bitcoin-Wildlife-Sanctuary/rust-bitcoin-script", rev = "2f2510ab9e616eaae5b0db807d13c40eae6964a0"}
+bitcoin = "0.32.5"
+bitcoin-scriptexec = { git = "https://github.com/Bitcoin-Wildlife-Sanctuary/rust-bitcoin-scriptexec/", rev = "fac1401b68baa2e3cb48b126ec1a691d28707567", features = ["debug"] }
+fenwick-tree = "0.1.0"
+anyhow = "1.0.97"
+serde = "1.0.216"
+serde_json = "1.0"
+bincode = "1.3.3"
+sha2 = "0.10.8"
+num-traits = "0.2.19"
+stwo-prover = { path = "../bws-stwo/crates/prover", features = ["parallel"] }
+rust-bitcoin-m31 = { git = "https://github.com/Bitcoin-Wildlife-Sanctuary/rust-bitcoin-m31", rev = "551735b3efa7dc79698cb55d9b17149a39b7768e" }
+circle-plonk-dsl-hints = { path = "../bws-recursion/components/hints" }
+circle-plonk-dsl-last-folding = { path = "../bws-recursion/components/last/folding" }
+circle-plonk-dsl-last-fiat-shamir = { path = "../bws-recursion/components/last/fiat_shamir" }
+circle-plonk-dsl-last-answer = { path = "../bws-recursion/components/last/answer" }
+itertools = "0.14.0"
+rayon = "1.10.0"
+covenants-gadgets = { git = "https://github.com/Bitcoin-Wildlife-Sanctuary/covenants-gadgets", rev = "93e057f2abdac14760b6a8ff82ee4a613a263153" }
+bitcoin-simulator = { git = "https://github.com/Bitcoin-Wildlife-Sanctuary/bitcoin-simulator", rev = "16b73cfa3fb21b55b37dee93ebd7fc34ba33cbe7" }
+clap = { version = "4.5.28", features = ["derive"] }
+hex = "0.4.3"
+colored = "3.0.0"
+
+[profile.release]
+opt-level = 3
+lto = "thin"
+incremental = true
+panic = 'abort'
+
+[profile.bench]
+opt-level = 3
+debug = false
+rpath = false
+lto = "thin"
+incremental = true
+debug-assertions = false
+
+[profile.dev]
+opt-level = 3
+panic = 'abort'
+
+[profile.test]
+opt-level = 3
+lto = "thin"
+incremental = true
+debug-assertions = true
+debug = true
+

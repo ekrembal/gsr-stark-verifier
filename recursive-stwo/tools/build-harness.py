@@ -33,5 +33,6 @@ body=body.replace(needle,needle+"\n            if(!in_function) while(stage_snap
 (build/'interpreter-instrumented.cpp').write_text(head+body)
 cmd=['c++','-std=c++20','-O2','-g',str(root/'harness/meter.cpp'),'-o',str(build/'gsr-meter')]
 for p in [build,BITCOIN_BUILD/'src',BITCOIN_SOURCE/'src',BITCOIN_SOURCE/'src/univalue/include',BITCOIN_SOURCE/'src/secp256k1/include']:cmd+=['-I'+str(p)]
-for p in ['lib/libbitcoin_consensus.a','lib/libbitcoin_common.a','lib/libbitcoin_util.a','lib/libbitcoin_clientversion.a','lib/libbitcoin_crypto.a','src/secp256k1/lib/libsecp256k1.a','src/univalue/libunivalue.a']:cmd.append(str(BITCOIN_BUILD/p))
+# Dependants precede their dependencies; GNU ld resolves static archives in order.
+for p in ['lib/libbitcoin_common.a','lib/libbitcoin_util.a','lib/libbitcoin_clientversion.a','lib/libbitcoin_consensus.a','lib/libbitcoin_crypto.a','src/secp256k1/lib/libsecp256k1.a','src/univalue/libunivalue.a']:cmd.append(str(BITCOIN_BUILD/p))
 subprocess.run(cmd,check=True)

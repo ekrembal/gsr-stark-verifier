@@ -5,7 +5,8 @@ Primitive                                             Varops  Fit in spend  WU t
 --------------------------------------------------------------------------------------
 SHA-256 two-to-one Merkle parent (64 B)                 5892        628626           1
 SHA-256 over 1 KiB                                     52450         70617           6
-BLAKE3/BLAKE2s compression                           4084192           906         409
+BLAKE3 compression, 7 rounds                         4084192           906         409
+BLAKE2s compression, 10 rounds                       5834560           634         584
 Keccak-f[1600] permutation                          11688672           316        1169
 Poseidon2 permutation, 31-bit field, width 16       10769698           343        1077
 RPO permutation, Goldilocks, width 12               34871088           106        3488

@@ -19,7 +19,8 @@ The rows are lower bounds. They count the arithmetic, bitwise and hashing opcode
 | Primitive | Varops | Copies affordable in one 400,000 WU spend, after the 4x factor |
 |---|---:|---:|
 | SHA-256 two-to-one Merkle parent | 5,892 | 170,000 |
-| BLAKE3 / BLAKE2s compression | 4,084,192 | 244 |
+| BLAKE3 compression, 7 rounds | 4,084,192 | 244 |
+| BLAKE2s compression, 10 rounds | 5,834,560 | 171 |
 | Poseidon2 permutation, 31-bit field, width 16 | 10,769,698 | 92 |
 | Keccak-f[1600] permutation | 11,688,672 | 85 |
 | Tip5 permutation, Goldilocks, width 16 | 25,042,400 | 39 |
@@ -43,9 +44,11 @@ Three consequences drive everything below.
 
 This is a prerequisite rather than a verifier, and it is the highest-leverage thing to add. Every general-purpose recursive stack worth porting — OpenVM, RISC Zero, Miden, SP1 — commits with Poseidon2 or another arithmetic hash, because that is what makes their own recursion cheap. The table says that choice is fatal onchain. The fix is the one the shipped verifier already relies on: a final recursion layer, proved offchain, whose own commitments use SHA-256, verifying the arithmetic-hash proof inside its circuit.
 
-Plonky3 is the concrete vehicle: it ships `p3-sha256`, including a padding-free compression function intended for use as a Merkle/duplex hash, and OpenVM's backend already pins Plonky3, so an OpenVM proof and a SHA-256-committed Plonky3 wrapper share a field and a Merkle abstraction. Plonky3's recent Merkle multiproof pruning also reduces example proof sizes by roughly 40% in upstream benchmarks, which matters directly under a byte-bound budget.
+Plonky3 is the concrete vehicle: it ships `p3-sha256`, and OpenVM's backend already pins Plonky3, so an OpenVM proof and a SHA-256-committed Plonky3 wrapper share a field and a Merkle abstraction. Plonky3's recent Merkle multiproof pruning also reduces example proof sizes by roughly 40% in upstream benchmarks, which matters directly under a byte-bound budget.
 
-Acceptance: a Plonky3 STARK whose commitment scheme and Fiat-Shamir transcript are SHA-256 throughout, verifying a fixed inner statement, with a raw canonical proof under 200 KB and a query count and blowup chosen at a stated security level. This cannot be obtained by substituting hash calls in an already-serialized proof; it is a different proving configuration and has to be proved that way. Caveat: generic Plonky3 recursion is less mature than the vendor-maintained recursion in OpenVM or RISC Zero, and is unaudited.
+One detail decides whether the priced SHA-256 row applies. `p3-sha256` exposes both the padded hash and a padding-free compression function, and the padding-free variant is the one a Plonky3 Merkle tree would normally use, because it is cheaper to prove. `OP_SHA256` computes the padded hash, which for a 64-byte input is two compressions plus length encoding, so a padding-free node digest is a different value and cannot be recomputed by a single GSR opcode. The wrapper must therefore be configured with the padded hash as its Merkle and duplex compression — the shape the `Sha256Parent` row prices and the shipped verifier already spends — and the prover pays for that choice, not the script.
+
+Acceptance: a Plonky3 STARK whose commitment scheme and Fiat-Shamir transcript are the padded SHA-256 throughout, verifying a fixed inner statement, with a raw canonical proof under 200 KB and a query count and blowup chosen at a stated security level. This cannot be obtained by substituting hash calls in an already-serialized proof; it is a different proving configuration and has to be proved that way. Caveat: generic Plonky3 recursion is less mature than the vendor-maintained recursion in OpenVM or RISC Zero, and is unaudited.
 
 ### 2. OpenVM v2.0.2, SWIRL/WHIR — keep it, but measure the stock profile first
 
@@ -71,7 +74,7 @@ RISC Zero lifts segment receipts and joins them into a constant-size succinct ST
 
 ### 5. Stwo/Cairo with a SHA-256 channel — the cheapest incremental win
 
-This repository already contains a working Circle-STARK verifier with M31 arithmetic, SHA-256 Merkle handling, witness packing and a measured spend. `stwo-cairo` is a production Circle STARK prover and verifier for the Cairo architecture with a recursive Cairo verifier, and Stwo supports Blake2s, Blake3, Poseidon252 and Keccak256 channels. A Cairo-program verifier would reuse most of the existing arithmetic layer, and the marginal work is the AIR and the proof shape rather than a new field or hash stack. The table rules out the Blake2s and Keccak channels at scale (244 and 85 compressions per spend), so this depends on reproducing the hybrid SHA-256 final layer the shipped bundle already uses. Highest ratio of value to new risk if a Cairo workload is wanted; no value if the goal is arbitrary Rust programs.
+This repository already contains a working Circle-STARK verifier with M31 arithmetic, SHA-256 Merkle handling, witness packing and a measured spend. `stwo-cairo` is a production Circle STARK prover and verifier for the Cairo architecture with a recursive Cairo verifier, and Stwo supports Blake2s, Blake3, Poseidon252 and Keccak256 channels. A Cairo-program verifier would reuse most of the existing arithmetic layer, and the marginal work is the AIR and the proof shape rather than a new field or hash stack. The table rules out the Blake2s and Keccak channels at scale (171 and 85 compressions per spend), so this depends on reproducing the hybrid SHA-256 final layer the shipped bundle already uses. Highest ratio of value to new risk if a Cairo workload is wanted; no value if the goal is arbitrary Rust programs.
 
 ### 6. Binius64 — revisit when proofs shrink
 

@@ -90,12 +90,13 @@ uint64_t Sha256Parent()
     return ExecutionCost(OP_CAT) + 64 * COST_COPYING + Sha256(64);
 }
 
-// BLAKE3/BLAKE2s-style compression: 7 rounds x 8 G functions, each G being
-// 6 wrapping adds, 4 XORs and 4 rotations on 32-bit words.
-uint64_t Blake3Compress()
+// BLAKE-style compression over 32-bit words: rounds x 8 G functions, each G
+// being 6 wrapping adds, 4 XORs and 4 rotations. BLAKE3 uses 7 rounds,
+// BLAKE2s 10.
+uint64_t BlakeCompress(unsigned rounds)
 {
     const uint64_t g = 6 * WrapAdd(4) + 4 * Xor(4) + 4 * Rotate(4);
-    return 7 * 8 * g;
+    return rounds * 8 * g;
 }
 
 // Keccak-f[1600]: 24 rounds over 25 64-bit lanes.
@@ -175,7 +176,8 @@ int main()
 
     Row("SHA-256 two-to-one Merkle parent (64 B)", Sha256Parent(), budget);
     Row("SHA-256 over 1 KiB", Sha256(1024), budget);
-    Row("BLAKE3/BLAKE2s compression", Blake3Compress(), budget);
+    Row("BLAKE3 compression, 7 rounds", BlakeCompress(7), budget);
+    Row("BLAKE2s compression, 10 rounds", BlakeCompress(10), budget);
     Row("Keccak-f[1600] permutation", KeccakF1600(), budget);
     Row("Poseidon2 permutation, 31-bit field, width 16", Poseidon2Width16(), budget);
     Row("RPO permutation, Goldilocks, width 12", RpoWidth12(), budget);

@@ -1,0 +1,126 @@
+$ R0_GSR_SEAL_DIR=/home/ubuntu/gsr-seals RUST_LOG=warn \
+    cargo test --release -p risc0-zkvm --features prove --lib gsr_measure -- --nocapture
+
+segments                 : 3
+segment seal bytes       : 662712
+poseidon2 seal bytes     : 222668
+poseidon2 receipt bytes  : 223226
+poseidon2 verify: sha_pair 0, sha_slice 0 over 0 bytes, poseidon2 5693
+poseidon2 verify: other base_mul 646550
+poseidon2 verify: other base_add 832594
+poseidon2 verify: other base_sub 4
+poseidon2 verify: other ext_mul 7798
+poseidon2 verify: other ext_mul_base 643
+poseidon2 verify: other ext_add 4110
+poseidon2 verify: other ext_sub 1
+poseidon2 verify: other ext_inv 0
+poseidon2 verify: constraint_eval base_mul 138453
+poseidon2 verify: constraint_eval base_add 108600
+poseidon2 verify: constraint_eval base_sub 5540
+poseidon2 verify: constraint_eval ext_mul 7287
+poseidon2 verify: constraint_eval ext_mul_base 0
+poseidon2 verify: constraint_eval ext_add 5289
+poseidon2 verify: constraint_eval ext_sub 1385
+poseidon2 verify: constraint_eval ext_inv 0
+poseidon2 verify: fri_fold base_mul 3055864
+poseidon2 verify: fri_fold base_add 4269511
+poseidon2 verify: fri_fold base_sub 19200
+poseidon2 verify: fri_fold ext_mul 11200
+poseidon2 verify: fri_fold ext_mul_base 7350
+poseidon2 verify: fri_fold ext_add 10400
+poseidon2 verify: fri_fold ext_sub 4800
+poseidon2 verify: fri_fold ext_inv 0
+poseidon2 verify: deep_ali base_mul 5795743
+poseidon2 verify: deep_ali base_add 8369000
+poseidon2 verify: deep_ali base_sub 6900
+poseidon2 verify: deep_ali ext_mul 3500
+poseidon2 verify: deep_ali ext_mul_base 9950
+poseidon2 verify: deep_ali ext_add 10250
+poseidon2 verify: deep_ali ext_sub 1350
+poseidon2 verify: deep_ali ext_inv 300
+sha-256 control id        : d7ecd18c7d06fc468166147cf20869aa10f32e097a0c166146a5a62dd2d975ea
+sha-256 seal bytes        : 222668
+sha-256 receipt bytes     : 223224
+sha-256 verify: sha_pair 4363, sha_slice 355 over 86028 bytes, poseidon2 0
+sha-256 verify: other base_mul 152942
+sha-256 verify: other base_add 110016
+sha-256 verify: other base_sub 4
+sha-256 verify: other ext_mul 7798
+sha-256 verify: other ext_mul_base 643
+sha-256 verify: other ext_add 4110
+sha-256 verify: other ext_sub 1
+sha-256 verify: other ext_inv 0
+sha-256 verify: constraint_eval base_mul 138453
+sha-256 verify: constraint_eval base_add 108600
+sha-256 verify: constraint_eval base_sub 5540
+sha-256 verify: constraint_eval ext_mul 7287
+sha-256 verify: constraint_eval ext_mul_base 0
+sha-256 verify: constraint_eval ext_add 5289
+sha-256 verify: constraint_eval ext_sub 1385
+sha-256 verify: constraint_eval ext_inv 0
+sha-256 verify: fri_fold base_mul 259184
+sha-256 verify: fri_fold base_add 176000
+sha-256 verify: fri_fold base_sub 19200
+sha-256 verify: fri_fold ext_mul 11200
+sha-256 verify: fri_fold ext_mul_base 7350
+sha-256 verify: fri_fold ext_add 10400
+sha-256 verify: fri_fold ext_sub 4800
+sha-256 verify: fri_fold ext_inv 0
+sha-256 verify: deep_ali base_mul 136528
+sha-256 verify: deep_ali base_add 85400
+sha-256 verify: deep_ali base_sub 6900
+sha-256 verify: deep_ali ext_mul 3500
+sha-256 verify: deep_ali ext_mul_base 9950
+sha-256 verify: deep_ali ext_add 10250
+sha-256 verify: deep_ali ext_sub 1350
+sha-256 verify: deep_ali ext_inv 300
+sha-256-padded control id        : a71e992ab67b268768f93eb47135e9ebbc8dc24f3622ab156c1e82ea4f19f062
+sha-256-padded seal bytes        : 222668
+sha-256-padded receipt bytes     : 223231
+sha-256-padded verify: sha_pair 4363, sha_slice 355 over 86028 bytes, poseidon2 0
+sha-256-padded verify: other base_mul 152942
+sha-256-padded verify: other base_add 110016
+sha-256-padded verify: other base_sub 4
+sha-256-padded verify: other ext_mul 7798
+sha-256-padded verify: other ext_mul_base 643
+sha-256-padded verify: other ext_add 4110
+sha-256-padded verify: other ext_sub 1
+sha-256-padded verify: other ext_inv 0
+sha-256-padded verify: constraint_eval base_mul 138453
+sha-256-padded verify: constraint_eval base_add 108600
+sha-256-padded verify: constraint_eval base_sub 5540
+sha-256-padded verify: constraint_eval ext_mul 7287
+sha-256-padded verify: constraint_eval ext_mul_base 0
+sha-256-padded verify: constraint_eval ext_add 5289
+sha-256-padded verify: constraint_eval ext_sub 1385
+sha-256-padded verify: constraint_eval ext_inv 0
+sha-256-padded verify: fri_fold base_mul 259376
+sha-256-padded verify: fri_fold base_add 176000
+sha-256-padded verify: fri_fold base_sub 19200
+sha-256-padded verify: fri_fold ext_mul 11200
+sha-256-padded verify: fri_fold ext_mul_base 7350
+sha-256-padded verify: fri_fold ext_add 10400
+sha-256-padded verify: fri_fold ext_sub 4800
+sha-256-padded verify: fri_fold ext_inv 0
+sha-256-padded verify: deep_ali base_mul 136589
+sha-256-padded verify: deep_ali base_add 85400
+sha-256-padded verify: deep_ali base_sub 6900
+sha-256-padded verify: deep_ali ext_mul 3500
+sha-256-padded verify: deep_ali ext_mul_base 9950
+sha-256-padded verify: deep_ali ext_add 10250
+sha-256-padded verify: deep_ali ext_sub 1350
+sha-256-padded verify: deep_ali ext_inv 300
+test host::recursion::tests::gsr_measure ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 241 filtered out; finished in 90.88s
+
+Notes:
+- base_mul/base_add/base_sub already include the base operations performed inside
+  extension operations; the ext_* rows show the shape of the arithmetic, not extra work.
+- the small run-to-run drift in base_mul (259184 vs 259376) comes from Elem::inv,
+  which is an addition chain whose length depends on the value being inverted.
+- poseidon2 fri_fold/deep_ali base_mul are ~12x the sha-256 figures because the
+  poseidon2 permutations themselves are field arithmetic.
+
+$ cargo test --release -p risc0-zkvm --features prove --lib gsr_padded_sha_matches_fips -- --nocapture
+test host::recursion::tests::gsr_padded_sha_matches_fips ... ok

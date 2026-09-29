@@ -40,7 +40,9 @@ Three consequences drive everything below.
 
 ## Ranking
 
-The order below is the order the ranking was written in; two of its entries have since been measured, and the measurements reorder it. [`risc0-measurement.md`](risc0-measurement.md) shows RISC Zero already ships most of item 1 and fits the byte budget, so it now leads; [`openvm-measurement.md`](openvm-measurement.md) shows OpenVM does not yet fit on either axis. Read item 4 before item 2.
+The order below is the order the ranking was written in; two of its entries have since been measured, and the measurements reorder it. [`risc0-measurement.md`](risc0-measurement.md) shows RISC Zero already ships most of item 1 and fits the byte budget; [`openvm-measurement.md`](openvm-measurement.md) shows OpenVM does not yet fit on either axis. Read item 4 before item 2.
+
+A third measurement then added an axis this ranking did not have. It ranks on proof bytes and on the commitment hash, on the finding that field arithmetic is cheap per operation. That finding is correct and not sufficient: [`risc0-verifier-sizing.md`](risc0-verifier-sizing.md) counts every BabyBear operation in a RISC Zero succinct-receipt verification and gets 687,360 multiplications, 8.4 billion varops, 210% of a maximal spend — with hashing at 0.36% of the total. **Operation count is a first-class screen, alongside proof size and hash choice, and the affordable budget is on the order of 10^5 field multiplications for the whole verifier.** No candidate below has been screened on it except RISC Zero, which fails it, and the shipped Stwo verifier, which passes at 8,667 multiplications. That screen moves the lead back to item 1: what a GSR script can afford is not a vendor's default recursion circuit but a small, purpose-built final wrapper, and how small it has to be is now a measured number rather than a guess.
 
 ### 1. A SHA-256-terminated outer layer, as a reusable component
 
@@ -56,7 +58,7 @@ Acceptance: a Plonky3 STARK whose commitment scheme and Fiat-Shamir transcript a
 
 OpenVM remains the strongest candidate on paper. It is the only one that combines a maintained multi-level recursive aggregation pipeline, a transparent hash-based commitment, and WHIR, whose whole point is a small proof and a low query count. Its verifier algebra is BabyBear with a degree-four extension, which the second finding above says is cheap.
 
-It is no longer the first thing to port — item 4 is — but it remains the better proof-size story if its hash problem is ever solved, and the WHIR proof should compress further than a fixed-size recursion receipt can.
+It remains the better proof-size story if its hash problem is ever solved, and the WHIR proof should compress further than a fixed-size recursion receipt can. WHIR's low query count also matters more than it appeared to when this was written: queries drive the per-query arithmetic that the operation-count screen charges for. Its verifier has not been counted on that screen, and should be before any port.
 
 The risk is entirely in the hash, and that risk has now been measured rather than modelled. [`openvm-measurement.md`](openvm-measurement.md) records a real 35-segment proof with two aggregation levels above the leaf layer: 315,319 raw canonical bytes, and 14,737 Poseidon2 permutations in the host verifier, against the 92 this table affords. That is 40x a maximal standard spend on the primitive lower bound and 161x after the overhead factor, so item 1 is a hard dependency for OpenVM. The same proof shape verified with padded SHA-256 parents would spend 8.8% of the budget instead, which leaves proof size as the binding constraint: 315 KB of witness already consumes 79% of a 400,000 WU spend.
 
@@ -72,13 +74,15 @@ Two caveats keep it below OpenVM. It is not hash-based, so adopting it means acc
 
 Acceptance for a feasibility study, before any port: count the ring multiplications, norm checks and transcript hashes in one Akita verification at the released parameters, price them with the model above, and measure the raw proof bytes. Swap the Fiat-Shamir transcript to SHA-256 if it is not already — a Keccak transcript costs 85 permutations per spend and would dominate everything else.
 
-### 4. RISC Zero succinct receipts — measured, fits, and now the first candidate to port
+### 4. RISC Zero succinct receipts — fits on bytes and hashing, fails on arithmetic
 
 This entry was written as a fallback behind OpenVM on the strength of published claims. Measurement reversed that. [`risc0-measurement.md`](risc0-measurement.md) records a real v3.0.6 succinct receipt over a lift/join aggregation of 3 and of 18 segments: 222,668 seal bytes in both cases, and, once the final layer is re-proved under the stock `sha-256` hash suite, 4,363 SHA-256 digest-pair hashes and 355 slice hashes over 86,028 bytes to verify — 30,451,946 varops, 0.76% of a maximal standard spend, 3.08% after the overhead factor. The same receipt verified in its stock Poseidon2 configuration costs 2,013x more.
 
 That clears both constraints this note ranks on. Proof size is constant in program length, unlike OpenVM's, and 222,668 bytes against the shipped verifier's 224,896-byte witness payload and 144,905-byte script is the same shape as a spend that already lands at 370,387 WU. The dependency on item 1 is mostly discharged in-stock: SHA-256 applies to the outer layer only — `lift` and `join` still assert Poseidon2 inputs — but that is precisely the arrangement item 1 asks for, since the inner Poseidon2 hashing is verified inside the identity circuit rather than in Script.
 
-What remains of item 1 is narrow: RISC Zero's `sha-256` suite hashes with the raw compression function rather than padded FIPS SHA-256, so `OP_SHA256` cannot reproduce its digests. A padded hash suite is needed, and source reading suggests it needs no circuit change, only regenerated control IDs. Validating that, and then sizing an actual BabyBear FRI verifier script over the seal, are the next steps.
+What remained of item 1 was narrow, and is now discharged: RISC Zero's `sha-256` suite hashes with the raw compression function rather than padded FIPS SHA-256, so `OP_SHA256` cannot reproduce its digests. [`risc0-verifier-sizing.md`](risc0-verifier-sizing.md) adds a `sha-256-padded` suite and proves and verifies a real succinct receipt under it, with no circuit change, no change in seal size, and identical hash counts — the digests are now exactly what `OP_CAT`/`OP_SHA256` computes.
+
+The same note then sizes the verifier itself, and that is where the port stops. Verifying the seal costs 687,360 BabyBear multiplications, 480,016 additions and 31,644 subtractions, which price at 8,386,531,106 varops: 210% of a maximal standard spend at the primitive lower bound, 849% after the overhead factor, needing 838,653 WU of transaction weight against a 400,000 WU limit. Cutting queries does not fix it — the query-independent setup, mixing and constraint evaluation alone are 89% of the budget. The obstacle is that the seal proves a 643-tap recursion circuit at `po2 = 18` with a 12,359-step constraint program, so the fix is a deliberately small final wrapper circuit, which is proof-side work rather than Script-side work.
 
 ### 5. Stwo/Cairo with a SHA-256 channel — the cheapest incremental win
 

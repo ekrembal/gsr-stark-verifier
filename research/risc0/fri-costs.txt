@@ -1,0 +1,28 @@
+Unit costs (varops):
+  BabyBear mul mod p       7720
+  BabyBear add mod p       5802
+  BabyBear sub mod p       8362
+  SHA-256 Merkle parent    5892
+
+Budget of a maximal 400,000 WU spend:        4000000000
+Budget left after the seal is paid as witness: 1773320000
+
+Verifier work                                             Varops   Of budget
+----------------------------------------------------------------------------
+arithmetic: setup and mixing                          1819058520       45.48%
+arithmetic: constraint eval                           1745279840       43.63%
+arithmetic: FRI folding                               3184085120       79.60%
+arithmetic: DEEP-ALI per query                        1607655680       40.19%
+hashing: padded SHA-256, all phases                     30451946        0.76%
+----------------------------------------------------------------------------
+total, primitive lower bound                          8386531106      209.66%
+total, x4.05 calibrated projection                   33965450979      849.14%
+total, calibrated, post-seal budget                  33965450979     1915.36%
+
+Operation totals: 687360 mul, 480016 add, 31644 sub
+Arithmetic share of the primitive lower bound: 99.64%
+
+Weight required for the measured verifier alone:
+  primitive lower bound      838653 WU
+  x4.05 calibrated           3396545 WU
+  plus seal witness bytes    222668 WU

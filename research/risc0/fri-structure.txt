@@ -1,0 +1,16 @@
+po2 18, 262144 cycles, evaluation domain 1048576
+3 FRI rounds, final degree 64, 256 final coefficients
+
+tree                rows   cols   top  path
+accum            1048576     12    32    15
+code             1048576     23    32    15
+data             1048576    128    32    15
+check            1048576     16    32    15
+fri round 0        65536     64    32    11
+fri round 1         4096     64    32     7
+fri round 2          256     64    32     3
+
+setup pairs 217, 81 path pairs per query
+predicted digest pairs     4267  measured    4363  delta    96  (Fiat-Shamir rng steps, 2 pairs each)
+predicted slice hashes      355  measured     355  delta     0
+predicted slice bytes     86028  measured   86028  delta     0

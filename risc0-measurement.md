@@ -4,8 +4,13 @@ This measures a real RISC Zero succinct receipt, in both its stock Poseidon2 con
 its SHA-256 configuration, and prices its verifier against the GSR limits that
 [`next-verifiers.md`](next-verifiers.md) pins. Reproduction: [`research/risc0/README.md`](research/risc0/README.md).
 
-The short version: RISC Zero is the first candidate measured here that fits. Its succinct receipt
-is 222,668 bytes regardless of program length, and its final proof layer can be produced with a
+> Follow-up: [`risc0-verifier-sizing.md`](risc0-verifier-sizing.md) validates the padded SHA-256
+> suite this note calls for, and measures the verifier's BabyBear arithmetic as well as its hashing.
+> That measurement reverses the conclusion below: hashing and proof size fit comfortably, but the
+> arithmetic costs 8.4 billion varops, over twice a maximal standard spend.
+
+The short version: on the two axes measured here, proof size and hashing, RISC Zero is the first
+candidate that fits. Its succinct receipt is 222,668 bytes regardless of program length, and its final proof layer can be produced with a
 stock SHA-256 hash suite, which costs 30,451,946 varops of hashing to verify — 0.76% of a maximal
 standard spend on the primitive lower bound, 3.08% after the calibrated overhead factor. The same
 receipt in the stock Poseidon2 configuration costs 2,013x more and is 15x over the whole budget.
@@ -56,7 +61,10 @@ script size would land in the same place.
 As in [`research/gsr-primitive-costs.cpp`](research/gsr-primitive-costs.cpp), these rows are hashing
 only. FRI folding, constraint evaluation over BabyBear and its degree-four extension, witness
 parsing and stack plumbing are not counted; the 4.05x row is the calibration that projects a
-comparable full verifier, and BabyBear arithmetic is in the cheap band that measurement found.
+comparable full verifier. Counting the arithmetic, in
+[`risc0-verifier-sizing.md`](risc0-verifier-sizing.md), adds 8.36 billion varops: per-operation
+BabyBear arithmetic is cheap, but this verifier does 687,360 multiplications, and that dominates
+the table above by two orders of magnitude.
 
 ## What the SHA-256 path actually is, and what it is not
 
@@ -79,8 +87,9 @@ Two limits are load-bearing, and neither is a blocker for GSR:
    padding, so a Script verifier cannot reproduce these digests directly. The fix is a padded
    SHA-256 hash suite, and reading the source suggests it is contained: the outer layer's own
    commitment hash is verified by the external verifier, not inside the recursion circuit, so a new
-   `HashSuite` plus regenerated control IDs should suffice with no circuit change. That inference is
-   not yet validated by running it, and validating it is the natural next step. The cost is already
+   `HashSuite` plus regenerated control IDs should suffice with no circuit change. That inference
+   has since been validated by implementing the suite and proving a receipt under it; see
+   [`risc0-verifier-sizing.md`](risc0-verifier-sizing.md). The cost is already
    accounted for above: the padded variant costs one extra compression per pair, and the GSR rows
    price a padded `OP_SHA256` over 64 bytes to begin with.
 
@@ -101,7 +110,7 @@ and the only one with a supported SHA-256 outer layer in stock releases. The rem
 padded SHA-256 hash suite and then the verifier itself; the hash budget, which killed a direct
 OpenVM port, is a rounding error here.
 
-Not measured, and needed before committing: the script size and arithmetic op count of an actual
-BabyBear FRI verifier over this seal, and whether the seal can be trimmed below 222,668 bytes
-without dropping below the 97-bit target — it is fixed by the recursion circuit's po2 and the
-50-query setting, so any reduction trades security directly.
+Not measured here, and measured next in [`risc0-verifier-sizing.md`](risc0-verifier-sizing.md): the
+arithmetic op count of an actual BabyBear FRI verifier over this seal. It is 687,360 multiplications
+and over twice the varops budget, which makes it, not hashing, the reason a direct port does not
+fit.

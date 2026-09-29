@@ -1,0 +1,39 @@
+Budget of the shipped 370,387 WU spend: 3703870000
+Budget of a maximal 400,000 WU standard spend: 4000000000
+
+Primitive                                             Varops  Fit in spend  WU to fund
+--------------------------------------------------------------------------------------
+SHA-256 two-to-one Merkle parent (64 B)                 5892        628626           1
+SHA-256 over 1 KiB                                     52450         70617           6
+BLAKE3/BLAKE2s compression                           4084192           906         409
+Keccak-f[1600] permutation                          11688672           316        1169
+Poseidon2 permutation, 31-bit field, width 16       10769698           343        1077
+RPO permutation, Goldilocks, width 12               34871088           106        3488
+Tip5 permutation, Goldilocks, width 16              25042400           147        2505
+M31 multiplication mod p (4 B)                          7720        479775           1
+M31 addition mod p (4 B)                                5802        638378           1
+M31 subtraction mod p (4 B)                             8362        442940           1
+Goldilocks multiplication mod p (8 B)                   8028        461368           1
+128-bit field multiplication mod p (16 B)               9580        386625           1
+252-bit field multiplication mod p (32 B)              15004        246858           2
+
+Merkle authentication, 8 queries over a depth-21 tree:
+  SHA-256 parents                                     989856          3741          99
+  Poseidon2 compressions                          1809309264             2      180931
+  Keccak-f permutations                           1963696896             1      196370
+
+Merkle authentication, 100 queries over a depth-21 tree:
+  SHA-256 parents                                   12373200           299        1238
+  Poseidon2 compressions                         22616365800             0     2261637
+
+Calibration against the shipped Recursive Stwo verifier:
+  Its 763,003 executed opcodes cost 1399895948 units, 1834 per opcode on average
+  Its arithmetic, hashing and invocation opcodes alone cost 346056480 units
+  Everything else (stack plumbing, parsing, control flow) is 75.28% of the spend
+  Multiply the primitive rows above by 4.05x to project a comparable full verifier
+
+Witness economics:
+  One witness byte costs 1 WU and funds 10000 varops units
+  A 32-byte digest costs 32 WU and funds 320000 varops units
+  Verifying it with a SHA-256 parent spends 5892 units, 1.84% of what the bytes fund
+  Verifying it with a Poseidon2 compression spends 10769698 units, 3365.53% of what the bytes fund

@@ -2,6 +2,10 @@
 
 Implementations of zero-knowledge proof-system verifiers for Bitcoin's Great Script Restoration (GSR), using Tapscript v2. Each verifier lives in its own directory with its source, dependencies, fixtures, tests, and measured results. The pinned Bitcoin checkout in [`bitcoin/`](bitcoin/) is shared.
 
+> **Warning — research code. Do not use in production.**
+>
+> This is an experimental research artifact published to document a GSR feasibility milestone. It has not been audited or independently reviewed for cryptographic or implementation security. It targets a proposed Tapscript v2 that is not part of Bitcoin consensus, and the verifier is fixed-shape: it verifies one pinned recursive proof bundle with hard-coded circuit commitments, FRI parameters, and public-input count, not arbitrary STARK proofs. Use it at your own risk; see [`LICENSE`](LICENSE) for the applicable disclaimer of warranty and liability.
+
 ## Implemented verifiers
 
 - **[Recursive Stwo](recursive-stwo/README.md)** — a GSR port built on [Bitcoin Wildlife Sanctuary's recursive-stwo-bitcoin](https://github.com/Bitcoin-Wildlife-Sanctuary/recursive-stwo-bitcoin). It verifies the existing recursive proof bundle, including its delegated obligations, in one standard Taproot spend. The upstream project supplies the recursive proof pipeline and Bitcoin verifier; this implementation adapts its arithmetic, witness handling, and Script compilation to GSR.
@@ -47,4 +51,18 @@ bash tools/test.sh
 cargo run --locked -- regtest-demo
 ```
 
+The instrumentation harness links against the pinned Core static libraries; on GNU/Linux the link order matters, so `libbitcoin_consensus.a` is passed after the libraries that reference it.
+
 Verifier artifacts and regtest data are written under `recursive-stwo/build/`; the shared node binaries are built under `build/bitcoin/` at the repository root. Each verifier can maintain its own Cargo workspace and toolchain.
+
+## License and attribution
+
+This repository is released under the [MIT License](LICENSE).
+
+It vendors and builds on third-party projects that keep their own licenses and copyright:
+
+- [Bitcoin Wildlife Sanctuary](https://github.com/Bitcoin-Wildlife-Sanctuary) `recursive-stwo-bitcoin` and `recursive-stwo` — MIT, vendored under [`recursive-stwo/vendor/bws-bitcoin`](recursive-stwo/vendor/bws-bitcoin) and [`recursive-stwo/vendor/bws-recursion`](recursive-stwo/vendor/bws-recursion).
+- [`stwo`](https://github.com/starkware-libs/stwo) (via `stwo-circle-poseidon-plonk`) — Apache License 2.0, vendored under [`recursive-stwo/vendor/bws-stwo`](recursive-stwo/vendor/bws-stwo).
+- [Bitcoin Core](https://github.com/bitcoin/bitcoin) with the GSR branch used by the [`bitcoin/`](bitcoin/) submodule — MIT.
+
+Pinned upstream revisions and the local changes applied to them are recorded in [`recursive-stwo/vendor/README.md`](recursive-stwo/vendor/README.md).

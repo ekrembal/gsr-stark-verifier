@@ -127,8 +127,9 @@ multiplication is 7,720 varops, an addition 5,802, a subtraction 8,362, a SHA-25
 The varops budget is 10,000 per weight unit, so the measured verifier alone needs 838,653 WU of
 transaction weight at the lower bound and 3,396,545 WU calibrated, against a 400,000 WU policy
 target and the roughly 300,000 WU that is practical once the 222,668-byte seal is paid for as
-witness. Script size is not the binding constraint — the constraint-program table, tap tables and
-roots of unity land in the same tens-of-kilobytes band as Recursive Stwo's 144,905-byte script — and
+witness. Script size has not been measured, since no verifier script was written; a rough, unmeasured
+estimate is 60–150 KB, dominated by the 12,359-step constraint program (table-driven or unrolled),
+against Recursive Stwo's 144,905-byte script. Either way it is not the binding constraint, and
 neither is proof size. Varops is, by a factor of at least two and probably eight.
 
 For scale, the shipped Recursive Stwo verifier does 8,667 multiplications, 15,747 additions and

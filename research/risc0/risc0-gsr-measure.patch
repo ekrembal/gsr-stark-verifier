@@ -1,0 +1,215 @@
+diff --git a/risc0/zkp/src/core/hash/mod.rs b/risc0/zkp/src/core/hash/mod.rs
+index c7516545..f7740c57 100644
+--- a/risc0/zkp/src/core/hash/mod.rs
++++ b/risc0/zkp/src/core/hash/mod.rs
+@@ -26,6 +26,34 @@ use risc0_core::field::{baby_bear::BabyBear, Field};
+ 
+ use super::digest::Digest;
+ 
++/// Instrumentation for GSR cost research: counts hash work in the verifier.
++pub mod gsr_counters {
++    use core::sync::atomic::{AtomicU64, Ordering};
++
++    /// SHA-256 compression-function calls on digest pairs (Merkle parents, Fiat-Shamir steps).
++    pub static SHA_PAIR: AtomicU64 = AtomicU64::new(0);
++    /// SHA-256 calls over field-element slices (Merkle leaves).
++    pub static SHA_SLICE: AtomicU64 = AtomicU64::new(0);
++    /// Bytes fed to those slice hashes.
++    pub static SHA_SLICE_BYTES: AtomicU64 = AtomicU64::new(0);
++    /// Poseidon2 permutations.
++    pub static P2_PERMUTE: AtomicU64 = AtomicU64::new(0);
++
++    /// Snapshot of every counter.
++    pub fn snapshot() -> [u64; 4] {
++        [
++            SHA_PAIR.load(Ordering::Relaxed),
++            SHA_SLICE.load(Ordering::Relaxed),
++            SHA_SLICE_BYTES.load(Ordering::Relaxed),
++            P2_PERMUTE.load(Ordering::Relaxed),
++        ]
++    }
++
++    pub(crate) fn bump(counter: &AtomicU64, by: u64) {
++        counter.fetch_add(by, Ordering::Relaxed);
++    }
++}
++
+ /// A trait that sets the hashes and encodings used by the ZKP.
+ pub trait HashFn<F: Field>: Send + Sync {
+     /// Generate a hash from a pair of [Digest].
+diff --git a/risc0/zkp/src/core/hash/poseidon2/mod.rs b/risc0/zkp/src/core/hash/poseidon2/mod.rs
+index d5bd9ebd..f9298296 100644
+--- a/risc0/zkp/src/core/hash/poseidon2/mod.rs
++++ b/risc0/zkp/src/core/hash/poseidon2/mod.rs
+@@ -200,6 +200,7 @@ fn partial_round(cells: &mut [BabyBearElem; CELLS], round: usize) {
+ 
+ /// The raw sponge mixing function
+ pub fn poseidon2_mix(cells: &mut [BabyBearElem; CELLS]) {
++    crate::core::hash::gsr_counters::bump(&crate::core::hash::gsr_counters::P2_PERMUTE, 1);
+     let mut round = 0;
+ 
+     // First linear layer.
+diff --git a/risc0/zkp/src/core/hash/sha/mod.rs b/risc0/zkp/src/core/hash/sha/mod.rs
+index f21be6ee..c6ee9c6e 100644
+--- a/risc0/zkp/src/core/hash/sha/mod.rs
++++ b/risc0/zkp/src/core/hash/sha/mod.rs
+@@ -313,14 +313,25 @@ struct Sha256HashFn;
+ 
+ impl<F: Field> super::HashFn<F> for Sha256HashFn {
+     fn hash_pair(&self, a: &Digest, b: &Digest) -> Box<Digest> {
++        super::gsr_counters::bump(&super::gsr_counters::SHA_PAIR, 1);
+         (*Impl::hash_pair(a, b)).into()
+     }
+ 
+     fn hash_elem_slice(&self, slice: &[F::Elem]) -> Box<Digest> {
++        super::gsr_counters::bump(&super::gsr_counters::SHA_SLICE, 1);
++        super::gsr_counters::bump(
++            &super::gsr_counters::SHA_SLICE_BYTES,
++            (slice.len() * core::mem::size_of::<F::Elem>()) as u64,
++        );
+         (*Impl::hash_raw_data_slice(slice)).into()
+     }
+ 
+     fn hash_ext_elem_slice(&self, slice: &[F::ExtElem]) -> Box<Digest> {
++        super::gsr_counters::bump(&super::gsr_counters::SHA_SLICE, 1);
++        super::gsr_counters::bump(
++            &super::gsr_counters::SHA_SLICE_BYTES,
++            (slice.len() * core::mem::size_of::<F::ExtElem>()) as u64,
++        );
+         (*Impl::hash_raw_data_slice(slice)).into()
+     }
+ }
+diff --git a/risc0/zkp/src/core/hash/sha/rng.rs b/risc0/zkp/src/core/hash/sha/rng.rs
+index c8266628..ee06f58c 100644
+--- a/risc0/zkp/src/core/hash/sha/rng.rs
++++ b/risc0/zkp/src/core/hash/sha/rng.rs
+@@ -57,6 +57,7 @@ impl ShaRng {
+     }
+ 
+     fn step(&mut self) {
++        crate::core::hash::gsr_counters::bump(&crate::core::hash::gsr_counters::SHA_PAIR, 2);
+         self.pool0 = (*Impl::hash_pair(&self.pool0, &self.pool1)).into();
+         self.pool1 = (*Impl::hash_pair(&self.pool0, &self.pool1)).into();
+         self.pool_used = 0;
+diff --git a/risc0/zkvm/src/host/recursion/tests.rs b/risc0/zkvm/src/host/recursion/tests.rs
+index 51108aab..8b5256c1 100644
+--- a/risc0/zkvm/src/host/recursion/tests.rs
++++ b/risc0/zkvm/src/host/recursion/tests.rs
+@@ -160,7 +160,11 @@ static BUSY_LOOP_SEGMENTS: LazyLock<(Journal, Vec<SegmentReceipt>)> =
+ 
+ fn generate_busy_loop_segments() -> (Journal, Vec<SegmentReceipt>) {
+     let segment_limit_po2 = 16; // 64k cycles
+-    let cycles = 1 << segment_limit_po2;
++    let mult: u64 = std::env::var("R0_GSR_CYCLES_MULT")
++        .ok()
++        .and_then(|s| s.parse().ok())
++        .unwrap_or(1);
++    let cycles = mult * (1 << segment_limit_po2);
+     let env = ExecutorEnv::builder()
+         .write(&MultiTestSpec::BusyLoop { cycles })
+         .unwrap()
+@@ -303,6 +307,104 @@ fn test_recursion_lift_join_unwrap_povw() -> anyhow::Result<()> {
+     Ok(())
+ }
+ 
++/// GSR cost research: measure seal bytes and verifier hash work for a real multi-segment
++/// succinct receipt, in both the stock poseidon2 configuration and the sha-256 configuration.
++#[test_log::test]
++fn gsr_measure() {
++    use risc0_zkp::core::hash::gsr_counters;
++
++    fn report(label: &str, before: [u64; 4], after: [u64; 4]) {
++        let d = |i: usize| after[i] - before[i];
++        println!(
++            "{label}: sha_pair {}, sha_slice {} over {} bytes, poseidon2 {}",
++            d(0),
++            d(1),
++            d(2),
++            d(3)
++        );
++    }
++
++    let (journal, segments) = BUSY_LOOP_SEGMENTS.clone();
++    println!("segments                 : {}", segments.len());
++    println!(
++        "segment seal bytes       : {}",
++        segments.iter().map(|s| s.seal.len() * 4).sum::<usize>()
++    );
++
++    let ctx = VerifierContext::default();
++    tracing::info!("Proving lift");
++    let mut compressed = lift(&segments[0]).unwrap();
++    for receipt in &segments[1..] {
++        tracing::info!("Proving lift");
++        let rec_receipt = lift(receipt).unwrap();
++        tracing::info!("Proving join");
++        compressed = join(&compressed, &rec_receipt).unwrap();
++    }
++
++    println!(
++        "poseidon2 seal bytes     : {}",
++        compressed.seal.len() * 4
++    );
++    println!(
++        "poseidon2 receipt bytes  : {}",
++        bincode::serialize(&Receipt::new(
++            InnerReceipt::Succinct(compressed.clone()),
++            journal.bytes.clone()
++        ))
++        .unwrap()
++        .len()
++    );
++
++    let before = gsr_counters::snapshot();
++    compressed.verify_integrity_with_context(&ctx).unwrap();
++    report("poseidon2 verify", before, gsr_counters::snapshot());
++
++    // Re-prove the final layer with the sha-256 hash suite, the stock analogue of identity_p254.
++    let (_, control_id_sha256) = zkr::identity("sha-256").unwrap();
++    let opts = ProverOpts::succinct()
++        .with_hashfn("sha-256".to_string())
++        .with_control_ids(vec![control_id_sha256]);
++    let mut prover = Prover::new_identity(&compressed, opts.clone()).unwrap();
++    let sha_recursion_receipt = prover.run().unwrap();
++
++    let hashfn = opts.hash_suite().unwrap().hashfn;
++    let control_tree = MerkleGroup::new(opts.control_ids.clone()).unwrap();
++    let params = SuccinctReceiptVerifierParameters {
++        control_root: control_tree.calc_root(hashfn.as_ref()),
++        inner_control_root: Some(ALLOWED_CONTROL_ROOT),
++        proof_system_info: PROOF_SYSTEM_INFO,
++        circuit_info: CircuitImpl::CIRCUIT_INFO,
++    };
++    let sha_receipt = SuccinctReceipt {
++        seal: sha_recursion_receipt.seal,
++        hashfn: opts.hashfn,
++        control_id: control_id_sha256,
++        control_inclusion_proof: control_tree
++            .get_proof(&control_id_sha256, hashfn.as_ref())
++            .unwrap(),
++        claim: compressed.claim.clone(),
++        verifier_parameters: params.digest(),
++    };
++
++    println!("sha-256 seal bytes       : {}", sha_receipt.seal.len() * 4);
++    println!(
++        "sha-256 receipt bytes    : {}",
++        bincode::serialize(&Receipt::new(
++            InnerReceipt::Succinct(sha_receipt.clone()),
++            journal.bytes.clone()
++        ))
++        .unwrap()
++        .len()
++    );
++
++    let sha_ctx = VerifierContext::empty()
++        .with_suites(VerifierContext::default_hash_suites())
++        .with_succinct_verifier_parameters(params);
++    let before = gsr_counters::snapshot();
++    sha_receipt.verify_integrity_with_context(&sha_ctx).unwrap();
++    report("sha-256 verify", before, gsr_counters::snapshot());
++}
++
+ #[test_log::test]
+ fn test_recursion_lift_join_identity_p254_e2e() {
+     // Prove the base case

@@ -1,0 +1,25 @@
+$ R0_GSR_CYCLES_MULT=1 RUST_LOG=info cargo test --release -p risc0-zkvm --features prove --lib gsr_measure -- --nocapture
+
+running 1 test
+ INFO risc0_zkvm::host::recursion::tests: Executing rv32im
+R0VM[852] Busy loop starting!
+R0VM[65719] Busy loop complete
+ INFO risc0_zkvm::host::server::exec::executor: execution time: 4.327055ms
+ INFO risc0_zkvm::host::recursion::tests: Proving rv32im
+ INFO risc0_zkvm::host::recursion::tests: Done proving rv32im: 3 segments
+segments                 : 3
+segment seal bytes       : 662712
+ INFO risc0_zkvm::host::recursion::tests: Proving lift
+ INFO risc0_zkvm::host::recursion::tests: Proving lift
+ INFO risc0_zkvm::host::recursion::tests: Proving join
+ INFO risc0_zkvm::host::recursion::tests: Proving lift
+ INFO risc0_zkvm::host::recursion::tests: Proving join
+poseidon2 seal bytes     : 222668
+poseidon2 receipt bytes  : 223226
+poseidon2 verify: sha_pair 0, sha_slice 0 over 0 bytes, poseidon2 5693
+sha-256 seal bytes       : 222668
+sha-256 receipt bytes    : 223224
+sha-256 verify: sha_pair 4363, sha_slice 355 over 86028 bytes, poseidon2 0
+test host::recursion::tests::gsr_measure ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 240 filtered out; finished in 78.25s

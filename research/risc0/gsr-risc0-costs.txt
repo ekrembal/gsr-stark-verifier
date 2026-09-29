@@ -1,0 +1,24 @@
+Measured RISC Zero v3.0.6 succinct receipt (3 and 18 segments, identical):
+  seal bytes                 222668
+  sha-256 digest-pair hashes 4363
+  sha-256 slice hashes       355 over 86028 bytes
+  poseidon2 permutations     5693 (stock configuration)
+
+Budget of a maximal 400,000 WU standard spend: 4000000000
+Budget left after paying for the seal as witness: 1773320000
+
+Verifier hashing                                              Varops   Of budget
+--------------------------------------------------------------------------------
+sha-256 digest pairs                                        25706796        0.64%
+sha-256 leaf slices                                          4745150        0.12%
+sha-256 total, primitive lower bound                        30451946        0.76%
+sha-256 total, x4.05 calibrated projection                 123330381        3.08%
+sha-256 total against post-seal budget                     123330381        6.95%
+poseidon2 total, primitive lower bound                   61311890714     1532.80%
+poseidon2 total, x4.05 calibrated projection            248313157391     6207.83%
+
+Ratios:
+  poseidon2 / sha-256 verifier hashing: 2013.40x
+  seal bytes as a share of 400,000 WU:  55.67%
+  weight left for script and overhead:  177332 WU
+  shipped Recursive Stwo script:        144905 bytes

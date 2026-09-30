@@ -40,11 +40,9 @@ MASK_LONG = 10560
 CHECK_COMBO = 5
 QUERY_ITEMS = ["accum", "accum_path", "code", "code_path", "data", "data_path", "check", "check_path",
                "hints", "fri0", "fri0_path", "fri1", "fri1_path", "fri2", "fri2_path"]
-COVENANT_ITEMS = ["journal", "sig", "pubkey", "sighash_prefix", "sighash_suffix"]
-# BIP 341 SigMsg bytes before sha_outputs for SIGHASH_DEFAULT: epoch, hash_type, nVersion, nLockTime,
-# sha_prevouts, sha_amounts, sha_scriptpubkeys, sha_sequences.
-SIGHASH_PREFIX = 138
-TAPSIGHASH_TAG = hashlib.sha256(b"TapSighash").digest()
+# OP_TX selector: collate, all outputs, amount + scriptPubKey. The result is the concatenation of the serialized
+# outputs (u64 LE amount, compact-size scriptPubKey), i.e. the BIP 341 `sha_outputs` preimage.
+OUTPUTS_SELECTOR = bytes([0x00, 0x01, 0x00, 0x02, 0x00, 0x03])
 CLAIM_OUT = 16
 SETUP_ITEMS = ["out", "ctrl_index", "ctrl_path", "code_top", "data_top", "accum_top", "check_top", "coeff",
                "fri_top0", "fri_top1", "fri_top2", "final"]
@@ -57,9 +55,8 @@ def word_mask(n_words: int, sel) -> int:
 class Statement:
     """What the verifier is specialized to (compile-time constants).
 
-    With `covenant`, the claim digest is not a constant: the Script recomputes it from the journal in the witness
-    (the image ID, exit code and the other claim fields stay constant) and requires the journal to be the spending
-    transaction's BIP 341 serialized outputs.
+    With `covenant`, the claim digest is not a constant: the Script recomputes it with the spending transaction's
+    serialized outputs (read with OP_TX) as the journal; the image ID, exit code and other claim fields stay constant.
     """
 
     def __init__(self, receipt: dict, covenant: bool = False) -> None:
@@ -171,7 +168,6 @@ class Gen:
         self.taps = ref.TapSet(circuit)
         self.layout = wit.Layout(self.taps)
         self.used: dict[int, list | Script] = {}
-        self.setup_items = (COVENANT_ITEMS if statement.covenant else []) + SETUP_ITEMS
 
     # ---- shared emitters (work on any Asm) ----
     @staticmethod
@@ -528,33 +524,13 @@ class Gen:
         return a.s, persist
 
     # ---- setup: transcript, commitments, constraint check, per-proof constants ----
-    def covenant(self, m: Asm, s_items: dict[str, V]) -> V:
-        """Bind the spending transaction to the journal and return the claim digest as packed output-global words.
-
-        The journal must be the transaction's BIP 341 serialized outputs, so SHA256(journal) is `sha_outputs`. The
-        spender supplies the SIGHASH_DEFAULT signature message around it; one 64-byte signature must verify both
-        against its hash (CHECKSIGFROMSTACK) and against the transaction (CHECKSIG), so the message is the real one.
-        """
+    def covenant(self, m: Asm) -> V:
+        """Return the claim digest, with the spending transaction's serialized outputs as journal, as packed
+        output-global words."""
         st = self.stmt
-        jd = m.roll(s_items["journal"])
+        m.push(OUTPUTS_SELECTOR)
+        m.op("TX", 1, V("journal"))
         jd = m.op("SHA256", 1, V("jd")).top()
-        for name, n in (("sig", 64), ("pubkey", 32), ("sighash_prefix", SIGHASH_PREFIX)):
-            self.size_check(m, s_items[name], n)
-        m.push(TAPSIGHASH_TAG + TAPSIGHASH_TAG)
-        m.roll(s_items["sighash_prefix"])
-        m.op("CAT", 2, V())
-        m.pick(jd)
-        m.op("CAT", 2, V())
-        m.roll(s_items["sighash_suffix"])
-        m.op("CAT", 2, V())
-        msg = m.op("SHA256", 1, V("sighash")).top()
-        m.pick(s_items["sig"])
-        m.roll(msg)
-        m.pick(s_items["pubkey"])
-        m.raw(assemble(["CHECKSIGFROMSTACK", "VERIFY"]), 3)
-        m.roll(s_items["sig"])
-        m.roll(s_items["pubkey"])
-        m.op("CHECKSIGVERIFY", 2)
 
         m.push(st.output_head)
         m.roll(jd)
@@ -591,9 +567,9 @@ class Gen:
         V.serial = 0
         self.used = {}
         q_items = [[V(f"q{q}.{n}") for n in QUERY_ITEMS] for q in range(ref.QUERIES)]
-        s_items = {n: V(n) for n in self.setup_items}
+        s_items = {n: V(n) for n in SETUP_ITEMS}
         base = [v for q in reversed(range(ref.QUERIES)) for v in reversed(q_items[q])]
-        m = Asm(base + [s_items[n] for n in reversed(self.setup_items)], plan)
+        m = Asm(base + [s_items[n] for n in reversed(SETUP_ITEMS)], plan)
         f = Field(m, inline=False, used=self.used, pool=pool)
 
         # range-check masks
@@ -624,7 +600,7 @@ class Gen:
             m.pick(v)
             rng.mix(m.op("SHA256", 1, V("d")).top())
 
-        claim_words = self.covenant(m, s_items) if self.stmt.covenant else None
+        claim_words = self.covenant(m) if self.stmt.covenant else None
 
         # output globals and po2
         out = m.roll(s_items["out"])
@@ -898,10 +874,9 @@ def prover_hints(gen: Gen, receipt: dict, seal: bytes) -> list[bytes]:
     return wit.deep_hints(wit.split_seal(seal, gen.layout), trace, gen.taps)
 
 
-def build_witness(gen: Gen, receipt: dict, seal: bytes, hints: list[bytes] | None = None,
-                  covenant: dict[str, bytes] | None = None) -> list[bytes]:
+def build_witness(gen: Gen, receipt: dict, seal: bytes, hints: list[bytes] | None = None) -> list[bytes]:
     """Witness stack, bottom first; queries deepest (query 0 just below the setup items). `hints` lets tests
-    pair any seal (including a rejected one) with chosen hints; `covenant` supplies the COVENANT_ITEMS."""
+    pair any seal (including a rejected one) with chosen hints."""
     if hints is None:
         hints = prover_hints(gen, receipt, seal)
     split = wit.split_seal(seal, gen.layout)
@@ -909,14 +884,14 @@ def build_witness(gen: Gen, receipt: dict, seal: bytes, hints: list[bytes] | Non
     setup = {"out": split["out"], "ctrl_index": int(proof["index"]).to_bytes(4, "little").rstrip(b"\0"),
              "ctrl_path": b"".join(bytes.fromhex(d) for d in proof["digests"]),
              "code_top": split["code_top"], "data_top": split["data_top"], "accum_top": split["accum_top"],
-             "check_top": split["check_top"], "coeff": split["coeff"], "final": split["final"], **(covenant or {})}
+             "check_top": split["check_top"], "coeff": split["coeff"], "final": split["final"]}
     for r in range(FRI_ROUNDS):
         setup[f"fri_top{r}"] = split["fri_top"][r]
     stack = []
     for q in reversed(range(ref.QUERIES)):
         items = dict(split["queries"][q], hints=hints[q])
         stack += [items[n] for n in reversed(QUERY_ITEMS)]
-    stack += [setup[n] for n in reversed(gen.setup_items)]
+    stack += [setup[n] for n in reversed(SETUP_ITEMS)]
     return stack
 
 

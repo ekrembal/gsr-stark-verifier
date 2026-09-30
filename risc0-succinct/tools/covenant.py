@@ -2,16 +2,14 @@
 """Covenant demo: a Taproot output that only a valid `gsr_covenant` STARK proof can spend, and only to the
 outputs committed in that proof's journal.
 
-The guest (see risc0-v3.0.6.patch) proves knowledge of a SHA-256 preimage and commits the spending
-transaction's BIP 341 serialized outputs as its journal. The Script verifies the succinct receipt, recomputes the
-claim digest from the image ID and the witness journal, and binds SHA256(journal) to the transaction's
-`sha_outputs` through a CHECKSIGFROMSTACK + CHECKSIG pair over the same signature (see `Gen.covenant`).
+The guest (see risc0-v3.0.6.patch) proves knowledge of a SHA-256 preimage and commits a list of serialized
+Bitcoin outputs as its journal. The Script reads the spending transaction's outputs with OP_TX, recomputes the claim
+digest with them as the journal, and verifies the succinct receipt against that claim (see `Gen.covenant`).
 
-    covenant.py              generate, sign, meter the complete spend and run the negative suite
+    covenant.py              generate, meter the complete spend and run the negative suite
     covenant.py --regtest    additionally fund, policy-check, broadcast and mine it on an activated regtest node
 """
 import argparse
-import hashlib
 import io
 import json
 import subprocess
@@ -27,13 +25,11 @@ from paths import BITCOIN_BUILD, BITCOIN_SOURCE  # noqa: E402
 
 sys.path.insert(0, str(BITCOIN_SOURCE / "test/functional"))
 from test_framework.address import output_key_to_p2tr  # noqa: E402
-from test_framework.key import compute_xonly_pubkey, sign_schnorr  # noqa: E402
 from test_framework.messages import COutPoint, CTransaction, CTxIn, CTxInWitness, CTxOut  # noqa: E402
-from test_framework.script import CScript, TaggedHash, TaprootSignatureMsg, taproot_construct  # noqa: E402
+from test_framework.script import CScript, taproot_construct  # noqa: E402
 
 ROOT = g.ROOT
 LEAF = 0xC2
-SPENDER_KEY = hashlib.sha256(b"gsr covenant demo spender").digest()
 FUNDING_VALUE = 5_000_000_000
 
 
@@ -64,20 +60,11 @@ class Covenant:
         tx.vout = parse_outputs(self.journal) if outputs is None else outputs
         return tx
 
-    def sighash_msg(self, tx: CTransaction, value: int, hash_type: int = 0) -> bytes:
-        return TaprootSignatureMsg(tx, [CTxOut(value, self.taproot.scriptPubKey)], hash_type, 0, scriptpath=True,
-                                   leaf_script=CScript(self.script), leaf_ver=LEAF,
-                                   codeseparator_pos=0xFFFFFFFF)
-
-    def spend(self, tx: CTransaction, value: int = FUNDING_VALUE, receipt: dict | None = None,
-              seal: bytes | None = None, hints: list[bytes] | None = None, **over: bytes) -> dict:
-        """Fill `tx`'s witness with an honest spend (any COVENANT_ITEMS in `over` replaced); returns the bundle."""
-        msg = self.sighash_msg(tx, value)
-        items = {"journal": self.journal, "sig": sign_schnorr(SPENDER_KEY, TaggedHash("TapSighash", msg)),
-                 "pubkey": compute_xonly_pubkey(SPENDER_KEY)[0],
-                 "sighash_prefix": msg[:g.SIGHASH_PREFIX], "sighash_suffix": msg[g.SIGHASH_PREFIX + 32:], **over}
+    def spend(self, tx: CTransaction, receipt: dict | None = None, seal: bytes | None = None,
+              hints: list[bytes] | None = None) -> dict:
+        """Fill `tx`'s witness with the receipt (default: the covenant receipt) and return the bundle."""
         witness = g.build_witness(self.gen, receipt or self.receipt, seal or self.seal,
-                                  self.hints if hints is None else hints, items)
+                                  self.hints if hints is None else hints)
         control = bytes([LEAF | self.taproot.negflag]) + NUMS
         tx.wit.vtxinwit = [CTxInWitness()]
         tx.wit.vtxinwit[0].scriptWitness.stack = witness + [self.script, control]
@@ -94,38 +81,15 @@ def negative_cases(cov: Covenant) -> dict:
     """name -> (bundle, tx). Every case must be rejected by the complete-transaction meter."""
     cases = {}
     outs = parse_outputs(cov.journal)
-    other = [CTxOut(outs[0].nValue - 1, outs[0].scriptPubKey)]
-    other_journal = b"".join(o.serialize() for o in other)
 
-    tx = cov.tx(outputs=other)
-    cases["tx_outputs_differ_from_journal"] = (cov.spend(tx), tx)
-
-    tx = cov.tx(outputs=other)
-    cases["journal_rewritten_to_match_tx"] = (cov.spend(tx, journal=other_journal), tx)
-
-    tx = cov.tx(outputs=other)  # a CHECKSIGFROMSTACK-valid signature over the message the journal implies
-    fake = cov.sighash_msg(cov.tx(), FUNDING_VALUE)
-    cases["sig_over_journal_message_not_tx"] = (
-        cov.spend(tx, sig=sign_schnorr(SPENDER_KEY, TaggedHash("TapSighash", fake)),
-                  sighash_prefix=fake[:g.SIGHASH_PREFIX], sighash_suffix=fake[g.SIGHASH_PREFIX + 32:]), tx)
-
-    tx = cov.tx()
-    msg = cov.sighash_msg(tx, FUNDING_VALUE)
-    cases["sighash_prefix_shifted"] = (cov.spend(tx, sighash_prefix=msg[:g.SIGHASH_PREFIX - 1],
-                                                 sighash_suffix=msg[g.SIGHASH_PREFIX - 1 + 32:]), tx)
-
-    tx = cov.tx()
-    msg = cov.sighash_msg(tx, FUNDING_VALUE, hash_type=1)
-    cases["sighash_all_65_byte_sig"] = (
-        cov.spend(tx, sig=sign_schnorr(SPENDER_KEY, TaggedHash("TapSighash", msg)) + b"\x01",
-                  sighash_prefix=msg[:g.SIGHASH_PREFIX], sighash_suffix=msg[g.SIGHASH_PREFIX + 32:]), tx)
-
-    tx = cov.tx()  # unknown (non-32-byte) public keys make both signature opcodes succeed without checking
-    cases["unknown_pubkey_type"] = (cov.spend(tx, pubkey=b"\x02" + compute_xonly_pubkey(SPENDER_KEY)[0],
-                                              sig=bytes(64)), tx)
-
-    tx = cov.tx()
-    cases["sig_from_other_key"] = (cov.spend(tx, pubkey=compute_xonly_pubkey(bytes(31) + b"\x07")[0]), tx)
+    for name, outputs in {
+        "output_value_minus_one": [CTxOut(outs[0].nValue - 1, outs[0].scriptPubKey)],
+        "other_destination": [CTxOut(outs[0].nValue, CScript(b"\x51\x20" + bytes(32)))],
+        "extra_output_appended": outs + [CTxOut(0, CScript(b"\x6a"))],
+        "outputs_split": [CTxOut(outs[0].nValue // 2, outs[0].scriptPubKey)] * 2,
+    }.items():
+        tx = cov.tx(outputs=outputs)
+        cases[name] = (cov.spend(tx), tx)
 
     tx = cov.tx()  # a valid receipt for a different image (the busy-loop fixture) with this journal
     busy = json.loads((ROOT / "fixtures/receipt.json").read_text())

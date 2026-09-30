@@ -5,14 +5,14 @@
   "native": "NATIVE_OK",
   "reference": "REFERENCE_OK",
   "native_other_journal": "NATIVE_ERR journal digest mismatch detected",
-  "script_bytes": 158929,
-  "witness_items": 767,
+  "script_bytes": 158815,
+  "witness_items": 762,
   "ok": true,
   "error": "No error",
-  "transaction_weight": 389079,
-  "budget": 3890790000,
-  "varops": 2086008213,
-  "sha256_calls": 4716,
+  "transaction_weight": 388641,
+  "budget": 3886410000,
+  "varops": 2084901887,
+  "sha256_calls": 4715,
   "function_calls": 15553,
   "invoked_body_bytes": 3231577,
   "peak_entries": 2666,
@@ -30,48 +30,45 @@
     "verifier": true
   },
   "negative": {
-    "tx_outputs_differ_from_journal": "Invalid Schnorr signature",
-    "journal_rewritten_to_match_tx": "Script failed an OP_VERIFY operation",
-    "sig_over_journal_message_not_tx": "Invalid Schnorr signature",
-    "sighash_prefix_shifted": "Script failed an OP_VERIFY operation",
-    "sighash_all_65_byte_sig": "Script failed an OP_VERIFY operation",
-    "unknown_pubkey_type": "Script failed an OP_VERIFY operation",
-    "sig_from_other_key": "Invalid Schnorr signature",
+    "output_value_minus_one": "Script failed an OP_VERIFY operation",
+    "other_destination": "Script failed an OP_VERIFY operation",
+    "extra_output_appended": "Script failed an OP_VERIFY operation",
+    "outputs_split": "Script failed an OP_VERIFY operation",
     "valid_proof_of_other_image": "Script failed an OP_VERIFY operation",
     "tampered_seal": "Script failed an OP_VERIFY operation"
   },
   "regtest": {
-    "address": "bcrt1p65gyjfn8x36y79efp0jud295eue09qnz504nhpr6hz6dk8cgsj3swzuh8t",
-    "funding_txid": "70a11a1607fb092de6412cf566b696528617ae007de9f9fbf1b3add5ebe46899",
+    "address": "bcrt1phnmycsyw9ekp9smpl468ev3l6ceajyfduvu3ys9mhcdct4afel6s3y0549",
+    "funding_txid": "ddbd3152109a5b727dfd8bd5fb142143c64af991d852b8e388d3f5957a9099a5",
     "redirected_spend_acceptance": [
       {
-        "txid": "75ed470fd951e7429b0ee31ce297a8a9f1c03a07188feed3a7dc9a34a6728278",
-        "wtxid": "f2103dd487298b0892f608a842dda8897a6473a87ea4fb663e736e178a7d3c60",
+        "txid": "d81ac4b2dd682f07ea995a8967732eebf18b313631293ebd13f05048975abd32",
+        "wtxid": "eafab05a692ec4533c8b42b6165cc257641bc637e067329361c0879abf087491",
         "allowed": false,
-        "reject-reason": "mempool-script-verify-flag-failed (Invalid Schnorr signature)",
-        "reject-details": "mempool-script-verify-flag-failed (Invalid Schnorr signature), input 0 of 75ed470fd951e7429b0ee31ce297a8a9f1c03a07188feed3a7dc9a34a6728278 (wtxid f2103dd487298b0892f608a842dda8897a6473a87ea4fb663e736e178a7d3c60), spending 70a11a1607fb092de6412cf566b696528617ae007de9f9fbf1b3add5ebe46899:0"
+        "reject-reason": "mempool-script-verify-flag-failed (Script failed an OP_VERIFY operation)",
+        "reject-details": "mempool-script-verify-flag-failed (Script failed an OP_VERIFY operation), input 0 of d81ac4b2dd682f07ea995a8967732eebf18b313631293ebd13f05048975abd32 (wtxid eafab05a692ec4533c8b42b6165cc257641bc637e067329361c0879abf087491), spending ddbd3152109a5b727dfd8bd5fb142143c64af991d852b8e388d3f5957a9099a5:0"
       }
     ],
-    "weight": 389079,
+    "weight": 388641,
     "mempool_acceptance": [
       {
-        "txid": "817cf8055434acc530e7d1a8881739e74500604aa79750e820b1cf72f314b1f8",
-        "wtxid": "f3566e0fd245d236635b4b0b9173254043feef31baa48cb914a4103fd2e728e8",
+        "txid": "9a65d155e611212a23adab6930375ada70cdf389da5d437c5f329d281775bf7e",
+        "wtxid": "06edf1ad85af303929b84302cf1d038d002ff516f10374ead8cca3a9cc83b8a9",
         "allowed": true,
-        "vsize_adjusted": 97270,
-        "vsize": 97270,
-        "vsize_bip141": 97270,
+        "vsize_adjusted": 97161,
+        "vsize": 97161,
+        "vsize_bip141": 97161,
         "fees": {
           "base": 0.002,
-          "effective-feerate": 2.056e-05,
+          "effective-feerate": 2.058e-05,
           "effective-includes": [
-            "f3566e0fd245d236635b4b0b9173254043feef31baa48cb914a4103fd2e728e8"
+            "06edf1ad85af303929b84302cf1d038d002ff516f10374ead8cca3a9cc83b8a9"
           ]
         }
       }
     ],
-    "txid": "817cf8055434acc530e7d1a8881739e74500604aa79750e820b1cf72f314b1f8",
-    "blockhash": "66fcbeb6844f6f1900cd7c53ed71df7bbea9f769954f850719e609e6f9eb84fc",
+    "txid": "9a65d155e611212a23adab6930375ada70cdf389da5d437c5f329d281775bf7e",
+    "blockhash": "2d796a873c781e630ec7e5a8a57534f1970d39f3b290f04fa71cd477db20669f",
     "mined": true,
     "spend_outputs": [
       {

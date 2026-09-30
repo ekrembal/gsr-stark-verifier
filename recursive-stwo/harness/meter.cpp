@@ -53,12 +53,18 @@ int main(int argc, char** argv) {
         weight=GetTransactionWeight(*transaction);
         budget=GetTransactionVaropsBudget(*transaction,spent);
         if(budget!=request["budget"].getInt<uint64_t>())return 3;
-        // Signature opcodes check against input 0 of this transaction, as in script-path validation of the leaf.
+        // Transaction-aware opcodes see input 0 of this transaction, as in script-path validation of the leaf.
         const CAmount amount=spent.at(0).nValue;
         txdata.Init(*transaction,std::move(spent));
         checker=std::make_unique<TransactionSignatureChecker>(&*transaction,0,amount,txdata,MissingDataBehavior::FAIL);
         execution.m_tapleaf_hash=ComputeTapleafHash(TAPROOT_LEAF_TAPSCRIPT_V2,raw);
         execution.m_tapleaf_hash_init=true;
+        // The last witness item is the control block, as in script-path validation (read by OP_TX).
+        const auto& control=transaction->vin.at(0).scriptWitness.stack.back();
+        execution.m_control_block=control;
+        execution.m_control_block_init=true;
+        execution.m_taptree_root=ComputeTaprootMerkleRoot(control,execution.m_tapleaf_hash);
+        execution.m_taptree_root_init=true;
     }
     varops::Budget meter(budget);
     ScriptError error=SCRIPT_ERR_UNKNOWN_ERROR;

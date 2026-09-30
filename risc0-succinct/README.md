@@ -63,22 +63,19 @@ python3 ../../recursive-stwo/tools/regtest-demo.py <bundle with script_sha256>  
 `tools/covenant.py` builds a Taproot output whose only spending path is a Script that verifies a receipt of the demo guest `gsr_covenant` (added by the patch, image ID `e57cedf4f6ea88bef1c91f1c2e19bfa7488fdd65ca36ef6b6a0e2762f9dc5e5e`) and forces the spending transaction's outputs to be exactly the guest's journal.
 
 - **Guest.** It reads a secret and a byte string, asserts `SHA256(secret)` equals a constant lock, checks the byte string parses as a list of Bitcoin outputs, and commits it as the journal. The journal format is BIP 341's `sha_outputs` preimage: for each output, `value` (u64 LE) ‖ compact-size length ‖ `scriptPubKey`. Only a prover who knows the secret gets a receipt, and the receipt fixes where the coins go.
-- **Claim from the journal.** The Script takes the journal from the witness and recomputes RISC Zero's claim digest, `tagged_struct("risc0.ReceiptClaim", [input, image_id, post, tagged_struct("risc0.Output", [SHA256(journal), assumptions])], [0, 0])`, with image ID, input, post-state, zero assumptions and exit code 0 as constants. It then requires output slot 1 of the seal to equal that digest. A different journal gives a different claim, which the STARK does not prove.
-- **Journal bound to the transaction.** There is no transaction-introspection opcode, so the Script uses a signature. The witness supplies a 64-byte signature, a 32-byte key, and the 138 bytes of the BIP 341 `SIGHASH_DEFAULT` message before `sha_outputs` plus the bytes after it. The Script builds `TaggedHash("TapSighash", prefix ‖ SHA256(journal) ‖ suffix)`, checks the signature on it with `OP_CHECKSIGFROMSTACK`, and then checks the same signature and key against the transaction with `OP_CHECKSIGVERIFY`. Schnorr signatures commit to their message, so both checks can only pass if the assembled message is the transaction's real signature message, whose `sha_outputs` is SHA256(journal). The key can be anyone's; the signature adds no trust. The fixed sizes stop a 65-byte signature with another sighash type and an unknown key type (non-32-byte keys make both opcodes succeed without checking).
+- **Claim from the journal.** The Script recomputes RISC Zero's claim digest, `tagged_struct("risc0.ReceiptClaim", [input, image_id, post, tagged_struct("risc0.Output", [SHA256(journal), assumptions])], [0, 0])`, with image ID, input, post-state, zero assumptions and exit code 0 as constants. It then requires output slot 1 of the seal to equal that digest. A different journal gives a different claim, which the STARK does not prove.
+- **Journal bound to the transaction.** The Script does not take the journal from the witness. It reads the spending transaction's outputs with `OP_TX` (selector `00 01 00 02 00 03`: collate, all outputs, amount and scriptPubKey), which yields exactly this serialization, and uses the result as the journal. A transaction with any other outputs, including an extra, missing or reordered one, gives a different claim digest, which the receipt does not prove.
 
-Measured spend (complete transaction, [reports/covenant.json](reports/covenant.json)): 389,079 WU; 2,086,008,213 of 3,890,790,000 varops; 158,929-byte Script; 767 witness items; 4,716 SHA-256 calls; 3,231,577 invoked function-body bytes; peak 2,666 entries; all limits pass. The covenant adds 681 WU and 2.6M varops to the fixed-statement verifier. On activated regtest the pinned node accepted the spend to the journal's output and mined it, and rejected the same proof spending to an output 1 sat smaller (`Invalid Schnorr signature`).
+Measured spend (complete transaction, [reports/covenant.json](reports/covenant.json)): 388,641 WU; 2,084,901,887 of 3,886,410,000 varops; 158,815-byte Script; 762 witness items (the same as the fixed-statement verifier); 4,715 SHA-256 calls; 3,231,577 invoked function-body bytes; peak 2,666 entries; all limits pass. The covenant adds 243 WU and 1.5M varops to the fixed-statement verifier. On activated regtest the pinned node accepted the spend to the journal's output and mined it, and rejected the same proof spending to an output 1 sat smaller.
 
-RISC Zero's native verifier and the Python reference accept the receipt, and native rejects it with a different journal. The Script rejects, in the complete transaction:
+RISC Zero's native verifier and the Python reference accept the receipt, and native rejects it with a different journal. In the complete transaction, the Script rejects:
 
 | Case | Rejected by |
 |---|---|
-| Transaction outputs differ from the journal | `CHECKSIGFROMSTACK` |
-| Journal rewritten to match the transaction | claim digest |
-| Signature over the journal-implied message, not the transaction's | `CHECKSIGVERIFY` |
-| Signature-message prefix shifted by one byte | size check |
-| 65-byte `SIGHASH_ALL` signature | size check |
-| 33-byte (unknown type) key | size check |
-| Signature from another key | `CHECKSIGFROMSTACK` |
+| Output value 1 sat smaller | claim digest |
+| Output to another scriptPubKey | claim digest |
+| Extra `OP_RETURN` output appended | claim digest |
+| Value split over two outputs | claim digest |
 | Valid receipt of another image (the busy-loop fixture) | claim digest |
 | Tampered seal | STARK verification |
 

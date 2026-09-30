@@ -11,6 +11,7 @@ values are kept in RISC Zero's Montgomery (R-scaled) form; every check is linear
 carried through instead of being removed.
 """
 import argparse
+import hashlib
 import json
 import struct
 from pathlib import Path
@@ -39,6 +40,10 @@ MASK_LONG = 10560
 CHECK_COMBO = 5
 QUERY_ITEMS = ["accum", "accum_path", "code", "code_path", "data", "data_path", "check", "check_path",
                "hints", "fri0", "fri0_path", "fri1", "fri1_path", "fri2", "fri2_path"]
+# OP_TX selector: collate, all outputs, amount + scriptPubKey. The result is the concatenation of the serialized
+# outputs (u64 LE amount, compact-size scriptPubKey), i.e. the BIP 341 `sha_outputs` preimage.
+OUTPUTS_SELECTOR = bytes([0x00, 0x01, 0x00, 0x02, 0x00, 0x03])
+CLAIM_OUT = 16
 SETUP_ITEMS = ["out", "ctrl_index", "ctrl_path", "code_top", "data_top", "accum_top", "check_top", "coeff",
                "fri_top0", "fri_top1", "fri_top2", "final"]
 
@@ -48,23 +53,46 @@ def word_mask(n_words: int, sel) -> int:
 
 
 class Statement:
-    """What the verifier is specialized to (compile-time constants)."""
+    """What the verifier is specialized to (compile-time constants).
 
-    def __init__(self, receipt: dict) -> None:
+    With `covenant`, the claim digest is not a constant: the Script recomputes it with the spending transaction's
+    serialized outputs (read with OP_TX) as the journal; the image ID, exit code and other claim fields stay constant.
+    """
+
+    def __init__(self, receipt: dict, covenant: bool = False) -> None:
         self.control_id = bytes.fromhex(receipt["control_id"])
         self.control_root = bytes.fromhex(receipt["control_root"])
         self.inner_control_root = bytes.fromhex(receipt["inner_control_root"])
         self.claim_digest = bytes.fromhex(receipt["claim_digest"])
+        self.covenant = covenant
         if receipt["hashfn"] != "sha-256-padded" or receipt["circuit_info"] != "RECURSION:rev1v1":
             raise ValueError("unsupported receipt parameters")
+        if covenant:
+            claim = receipt["claim"]
+            if claim["assumptions_digest"] != "00" * 32 or (claim["sys_exit"], claim["user_exit"]) != (0, 0):
+                raise ValueError("covenant receipts must be unconditional and halt with exit code 0")
+            self.image_id = bytes.fromhex(claim["pre"])
+            self.output_head = hashlib.sha256(b"risc0.Output").digest()
+            self.output_tail = bytes.fromhex(claim["assumptions_digest"]) + struct.pack("<H", 2)
+            self.claim_head = (hashlib.sha256(b"risc0.ReceiptClaim").digest() + bytes.fromhex(claim["input"])
+                               + self.image_id + bytes.fromhex(claim["post"]))
+            self.claim_tail = struct.pack("<IIH", claim["sys_exit"], claim["user_exit"], 4)
+            if self.claim_for(bytes.fromhex(receipt["journal"])) != self.claim_digest:
+                raise ValueError("claim digest does not match the claim fields and journal")
+
+    def claim_for(self, journal: bytes) -> bytes:
+        """RISC Zero's ReceiptClaim digest for this image with `journal` (tagged_struct hashing)."""
+        output = hashlib.sha256(self.output_head + hashlib.sha256(journal).digest() + self.output_tail).digest()
+        return hashlib.sha256(self.claim_head + output + self.claim_tail).digest()
 
     def fixed_out(self) -> dict[int, int]:
         """Output global index -> required true value (inner control root words, claim digest halves)."""
         fixed = {}
         for i, w in enumerate(struct.unpack("<8I", self.inner_control_root)):
             fixed[2 * i] = w
-        for i, h in enumerate(struct.unpack("<16H", self.claim_digest)):
-            fixed[16 + i] = h
+        if not self.covenant:
+            for i, h in enumerate(struct.unpack("<16H", self.claim_digest)):
+                fixed[CLAIM_OUT + i] = h
         return fixed
 
 
@@ -496,6 +524,43 @@ class Gen:
         return a.s, persist
 
     # ---- setup: transcript, commitments, constraint check, per-proof constants ----
+    def covenant(self, m: Asm) -> V:
+        """Return the claim digest, with the spending transaction's serialized outputs as journal, as packed
+        output-global words."""
+        st = self.stmt
+        m.push(OUTPUTS_SELECTOR)
+        m.op("TX", 1, V("journal"))
+        jd = m.op("SHA256", 1, V("jd")).top()
+
+        m.push(st.output_head)
+        m.roll(jd)
+        m.op("CAT", 2, V())
+        m.push(st.output_tail)
+        m.op("CAT", 2, V())
+        m.op("SHA256", 1, V())
+        m.push(st.claim_head)
+        m.raw(assemble(["SWAP", "CAT"]), 2, V())
+        m.push(st.claim_tail)
+        m.op("CAT", 2, V())
+        claim = m.op("SHA256", 1, V("claim")).top()
+        # Claim digest half i (u16 LE) lands in output global CLAIM_OUT + i as a Montgomery word.
+        acc = None
+        for i in range(16):
+            m.pick(claim)
+            m.push(2 * i)
+            m.push(2)
+            m.op("SUBSTR", 3, V())
+            m.push(bb.R)
+            word = m.raw(assemble(["MUL", P, "MOD", 32 * (CLAIM_OUT + i), "LSHIFT"]), 2, V()).top()
+            if acc is not None:
+                m.roll(acc)
+                m.roll(word)
+                word = m.op("ADD", 2, V()).top()
+            acc = word
+        m.drop(claim)
+        assert acc is not None
+        return acc
+
     def generate(self, plan: dict[int, int] | None = None, pool: list[int] | None = None) -> tuple[Script, dict]:
         """Emit the verifier. Pass the `info["accesses"]` of a first call as `plan` to emit liveness-optimized code."""
         taps, circuit = self.taps, self.circuit
@@ -535,6 +600,8 @@ class Gen:
             m.pick(v)
             rng.mix(m.op("SHA256", 1, V("d")).top())
 
+        claim_words = self.covenant(m) if self.stmt.covenant else None
+
         # output globals and po2
         out = m.roll(s_items["out"])
         self.size_check(m, out, 4 * OUT_WORDS)
@@ -546,10 +613,14 @@ class Gen:
         m.op("SUBSTR", 3, V())
         m.raw(assemble([PO2, "NUMEQUAL", "VERIFY"]), 1)
         fixed = self.stmt.fixed_out()
+        bound = set(fixed) | (set(range(CLAIM_OUT, CLAIM_OUT + 16)) if claim_words else set())
         m.pick(out)
-        m.push(word_mask(OUT_WORDS, lambda i: i in fixed))
+        m.push(word_mask(OUT_WORDS, lambda i: i in bound))
         m.op("AND", 2, V())
         m.push(sum(bb.to_mont(v) << (32 * i) for i, v in fixed.items()))
+        if claim_words:
+            m.roll(claim_words)
+            m.op("ADD", 2, V())
         m.raw(assemble(["NUMEQUAL", "VERIFY"]), 2)
         out_vals: dict[int, int | V] = dict(fixed)
         for i in range(circuit["output_size"]):

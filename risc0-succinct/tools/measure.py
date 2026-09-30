@@ -19,8 +19,9 @@ from gsr import op_success_offsets  # noqa: E402
 METER = ROOT.parent / "recursive-stwo/build/harness/gsr-meter"
 
 
-def meter(bundle: dict) -> dict:
-    request = meter_request(bundle)
+def meter(bundle: dict, tx=None, spent_value: int = 5_000_000_000) -> dict:
+    """Meter `bundle` as the only input of `tx` (default: the deterministic 1-in/1-out spend)."""
+    request = meter_request(bundle, tx, spent_value)
     path = ROOT / "build/measurement-input.json"
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(request))

@@ -1,0 +1,80 @@
+{
+  "image_id": "bb06f6ecf52a330b78d4ce2298247f1568d50c27e959f394f30b0c9b92b2d05b",
+  "journal": "c0e4022a01000000225120ebbb8193d78204bf6880fed5bd735d42d1e5abfb1be2f3acd8b190172cb2cc92",
+  "claim_digest": "83601fda24834ef0b5605e77d519317259ed429e5b4c172f22c60ef1446508de",
+  "native": "NATIVE_OK",
+  "reference": "REFERENCE_OK",
+  "native_other_journal": "NATIVE_ERR journal digest mismatch detected",
+  "script_bytes": 158815,
+  "witness_items": 762,
+  "ok": true,
+  "error": "No error",
+  "transaction_weight": 388641,
+  "budget": 3886410000,
+  "varops": 2085001847,
+  "sha256_calls": 4715,
+  "function_calls": 15553,
+  "invoked_body_bytes": 3231577,
+  "peak_entries": 2666,
+  "peak_payload_bytes": 346587,
+  "peak_element_bytes": 16384,
+  "limits": {
+    "standard_weight": true,
+    "varops": true,
+    "invoked_body_bytes": true,
+    "function_ids": true,
+    "stack_entries": true,
+    "live_payload": true,
+    "single_element": true,
+    "no_op_success": true,
+    "verifier": true
+  },
+  "negative": {
+    "output_value_minus_one": "Script failed an OP_VERIFY operation",
+    "other_destination": "Script failed an OP_VERIFY operation",
+    "extra_output_appended": "Script failed an OP_VERIFY operation",
+    "outputs_split": "Script failed an OP_VERIFY operation",
+    "valid_proof_of_other_image": "Script failed an OP_VERIFY operation",
+    "tampered_seal": "Script failed an OP_VERIFY operation"
+  },
+  "regtest": {
+    "address": "bcrt1p3um0pra5zaxt8mk5zh7pq403aayyjvtygpsd3msxmkaa98uamwssjwupmz",
+    "funding_txid": "4e07f66e491235c7cf7be322228eec834a96b90635185e4f8137b1f792142633",
+    "redirected_spend_acceptance": [
+      {
+        "txid": "0d6cf576745c5ea685e13ec9311d89cc71ed6ea2ba2633e9fa858e955ab68e29",
+        "wtxid": "94e17e0249b71bfdc83a721bf6d1594d6c31d78c31baaadadbe85fe131285007",
+        "allowed": false,
+        "reject-reason": "mempool-script-verify-flag-failed (Script failed an OP_VERIFY operation)",
+        "reject-details": "mempool-script-verify-flag-failed (Script failed an OP_VERIFY operation), input 0 of 0d6cf576745c5ea685e13ec9311d89cc71ed6ea2ba2633e9fa858e955ab68e29 (wtxid 94e17e0249b71bfdc83a721bf6d1594d6c31d78c31baaadadbe85fe131285007), spending 4e07f66e491235c7cf7be322228eec834a96b90635185e4f8137b1f792142633:0"
+      }
+    ],
+    "weight": 388641,
+    "mempool_acceptance": [
+      {
+        "txid": "bc5d49b69f681ef4da0986f4682bca9c48e0b2e5b3aff56793ee8d3df0c0ed0a",
+        "wtxid": "c0c9b3c5b7bff2bd44f547d5845856b7fd4cc4669d0ee80f3fcff8052e3df2e3",
+        "allowed": true,
+        "vsize_adjusted": 97161,
+        "vsize": 97161,
+        "vsize_bip141": 97161,
+        "fees": {
+          "base": 0.002,
+          "effective-feerate": 2.058e-05,
+          "effective-includes": [
+            "c0c9b3c5b7bff2bd44f547d5845856b7fd4cc4669d0ee80f3fcff8052e3df2e3"
+          ]
+        }
+      }
+    ],
+    "txid": "bc5d49b69f681ef4da0986f4682bca9c48e0b2e5b3aff56793ee8d3df0c0ed0a",
+    "blockhash": "41100eed5b395c9b6a41753374abb88dddf9be0167a4787f7144542baa244c5b",
+    "mined": true,
+    "spend_outputs": [
+      {
+        "value": 49.998,
+        "scriptPubKey": "5120ebbb8193d78204bf6880fed5bd735d42d1e5abfb1be2f3acd8b190172cb2cc92"
+      }
+    ]
+  }
+}

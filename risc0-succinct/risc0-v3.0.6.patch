@@ -745,6 +745,86 @@ index e7ddb1a2..56590960 100644
          self.iop().commit(&self.suite.hashfn.hash_elem_slice(slice));
  
          // Extract the out buffer and po2 from slice while checking sizes.
+diff --git a/risc0/zkvm/methods/guest/src/bin/gsr_covenant.rs b/risc0/zkvm/methods/guest/src/bin/gsr_covenant.rs
+new file mode 100644
+index 00000000..b8e7dbbd
+--- /dev/null
++++ b/risc0/zkvm/methods/guest/src/bin/gsr_covenant.rs
+@@ -0,0 +1,74 @@
++// Copyright 2026 RISC Zero, Inc.
++//
++// Licensed under the Apache License, Version 2.0 (the "License");
++// you may not use this file except in compliance with the License.
++// You may obtain a copy of the License at
++//
++//     http://www.apache.org/licenses/LICENSE-2.0
++//
++// Unless required by applicable law or agreed to in writing, software
++// distributed under the License is distributed on an "AS IS" BASIS,
++// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++// See the License for the specific language governing permissions and
++// limitations under the License.
++
++//! GSR covenant demo: authorizes a Bitcoin spend by proving knowledge of a SHA-256 preimage.
++//!
++//! The journal is the spending transaction's outputs in BIP 341 serialization
++//! (`value: u64 LE || compact_size(len) || scriptPubKey` per output), so the journal digest equals the
++//! transaction's `sha_outputs`, which the Tapscript covenant binds through the signature hash.
++
++#![no_std]
++#![no_main]
++
++extern crate alloc;
++
++use alloc::vec::Vec;
++
++use risc0_zkvm::{
++    guest::env,
++    sha::{Impl, Sha256},
++};
++
++risc0_zkvm::entry!(main);
++
++/// SHA-256("gsr covenant demo secret").
++const LOCK: [u8; 32] =
++    hex_literal::hex!("10af5e6b28cf0f912dfedf2fd49946b8cd4ff90e47e94022154ce153dc2e7ad9");
++
++fn take<'a>(data: &'a [u8], pos: &mut usize, n: usize) -> &'a [u8] {
++    let end = pos.checked_add(n).expect("length overflow");
++    let out = data.get(*pos..end).expect("truncated outputs");
++    *pos = end;
++    out
++}
++
++/// Bitcoin CompactSize, rejecting non-minimal encodings (OP_TX serializes outputs minimally).
++fn compact_size(data: &[u8], pos: &mut usize) -> usize {
++    let (n, min) = match take(data, pos, 1)[0] {
++        0xfd => (u16::from_le_bytes(take(data, pos, 2).try_into().unwrap()) as u64, 0xfd),
++        0xfe => (u32::from_le_bytes(take(data, pos, 4).try_into().unwrap()) as u64, 0x1_0000),
++        0xff => (u64::from_le_bytes(take(data, pos, 8).try_into().unwrap()), 0x1_0000_0000),
++        n => (n as u64, 0),
++    };
++    assert!(n >= min, "non-minimal compact size");
++    usize::try_from(n).expect("length overflow")
++}
++
++fn main() {
++    let secret: Vec<u8> = env::read();
++    let outputs: Vec<u8> = env::read();
++    assert_eq!(Impl::hash_bytes(&secret).as_bytes(), &LOCK, "wrong secret");
++
++    let mut pos = 0;
++    let mut count = 0;
++    while pos < outputs.len() {
++        take(&outputs, &mut pos, 8);
++        let len = compact_size(&outputs, &mut pos);
++        take(&outputs, &mut pos, len);
++        count += 1;
++    }
++    assert!(count > 0, "no outputs");
++
++    env::commit_slice(&outputs);
++}
 diff --git a/risc0/zkvm/src/host/recursion/prove/zkr.rs b/risc0/zkvm/src/host/recursion/prove/zkr.rs
 index 00a0bc9d..eff5bc63 100644
 --- a/risc0/zkvm/src/host/recursion/prove/zkr.rs
@@ -779,10 +859,21 @@ index 00a0bc9d..eff5bc63 100644
          "poseidon2" => &POSEIDON2_CONTROL_IDS,
          "sha-256" => &SHA256_CONTROL_IDS,
 diff --git a/risc0/zkvm/src/host/recursion/tests.rs b/risc0/zkvm/src/host/recursion/tests.rs
-index 51108aab..be94a14e 100644
+index 51108aab..da8b44f5 100644
 --- a/risc0/zkvm/src/host/recursion/tests.rs
 +++ b/risc0/zkvm/src/host/recursion/tests.rs
-@@ -160,7 +160,11 @@ static BUSY_LOOP_SEGMENTS: LazyLock<(Journal, Vec<SegmentReceipt>)> =
+@@ -22,7 +22,9 @@ use risc0_zkp::{
+     core::digest::{digest, Digest, DIGEST_SHORTS},
+     field::baby_bear::BabyBearElem,
+ };
+-use risc0_zkvm_methods::{multi_test::MultiTestSpec, MULTI_TEST_ELF, MULTI_TEST_ID};
++use risc0_zkvm_methods::{
++    multi_test::MultiTestSpec, GSR_COVENANT_ELF, GSR_COVENANT_ID, MULTI_TEST_ELF, MULTI_TEST_ID,
++};
+ 
+ use super::{identity_p254, join, lift, prove::zkr, MerkleGroup, Prover};
+ use crate::{
+@@ -160,7 +162,11 @@ static BUSY_LOOP_SEGMENTS: LazyLock<(Journal, Vec<SegmentReceipt>)> =
  
  fn generate_busy_loop_segments() -> (Journal, Vec<SegmentReceipt>) {
      let segment_limit_po2 = 16; // 64k cycles
@@ -795,7 +886,7 @@ index 51108aab..be94a14e 100644
      let env = ExecutorEnv::builder()
          .write(&MultiTestSpec::BusyLoop { cycles })
          .unwrap()
-@@ -303,6 +307,181 @@ fn test_recursion_lift_join_unwrap_povw() -> anyhow::Result<()> {
+@@ -303,6 +309,158 @@ fn test_recursion_lift_join_unwrap_povw() -> anyhow::Result<()> {
      Ok(())
  }
  
@@ -909,31 +1000,8 @@ index 51108aab..be94a14e 100644
 +    // "sha-256" is RISC Zero's bare compression function; "sha-256-padded" is FIPS 180-4 SHA-256,
 +    // which is what a Bitcoin Script OP_SHA256 verifier can recompute.
 +    for name in ["sha-256", "sha-256-padded"] {
-+        let (_, control_id) = zkr::identity(name).unwrap();
-+        let opts = ProverOpts::succinct()
-+            .with_hashfn(name.to_string())
-+            .with_control_ids(vec![control_id]);
-+        let mut prover = Prover::new_identity(&compressed, opts.clone()).unwrap();
-+        let recursion_receipt = prover.run().unwrap();
-+
-+        let hashfn = opts.hash_suite().unwrap().hashfn;
-+        let control_tree = MerkleGroup::new(opts.control_ids.clone()).unwrap();
-+        let params = SuccinctReceiptVerifierParameters {
-+            control_root: control_tree.calc_root(hashfn.as_ref()),
-+            inner_control_root: Some(ALLOWED_CONTROL_ROOT),
-+            proof_system_info: PROOF_SYSTEM_INFO,
-+            circuit_info: CircuitImpl::CIRCUIT_INFO,
-+        };
-+        let receipt = SuccinctReceipt {
-+            seal: recursion_receipt.seal,
-+            hashfn: opts.hashfn,
-+            control_id,
-+            control_inclusion_proof: control_tree
-+                .get_proof(&control_id, hashfn.as_ref())
-+                .unwrap(),
-+            claim: compressed.claim.clone(),
-+            verifier_parameters: params.digest(),
-+        };
++        let (receipt, params) = gsr_identity(&compressed, name);
++        let control_id = receipt.control_id;
 +
 +        println!("{name} control id        : {control_id}");
 +        println!("{name} seal bytes        : {}", receipt.seal.len() * 4);
@@ -977,7 +1045,7 @@ index 51108aab..be94a14e 100644
  #[test_log::test]
  fn test_recursion_lift_join_identity_p254_e2e() {
      // Prove the base case
-@@ -577,3 +756,88 @@ fn union() {
+@@ -577,3 +735,195 @@ fn union() {
      }
      let _ = mmr.root().unwrap();
  }
@@ -1065,6 +1133,113 @@ index 51108aab..be94a14e 100644
 +        Ok(()) => println!("NATIVE_OK"),
 +        Err(e) => println!("NATIVE_ERR {e}"),
 +    }
++}
++
++/// Re-prove the final recursion layer of `inner` with the identity program under hash suite `name`, returning
++/// the succinct receipt and the verifier parameters for a control tree holding only that identity program.
++fn gsr_identity(
++    inner: &SuccinctReceipt<ReceiptClaim>,
++    name: &str,
++) -> (SuccinctReceipt<ReceiptClaim>, SuccinctReceiptVerifierParameters) {
++    let (_, control_id) = zkr::identity(name).unwrap();
++    let opts = ProverOpts::succinct()
++        .with_hashfn(name.to_string())
++        .with_control_ids(vec![control_id]);
++    let mut prover = Prover::new_identity(inner, opts.clone()).unwrap();
++    let recursion_receipt = prover.run().unwrap();
++
++    let hashfn = opts.hash_suite().unwrap().hashfn;
++    let control_tree = MerkleGroup::new(opts.control_ids.clone()).unwrap();
++    let params = SuccinctReceiptVerifierParameters {
++        control_root: control_tree.calc_root(hashfn.as_ref()),
++        inner_control_root: Some(ALLOWED_CONTROL_ROOT),
++        proof_system_info: PROOF_SYSTEM_INFO,
++        circuit_info: CircuitImpl::CIRCUIT_INFO,
++    };
++    let receipt = SuccinctReceipt {
++        seal: recursion_receipt.seal,
++        hashfn: opts.hashfn,
++        control_id,
++        control_inclusion_proof: control_tree
++            .get_proof(&control_id, hashfn.as_ref())
++            .unwrap(),
++        claim: inner.claim.clone(),
++        verifier_parameters: params.digest(),
++    };
++    (receipt, params)
++}
++
++/// Prove the `gsr_covenant` guest with secret `R0_GSR_COVENANT_SECRET` and transaction outputs
++/// `R0_GSR_COVENANT_OUTPUTS` (both hex) down to a `sha-256-padded` succinct receipt, verify it natively and
++/// write `covenant-receipt.json` / `covenant-seal.bin` to `R0_GSR_SEAL_DIR`.
++#[test]
++#[ignore]
++fn gsr_covenant_prove() {
++    let hex_var = |k: &str| hex::decode(std::env::var(k).unwrap()).unwrap();
++    let (secret, outputs) = (hex_var("R0_GSR_COVENANT_SECRET"), hex_var("R0_GSR_COVENANT_OUTPUTS"));
++    let env = ExecutorEnv::builder()
++        .write(&secret)
++        .unwrap()
++        .write(&outputs)
++        .unwrap()
++        .build()
++        .unwrap();
++    let session = execute_elf(env, GSR_COVENANT_ELF).unwrap();
++    let journal = session.journal.clone().unwrap();
++    assert_eq!(journal.bytes, outputs);
++
++    let segments = prove_segments(&session).unwrap();
++    let mut compressed = lift(&segments[0]).unwrap();
++    for receipt in &segments[1..] {
++        compressed = join(&compressed, &lift(receipt).unwrap()).unwrap();
++    }
++    let (receipt, params) = gsr_identity(&compressed, "sha-256-padded");
++    let claim = receipt.claim.as_value().unwrap();
++    assert_eq!(claim.pre.digest(), Digest::from(GSR_COVENANT_ID));
++
++    let ctx = VerifierContext::empty()
++        .with_suites(VerifierContext::default_hash_suites())
++        .with_succinct_verifier_parameters(params.clone());
++    receipt.verify_integrity_with_context(&ctx).unwrap();
++    Receipt::new(InnerReceipt::Succinct(receipt.clone()), journal.bytes.clone())
++        .verify_with_context(&ctx, GSR_COVENANT_ID)
++        .unwrap();
++
++    let dir = std::env::var("R0_GSR_SEAL_DIR").unwrap();
++    std::fs::write(
++        format!("{dir}/covenant-seal.bin"),
++        bytemuck::cast_slice::<u32, u8>(&receipt.seal),
++    )
++    .unwrap();
++    std::fs::write(
++        format!("{dir}/covenant-receipt.json"),
++        serde_json::to_string_pretty(&gsr_receipt_json(&receipt, &params, &journal.bytes)).unwrap(),
++    )
++    .unwrap();
++    println!("covenant image id : {}", Digest::from(GSR_COVENANT_ID));
++    println!("covenant claim    : {}", receipt.claim.digest());
++}
++
++/// `OP_TX` serializes outputs with minimal CompactSize lengths, so the guest must reject any other
++/// encoding: its journal could never match a spending transaction.
++#[test]
++fn gsr_covenant_rejects_nonminimal_compact_size() {
++    let spk = [&[0x51u8, 0x20][..], &[0u8; 32]].concat();
++    let run = |prefix: &[u8]| {
++        let outputs = [&1u64.to_le_bytes()[..], prefix, &spk].concat();
++        let env = ExecutorEnv::builder()
++            .write(&b"gsr covenant demo secret".to_vec())
++            .unwrap()
++            .write(&outputs)
++            .unwrap()
++            .build()
++            .unwrap();
++        execute_elf(env, GSR_COVENANT_ELF)
++    };
++    assert!(run(&[0x22]).is_ok());
++    assert!(run(&[0xfd, 0x22, 0x00]).is_err());
++    assert!(run(&[0xfe, 0x22, 0x00, 0x00, 0x00]).is_err());
++    assert!(run(&[0xff, 0x22, 0, 0, 0, 0, 0, 0, 0]).is_err());
 +}
 diff --git a/risc0/zkvm/src/receipt.rs b/risc0/zkvm/src/receipt.rs
 index 55cb42b4..dd233d7b 100644

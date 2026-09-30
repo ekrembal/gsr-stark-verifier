@@ -1,0 +1,16 @@
+$ R0_GSR_CYCLES_MULT=8 RUST_LOG=warn cargo test --release -p risc0-zkvm --features prove --lib gsr_measure -- --nocapture
+
+running 1 test
+R0VM[852] Busy loop starting!
+R0VM[524425] Busy loop complete
+segments                 : 18
+segment seal bytes       : 3964624
+poseidon2 seal bytes     : 222668
+poseidon2 receipt bytes  : 223226
+poseidon2 verify: sha_pair 0, sha_slice 0 over 0 bytes, poseidon2 5693
+sha-256 seal bytes       : 222668
+sha-256 receipt bytes    : 223224
+sha-256 verify: sha_pair 4363, sha_slice 355 over 86028 bytes, poseidon2 0
+test host::recursion::tests::gsr_measure ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 240 filtered out; finished in 499.40s

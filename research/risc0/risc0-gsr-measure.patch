@@ -1,0 +1,863 @@
+diff --git a/risc0/circuit/recursion/src/prove/hal/cpu.rs b/risc0/circuit/recursion/src/prove/hal/cpu.rs
+index ebad19a0..c46954b0 100644
+--- a/risc0/circuit/recursion/src/prove/hal/cpu.rs
++++ b/risc0/circuit/recursion/src/prove/hal/cpu.rs
+@@ -25,6 +25,7 @@ use risc0_zkp::{
+     core::{
+         hash::{
+             poseidon2::Poseidon2HashSuite, poseidon_254::Poseidon254HashSuite, sha::Sha256HashSuite,
++            sha_padded::{PaddedSha256HashSuite, SHA256_PADDED},
+         },
+         log2_ceil,
+     },
+@@ -168,6 +169,7 @@ pub(crate) fn recursion_prover(hashfn: &str) -> Result<Box<dyn RecursionProver>>
+         "poseidon2" => Poseidon2HashSuite::new_suite(),
+         "poseidon_254" => Poseidon254HashSuite::new_suite(),
+         "sha-256" => Sha256HashSuite::new_suite(),
++        SHA256_PADDED => PaddedSha256HashSuite::new_suite(),
+         _ => bail!("Unsupported hashfn: {hashfn}"),
+     };
+ 
+diff --git a/risc0/core/src/field/baby_bear.rs b/risc0/core/src/field/baby_bear.rs
+index 989a827f..d01dd746 100644
+--- a/risc0/core/src/field/baby_bear.rs
++++ b/risc0/core/src/field/baby_bear.rs
+@@ -222,11 +222,22 @@ impl Elem {
+     }
+ }
+ 
++/// GSR cost research: bump a field operation counter (no-op inside the zkVM guest).
++macro_rules! gsr_bump {
++    ($counter:ident) => {
++        #[cfg(not(target_os = "zkvm"))]
++        {
++            crate::field::gsr_ops::bump(crate::field::gsr_ops::$counter);
++        }
++    };
++}
++
+ impl ops::Add for Elem {
+     type Output = Self;
+ 
+     /// Addition for Baby Bear [Elem]
+     fn add(self, rhs: Self) -> Self {
++        gsr_bump!(BASE_ADD);
+         Elem(add(self.ensure_valid().0, rhs.ensure_valid().0))
+     }
+ }
+@@ -234,6 +245,7 @@ impl ops::Add for Elem {
+ impl ops::AddAssign for Elem {
+     /// Simple addition case for Baby Bear [Elem]
+     fn add_assign(&mut self, rhs: Self) {
++        gsr_bump!(BASE_ADD);
+         self.0 = add(self.ensure_valid().0, rhs.ensure_valid().0)
+     }
+ }
+@@ -243,6 +255,7 @@ impl ops::Sub for Elem {
+ 
+     /// Subtraction for Baby Bear [Elem]
+     fn sub(self, rhs: Self) -> Self {
++        gsr_bump!(BASE_SUB);
+         Elem(sub(self.ensure_valid().0, rhs.ensure_valid().0))
+     }
+ }
+@@ -250,6 +263,7 @@ impl ops::Sub for Elem {
+ impl ops::SubAssign for Elem {
+     /// Simple subtraction case for Baby Bear [Elem]
+     fn sub_assign(&mut self, rhs: Self) {
++        gsr_bump!(BASE_SUB);
+         self.0 = sub(self.ensure_valid().0, rhs.ensure_valid().0)
+     }
+ }
+@@ -259,6 +273,7 @@ impl ops::Mul for Elem {
+ 
+     /// Multiplication for Baby Bear [Elem]
+     fn mul(self, rhs: Self) -> Self {
++        gsr_bump!(BASE_MUL);
+         Elem(mul(self.ensure_valid().0, rhs.ensure_valid().0))
+     }
+ }
+@@ -266,6 +281,7 @@ impl ops::Mul for Elem {
+ impl ops::MulAssign for Elem {
+     /// Simple multiplication case for Baby Bear [Elem]
+     fn mul_assign(&mut self, rhs: Self) {
++        gsr_bump!(BASE_MUL);
+         self.0 = mul(self.ensure_valid().0, rhs.ensure_valid().0)
+     }
+ }
+@@ -458,6 +474,7 @@ impl field::Elem for ExtElem {
+ 
+     /// Compute the multiplicative inverse of an `ExtElem`.
+     fn inv(self) -> Self {
++        gsr_bump!(EXT_INV);
+         let a = &self.ensure_valid().0;
+         // Compute the multiplicative inverse by looking at `ExtElem` as a composite
+         // field and using the same basic methods used to invert complex
+@@ -633,6 +650,7 @@ impl ops::Add for ExtElem {
+ impl ops::AddAssign for ExtElem {
+     /// Simple addition case for Baby Bear [ExtElem]
+     fn add_assign(&mut self, rhs: Self) {
++        gsr_bump!(EXT_ADD);
+         for i in 0..self.0.len() {
+             self.0[i] += rhs.0[i];
+         }
+@@ -664,6 +682,7 @@ impl ops::Add<ExtElem> for Elem {
+ impl ops::AddAssign<Elem> for ExtElem {
+     /// Promoting addition case for BabyBear [Elem]
+     fn add_assign(&mut self, rhs: Elem) {
++        gsr_bump!(EXT_ADD);
+         self.0[0] += rhs;
+     }
+ }
+@@ -682,6 +701,7 @@ impl ops::Sub for ExtElem {
+ impl ops::SubAssign for ExtElem {
+     /// Simple subtraction case for Baby Bear [ExtElem]
+     fn sub_assign(&mut self, rhs: Self) {
++        gsr_bump!(EXT_SUB);
+         for i in 0..self.0.len() {
+             self.0[i] -= rhs.0[i];
+         }
+@@ -713,6 +733,7 @@ impl ops::Sub<ExtElem> for Elem {
+ impl ops::SubAssign<Elem> for ExtElem {
+     /// Promoting subtraction case for BabyBear [Elem]
+     fn sub_assign(&mut self, rhs: Elem) {
++        gsr_bump!(EXT_SUB);
+         self.0[0] -= rhs;
+     }
+ }
+@@ -721,6 +742,7 @@ impl ops::MulAssign<Elem> for ExtElem {
+     /// Simple multiplication case by a
+     /// Baby Bear [Elem]
+     fn mul_assign(&mut self, rhs: Elem) {
++        gsr_bump!(EXT_MUL_BASE);
+         for i in 0..self.0.len() {
+             self.0[i] *= rhs;
+         }
+@@ -756,6 +778,7 @@ impl ops::Mul<ExtElem> for Elem {
+ impl ops::MulAssign for ExtElem {
+     #[inline(always)]
+     fn mul_assign(&mut self, rhs: Self) {
++        gsr_bump!(EXT_MUL);
+         // Rename the element arrays to something small for readability.
+         let a = &self.0;
+         let b = &rhs.0;
+diff --git a/risc0/core/src/field/gsr_ops.rs b/risc0/core/src/field/gsr_ops.rs
+new file mode 100644
+index 00000000..91c7425d
+--- /dev/null
++++ b/risc0/core/src/field/gsr_ops.rs
+@@ -0,0 +1,117 @@
++// Copyright 2026 RISC Zero, Inc.
++//
++// Licensed under the Apache License, Version 2.0 (the "License");
++// you may not use this file except in compliance with the License.
++// You may obtain a copy of the License at
++//
++//     http://www.apache.org/licenses/LICENSE-2.0
++//
++// Unless required by applicable law or agreed to in writing, software
++// distributed under the License is distributed on an "AS IS" BASIS,
++// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++// See the License for the specific language governing permissions and
++// limitations under the License.
++
++//! GSR cost research: field operation counters, split by verifier phase.
++//!
++//! Counts BabyBear base and extension field operations so a Bitcoin Script (GSR) verifier can be
++//! priced. Extension operations are implemented in terms of base operations, so the base counters
++//! already include the work done inside extension operations; the extension counters are reported
++//! separately only to show the shape of the arithmetic.
++//!
++//! Counting is off by default: incrementing shared atomics from every prover thread is far too
++//! contended to leave on during proving. Call [`enable`] around the code being measured.
++
++#[cfg(not(target_os = "zkvm"))]
++use core::sync::atomic::{AtomicBool, AtomicU64, AtomicUsize, Ordering};
++
++/// Operation counter names, in index order.
++pub const OPS: &[&str] = &[
++    "base_mul",
++    "base_add",
++    "base_sub",
++    "ext_mul",
++    "ext_mul_base",
++    "ext_add",
++    "ext_sub",
++    "ext_inv",
++];
++
++/// Index of the base field multiplication counter.
++pub const BASE_MUL: usize = 0;
++/// Index of the base field addition counter.
++pub const BASE_ADD: usize = 1;
++/// Index of the base field subtraction counter.
++pub const BASE_SUB: usize = 2;
++/// Index of the extension field multiplication counter.
++pub const EXT_MUL: usize = 3;
++/// Index of the extension-by-base field multiplication counter.
++pub const EXT_MUL_BASE: usize = 4;
++/// Index of the extension field addition counter.
++pub const EXT_ADD: usize = 5;
++/// Index of the extension field subtraction counter.
++pub const EXT_SUB: usize = 6;
++/// Index of the extension field inversion counter.
++pub const EXT_INV: usize = 7;
++
++/// Verifier phase names, in index order.
++pub const PHASES: &[&str] = &["other", "constraint_eval", "fri_fold", "deep_ali"];
++
++/// Phase covering everything that is not separately attributed.
++pub const PHASE_OTHER: usize = 0;
++/// Phase covering the one-shot DEEP-ALI constraint (validity polynomial) evaluation.
++pub const PHASE_CONSTRAINT_EVAL: usize = 1;
++/// Phase covering FRI folding: the per-round NTT interpolation and evaluation.
++pub const PHASE_FRI: usize = 2;
++/// Phase covering the per-query DEEP-ALI evaluation of the tap columns.
++pub const PHASE_DEEP_ALI: usize = 3;
++
++#[cfg(not(target_os = "zkvm"))]
++const NUM_COUNTERS: usize = 4 * 8;
++
++#[cfg(not(target_os = "zkvm"))]
++#[allow(clippy::declare_interior_mutable_const)]
++const ZERO: AtomicU64 = AtomicU64::new(0);
++
++/// Counters, indexed by `phase * OPS.len() + op`.
++#[cfg(not(target_os = "zkvm"))]
++pub static COUNTS: [AtomicU64; NUM_COUNTERS] = [ZERO; NUM_COUNTERS];
++
++#[cfg(not(target_os = "zkvm"))]
++static ENABLED: AtomicBool = AtomicBool::new(false);
++
++#[cfg(not(target_os = "zkvm"))]
++static PHASE: AtomicUsize = AtomicUsize::new(PHASE_OTHER);
++
++/// Increment an operation counter for the current phase, if counting is enabled.
++#[cfg(not(target_os = "zkvm"))]
++#[inline(always)]
++pub fn bump(op: usize) {
++    if ENABLED.load(Ordering::Relaxed) {
++        COUNTS[PHASE.load(Ordering::Relaxed) * OPS.len() + op].fetch_add(1, Ordering::Relaxed);
++    }
++}
++
++/// Turn counting on or off.
++#[cfg(not(target_os = "zkvm"))]
++pub fn enable(on: bool) {
++    ENABLED.store(on, Ordering::Relaxed);
++}
++
++/// Attribute subsequent operations to `phase`, returning the previous phase.
++#[cfg(not(target_os = "zkvm"))]
++pub fn set_phase(phase: usize) -> usize {
++    PHASE.swap(phase, Ordering::Relaxed)
++}
++
++/// A snapshot of every counter, indexed by `phase * OPS.len() + op`.
++#[cfg(not(target_os = "zkvm"))]
++pub fn snapshot() -> [u64; NUM_COUNTERS] {
++    core::array::from_fn(|i| COUNTS[i].load(Ordering::Relaxed))
++}
++
++/// Counting is not available inside the guest, where there is nothing to measure.
++#[cfg(target_os = "zkvm")]
++pub fn set_phase(_phase: usize) -> usize {
++    PHASE_OTHER
++}
+diff --git a/risc0/core/src/field/mod.rs b/risc0/core/src/field/mod.rs
+index 9f516a8b..18eb92d4 100644
+--- a/risc0/core/src/field/mod.rs
++++ b/risc0/core/src/field/mod.rs
+@@ -22,6 +22,7 @@ use bytemuck::checked::CheckedCastError;
+ use core::{cmp, fmt::Debug, ops};
+ 
+ pub mod baby_bear;
++pub mod gsr_ops;
+ 
+ /// A pair of fields, one of which is an extension field of the other.
+ pub trait Field {
+diff --git a/risc0/zkp/src/core/hash/mod.rs b/risc0/zkp/src/core/hash/mod.rs
+index c7516545..ed59a387 100644
+--- a/risc0/zkp/src/core/hash/mod.rs
++++ b/risc0/zkp/src/core/hash/mod.rs
+@@ -19,6 +19,7 @@ pub mod poseidon2;
+ #[cfg(feature = "prove")]
+ pub mod poseidon_254;
+ pub mod sha;
++pub mod sha_padded;
+ 
+ use alloc::{boxed::Box, rc::Rc, string::String};
+ 
+@@ -26,6 +27,34 @@ use risc0_core::field::{baby_bear::BabyBear, Field};
+ 
+ use super::digest::Digest;
+ 
++/// Instrumentation for GSR cost research: counts hash work in the verifier.
++pub mod gsr_counters {
++    use core::sync::atomic::{AtomicU64, Ordering};
++
++    /// SHA-256 compression-function calls on digest pairs (Merkle parents, Fiat-Shamir steps).
++    pub static SHA_PAIR: AtomicU64 = AtomicU64::new(0);
++    /// SHA-256 calls over field-element slices (Merkle leaves).
++    pub static SHA_SLICE: AtomicU64 = AtomicU64::new(0);
++    /// Bytes fed to those slice hashes.
++    pub static SHA_SLICE_BYTES: AtomicU64 = AtomicU64::new(0);
++    /// Poseidon2 permutations.
++    pub static P2_PERMUTE: AtomicU64 = AtomicU64::new(0);
++
++    /// Snapshot of every counter.
++    pub fn snapshot() -> [u64; 4] {
++        [
++            SHA_PAIR.load(Ordering::Relaxed),
++            SHA_SLICE.load(Ordering::Relaxed),
++            SHA_SLICE_BYTES.load(Ordering::Relaxed),
++            P2_PERMUTE.load(Ordering::Relaxed),
++        ]
++    }
++
++    pub(crate) fn bump(counter: &AtomicU64, by: u64) {
++        counter.fetch_add(by, Ordering::Relaxed);
++    }
++}
++
+ /// A trait that sets the hashes and encodings used by the ZKP.
+ pub trait HashFn<F: Field>: Send + Sync {
+     /// Generate a hash from a pair of [Digest].
+@@ -105,6 +134,7 @@ impl<F: Field> Clone for HashSuite<F> {
+ pub fn hash_suite_from_name(name: impl AsRef<str>) -> Option<HashSuite<BabyBear>> {
+     match name.as_ref() {
+         "sha-256" => Some(sha::Sha256HashSuite::new_suite()),
++        sha_padded::SHA256_PADDED => Some(sha_padded::PaddedSha256HashSuite::new_suite()),
+         "poseidon2" => Some(poseidon2::Poseidon2HashSuite::new_suite()),
+         "blake2b" => Some(blake2b::Blake2bCpuHashSuite::new_suite()),
+         #[cfg(feature = "prove")]
+diff --git a/risc0/zkp/src/core/hash/poseidon2/mod.rs b/risc0/zkp/src/core/hash/poseidon2/mod.rs
+index d5bd9ebd..f9298296 100644
+--- a/risc0/zkp/src/core/hash/poseidon2/mod.rs
++++ b/risc0/zkp/src/core/hash/poseidon2/mod.rs
+@@ -200,6 +200,7 @@ fn partial_round(cells: &mut [BabyBearElem; CELLS], round: usize) {
+ 
+ /// The raw sponge mixing function
+ pub fn poseidon2_mix(cells: &mut [BabyBearElem; CELLS]) {
++    crate::core::hash::gsr_counters::bump(&crate::core::hash::gsr_counters::P2_PERMUTE, 1);
+     let mut round = 0;
+ 
+     // First linear layer.
+diff --git a/risc0/zkp/src/core/hash/sha/mod.rs b/risc0/zkp/src/core/hash/sha/mod.rs
+index f21be6ee..c6ee9c6e 100644
+--- a/risc0/zkp/src/core/hash/sha/mod.rs
++++ b/risc0/zkp/src/core/hash/sha/mod.rs
+@@ -313,14 +313,25 @@ struct Sha256HashFn;
+ 
+ impl<F: Field> super::HashFn<F> for Sha256HashFn {
+     fn hash_pair(&self, a: &Digest, b: &Digest) -> Box<Digest> {
++        super::gsr_counters::bump(&super::gsr_counters::SHA_PAIR, 1);
+         (*Impl::hash_pair(a, b)).into()
+     }
+ 
+     fn hash_elem_slice(&self, slice: &[F::Elem]) -> Box<Digest> {
++        super::gsr_counters::bump(&super::gsr_counters::SHA_SLICE, 1);
++        super::gsr_counters::bump(
++            &super::gsr_counters::SHA_SLICE_BYTES,
++            (slice.len() * core::mem::size_of::<F::Elem>()) as u64,
++        );
+         (*Impl::hash_raw_data_slice(slice)).into()
+     }
+ 
+     fn hash_ext_elem_slice(&self, slice: &[F::ExtElem]) -> Box<Digest> {
++        super::gsr_counters::bump(&super::gsr_counters::SHA_SLICE, 1);
++        super::gsr_counters::bump(
++            &super::gsr_counters::SHA_SLICE_BYTES,
++            (slice.len() * core::mem::size_of::<F::ExtElem>()) as u64,
++        );
+         (*Impl::hash_raw_data_slice(slice)).into()
+     }
+ }
+diff --git a/risc0/zkp/src/core/hash/sha/rng.rs b/risc0/zkp/src/core/hash/sha/rng.rs
+index c8266628..ee06f58c 100644
+--- a/risc0/zkp/src/core/hash/sha/rng.rs
++++ b/risc0/zkp/src/core/hash/sha/rng.rs
+@@ -57,6 +57,7 @@ impl ShaRng {
+     }
+ 
+     fn step(&mut self) {
++        crate::core::hash::gsr_counters::bump(&crate::core::hash::gsr_counters::SHA_PAIR, 2);
+         self.pool0 = (*Impl::hash_pair(&self.pool0, &self.pool1)).into();
+         self.pool1 = (*Impl::hash_pair(&self.pool0, &self.pool1)).into();
+         self.pool_used = 0;
+diff --git a/risc0/zkp/src/core/hash/sha_padded.rs b/risc0/zkp/src/core/hash/sha_padded.rs
+new file mode 100644
+index 00000000..8322d4f3
+--- /dev/null
++++ b/risc0/zkp/src/core/hash/sha_padded.rs
+@@ -0,0 +1,177 @@
++// Copyright 2026 RISC Zero, Inc.
++//
++// Licensed under the Apache License, Version 2.0 (the "License");
++// you may not use this file except in compliance with the License.
++// You may obtain a copy of the License at
++//
++//     http://www.apache.org/licenses/LICENSE-2.0
++//
++// Unless required by applicable law or agreed to in writing, software
++// distributed under the License is distributed on an "AS IS" BASIS,
++// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++// See the License for the specific language governing permissions and
++// limitations under the License.
++
++//! A hash suite built from padded, standards-compliant SHA-256 of [FIPS 180-4].
++//!
++//! The stock [`sha`](super::sha) suite commits with the bare SHA-256 compression function:
++//! `hash_pair` is `compress(SHA256_INIT, a, b)` and slice hashes are unpadded Merkle–Damgård.
++//! Neither is a hash of any preimage under FIPS 180-4, so a verifier that only has a full
++//! SHA-256 (such as Bitcoin Script's `OP_SHA256`) cannot reproduce those digests.
++//!
++//! This suite hashes exactly the same preimage bytes, in the same order, with the padding and
++//! length trailer added, so every digest it produces is `SHA256(preimage)`.
++//!
++//! [FIPS 180-4]: https://nvlpubs.nist.gov/nistpubs/FIPS/NIST.FIPS.180-4.pdf
++
++use alloc::boxed::Box;
++use core::marker::PhantomData;
++
++use rand_core::{impls, RngCore};
++use risc0_core::field::{Elem, Field};
++
++use super::{
++    gsr_counters,
++    sha::{Impl, Sha256},
++    HashSuite, Rng, RngFactory,
++};
++use crate::core::digest::{Digest, DIGEST_BYTES, DIGEST_WORDS};
++
++/// Name under which this suite is registered with [`hash_suite_from_name`](super::hash_suite_from_name).
++pub const SHA256_PADDED: &str = "sha-256-padded";
++
++struct PaddedSha256HashFn;
++
++fn hash_pair_padded(a: &Digest, b: &Digest) -> Box<Digest> {
++    let mut block = [0u8; 2 * DIGEST_BYTES];
++    block[..DIGEST_BYTES].copy_from_slice(a.as_bytes());
++    block[DIGEST_BYTES..].copy_from_slice(b.as_bytes());
++    gsr_counters::bump(&gsr_counters::SHA_PAIR, 1);
++    (*Impl::hash_bytes(&block)).into()
++}
++
++fn hash_slice_padded<T: bytemuck::NoUninit>(slice: &[T]) -> Box<Digest> {
++    let bytes: &[u8] = bytemuck::cast_slice(slice);
++    gsr_counters::bump(&gsr_counters::SHA_SLICE, 1);
++    gsr_counters::bump(&gsr_counters::SHA_SLICE_BYTES, bytes.len() as u64);
++    (*Impl::hash_bytes(bytes)).into()
++}
++
++impl<F: Field> super::HashFn<F> for PaddedSha256HashFn {
++    fn hash_pair(&self, a: &Digest, b: &Digest) -> Box<Digest> {
++        hash_pair_padded(a, b)
++    }
++
++    fn hash_elem_slice(&self, slice: &[F::Elem]) -> Box<Digest> {
++        hash_slice_padded(slice)
++    }
++
++    fn hash_ext_elem_slice(&self, slice: &[F::ExtElem]) -> Box<Digest> {
++        hash_slice_padded(slice)
++    }
++}
++
++/// Fiat-Shamir CRNG driven by padded SHA-256.
++///
++/// Mirrors the stock `ShaRng` with `hash_pair` replaced by `SHA256(pool0 || pool1)`,
++/// and the two seeds are already standard hashes in the stock RNG.
++#[derive(Clone, Debug)]
++pub struct PaddedShaRng {
++    pool0: Box<Digest>,
++    pool1: Box<Digest>,
++    pool_used: usize,
++}
++
++impl Default for PaddedShaRng {
++    fn default() -> Self {
++        Self::new()
++    }
++}
++
++impl PaddedShaRng {
++    /// Create a new [PaddedShaRng].
++    pub fn new() -> Self {
++        Self {
++            pool0: (*Impl::hash_bytes(b"Hello")).into(),
++            pool1: (*Impl::hash_bytes(b"World")).into(),
++            pool_used: 0,
++        }
++    }
++
++    /// Mix the pool with a specified [Digest].
++    pub fn inner_mix(&mut self, val: &Digest) {
++        for i in 0..DIGEST_WORDS {
++            self.pool0.as_mut_words()[i] = self.pool0.as_words()[i] ^ val.as_words()[i];
++        }
++        self.step();
++    }
++
++    fn step(&mut self) {
++        self.pool0 = hash_pair_padded(&self.pool0, &self.pool1);
++        self.pool1 = hash_pair_padded(&self.pool0, &self.pool1);
++        self.pool_used = 0;
++    }
++}
++
++impl RngCore for PaddedShaRng {
++    fn next_u32(&mut self) -> u32 {
++        if self.pool_used == DIGEST_WORDS {
++            self.step();
++        }
++        let out = self.pool0.as_words()[self.pool_used];
++        self.pool_used += 1;
++        out
++    }
++
++    fn next_u64(&mut self) -> u64 {
++        ((self.next_u32() as u64) << 32) | (self.next_u32() as u64)
++    }
++
++    fn fill_bytes(&mut self, dest: &mut [u8]) {
++        impls::fill_bytes_via_next(self, dest);
++    }
++}
++
++impl<F: Field> Rng<F> for PaddedShaRng {
++    fn mix(&mut self, val: &Digest) {
++        self.inner_mix(val);
++    }
++
++    fn random_bits(&mut self, bits: usize) -> u32 {
++        ((1 << bits) - 1) & self.next_u32()
++    }
++
++    fn random_elem(&mut self) -> F::Elem {
++        F::Elem::random(self)
++    }
++
++    fn random_ext_elem(&mut self) -> F::ExtElem {
++        F::ExtElem::random(self)
++    }
++}
++
++struct PaddedSha256RngFactory;
++
++impl<F: Field> RngFactory<F> for PaddedSha256RngFactory {
++    fn new_rng(&self) -> Box<dyn Rng<F>> {
++        Box::new(PaddedShaRng::new())
++    }
++}
++
++/// A [HashSuite] using padded, standards-compliant SHA-256.
++pub struct PaddedSha256HashSuite<F: Field> {
++    phantom: PhantomData<F>,
++}
++
++impl<F: Field> PaddedSha256HashSuite<F> {
++    /// Construct a [PaddedSha256HashSuite].
++    pub fn new_suite() -> HashSuite<F> {
++        use alloc::rc::Rc;
++        HashSuite {
++            name: SHA256_PADDED.into(),
++            hashfn: Rc::new(PaddedSha256HashFn {}),
++            rng: Rc::new(PaddedSha256RngFactory {}),
++        }
++    }
++}
++
+diff --git a/risc0/zkp/src/verify/mod.rs b/risc0/zkp/src/verify/mod.rs
+index e7ddb1a2..5c1572ec 100644
+--- a/risc0/zkp/src/verify/mod.rs
++++ b/risc0/zkp/src/verify/mod.rs
+@@ -28,7 +28,7 @@ use core::{
+ 
+ pub(crate) use merkle::MerkleTreeVerifier;
+ pub use read_iop::ReadIOP;
+-use risc0_core::field::{Elem, ExtElem, Field, RootsOfUnity};
++use risc0_core::field::{gsr_ops, Elem, ExtElem, Field, RootsOfUnity};
+ 
+ use crate::{
+     adapter::{
+@@ -348,7 +348,9 @@ impl<'a, F: Field> Verifier<'a, F> {
+         #[cfg(not(target_os = "zkvm"))]
+         tracing::debug!("> compute_polynomial");
+ 
++        let prev_phase = gsr_ops::set_phase(gsr_ops::PHASE_CONSTRAINT_EVAL);
+         let result = validity_fn(&poly_mix, &eval_u);
++        gsr_ops::set_phase(prev_phase);
+         trace_if_enabled!("Computed polynomial: {result:?}");
+ 
+         // Now generate the check polynomial
+@@ -428,7 +430,9 @@ impl<'a, F: Field> Verifier<'a, F> {
+         );
+         let gen = <F::Elem as RootsOfUnity>::ROU_FWD[log2_ceil(domain)];
+         let hashfn = self.suite.hashfn.as_ref();
+-        self.fri_verify(|idx| {
++        let fri_phase = gsr_ops::set_phase(gsr_ops::PHASE_FRI);
++        let fri_result = self.fri_verify(|idx| {
++            let inner_phase = gsr_ops::set_phase(gsr_ops::PHASE_DEEP_ALI);
+             let x = gen.pow(idx);
+             let rows= self
+                 .merkle_verifiers
+@@ -441,8 +445,11 @@ impl<'a, F: Field> Verifier<'a, F> {
+                 .collect::<Result<Vec<_>,_>>()?;
+             let check_row = check_merkle.verify(self.iop().deref_mut(), hashfn, idx)?;
+             let ret = self.fri_eval_taps(&combo_u, check_row, back_one, x, z, &rows, &tap_mix_pows, &check_mix_pows);
++            gsr_ops::set_phase(inner_phase);
+             Ok(ret)
+-        })?;
++        });
++        gsr_ops::set_phase(fri_phase);
++        fri_result?;
+         Ok(())
+     }
+ 
+diff --git a/risc0/zkvm/src/host/recursion/prove/zkr.rs b/risc0/zkvm/src/host/recursion/prove/zkr.rs
+index 00a0bc9d..eff5bc63 100644
+--- a/risc0/zkvm/src/host/recursion/prove/zkr.rs
++++ b/risc0/zkvm/src/host/recursion/prove/zkr.rs
+@@ -17,11 +17,27 @@ use risc0_circuit_recursion::{
+     control_id::{BN254_IDENTITY_CONTROL_ID, POSEIDON2_CONTROL_IDS, SHA256_CONTROL_IDS},
+     prove::Program,
+ };
+-use risc0_zkp::{core::digest::Digest, MAX_CYCLES_PO2, MIN_CYCLES_PO2};
++use risc0_zkp::{
++    core::{
++        digest::Digest,
++        hash::{hash_suite_from_name, sha_padded::SHA256_PADDED},
++    },
++    MAX_CYCLES_PO2, MIN_CYCLES_PO2,
++};
+ 
+ use crate::RECURSION_PO2;
+ 
+ fn get_zkr(name: &str, hashfn: &str) -> Result<(Program, Digest)> {
++    // The padded SHA-256 suite has no bootstrapped control ID table, so derive the ID from the
++    // program itself. This is the same computation `cargo xtask bootstrap` runs to fill the tables.
++    if hashfn == SHA256_PADDED {
++        let program = risc0_circuit_recursion::prove::zkr::get_zkr(name, RECURSION_PO2)?;
++        let suite = hash_suite_from_name(hashfn)
++            .ok_or_else(|| anyhow!("unsupported hash function: {hashfn}"))?;
++        let control_id = program.compute_control_id(suite)?;
++        return Ok((program, control_id));
++    }
++
+     let control_ids: &[(&str, Digest)] = match hashfn {
+         "poseidon2" => &POSEIDON2_CONTROL_IDS,
+         "sha-256" => &SHA256_CONTROL_IDS,
+diff --git a/risc0/zkvm/src/host/recursion/tests.rs b/risc0/zkvm/src/host/recursion/tests.rs
+index 51108aab..aef9d358 100644
+--- a/risc0/zkvm/src/host/recursion/tests.rs
++++ b/risc0/zkvm/src/host/recursion/tests.rs
+@@ -160,7 +160,11 @@ static BUSY_LOOP_SEGMENTS: LazyLock<(Journal, Vec<SegmentReceipt>)> =
+ 
+ fn generate_busy_loop_segments() -> (Journal, Vec<SegmentReceipt>) {
+     let segment_limit_po2 = 16; // 64k cycles
+-    let cycles = 1 << segment_limit_po2;
++    let mult: u64 = std::env::var("R0_GSR_CYCLES_MULT")
++        .ok()
++        .and_then(|s| s.parse().ok())
++        .unwrap_or(1);
++    let cycles = mult * (1 << segment_limit_po2);
+     let env = ExecutorEnv::builder()
+         .write(&MultiTestSpec::BusyLoop { cycles })
+         .unwrap()
+@@ -303,6 +307,175 @@ fn test_recursion_lift_join_unwrap_povw() -> anyhow::Result<()> {
+     Ok(())
+ }
+ 
++/// GSR cost research: the padded suite must produce digests a plain SHA-256 (Bitcoin Script's
++/// `OP_SHA256`) reproduces, unlike the stock "sha-256" suite's bare compression function.
++#[test_log::test]
++fn gsr_padded_sha_matches_fips() {
++    use risc0_zkp::core::{
++        digest::Digest,
++        hash::{hash_suite_from_name, sha::Impl as ShaImpl, sha::Sha256 as _},
++    };
++
++    // Anchor Impl::hash_bytes to the FIPS 180-4 test vector for "abc".
++    assert_eq!(
++        ShaImpl::hash_bytes(b"abc").as_bytes(),
++        hex::decode("ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad")
++            .unwrap()
++            .as_slice()
++    );
++
++    let padded = hash_suite_from_name("sha-256-padded").unwrap();
++    let stock = hash_suite_from_name("sha-256").unwrap();
++    let a = Digest::from([1u32, 2, 3, 4, 5, 6, 7, 8]);
++    let b = Digest::from([9u32, 10, 11, 12, 13, 14, 15, 16]);
++
++    let mut preimage = a.as_bytes().to_vec();
++    preimage.extend_from_slice(b.as_bytes());
++    assert_eq!(
++        padded.hashfn.hash_pair(&a, &b).as_bytes(),
++        ShaImpl::hash_bytes(&preimage).as_bytes()
++    );
++    assert_ne!(
++        stock.hashfn.hash_pair(&a, &b).as_bytes(),
++        ShaImpl::hash_bytes(&preimage).as_bytes()
++    );
++
++    let elems: Vec<BabyBearElem> = (0..37u32).map(BabyBearElem::new).collect();
++    assert_eq!(
++        padded.hashfn.hash_elem_slice(&elems).as_bytes(),
++        ShaImpl::hash_bytes(bytemuck::cast_slice::<_, u8>(&elems)).as_bytes()
++    );
++}
++
++/// GSR cost research: measure seal bytes and verifier hash work for a real multi-segment
++/// succinct receipt, in both the stock poseidon2 configuration and the sha-256 configuration.
++#[test_log::test]
++fn gsr_measure() {
++    use risc0_core::field::gsr_ops;
++    use risc0_zkp::core::hash::gsr_counters;
++
++    fn report(label: &str, before: [u64; 4], after: [u64; 4]) {
++        let d = |i: usize| after[i] - before[i];
++        println!(
++            "{label}: sha_pair {}, sha_slice {} over {} bytes, poseidon2 {}",
++            d(0),
++            d(1),
++            d(2),
++            d(3)
++        );
++    }
++
++    fn report_ops(label: &str, before: &[u64], after: &[u64]) {
++        for (p, phase) in gsr_ops::PHASES.iter().enumerate() {
++            for (o, op) in gsr_ops::OPS.iter().enumerate() {
++                let i = p * gsr_ops::OPS.len() + o;
++                println!("{label}: {phase} {op} {}", after[i] - before[i]);
++            }
++        }
++    }
++
++    let (journal, segments) = BUSY_LOOP_SEGMENTS.clone();
++    println!("segments                 : {}", segments.len());
++    println!(
++        "segment seal bytes       : {}",
++        segments.iter().map(|s| s.seal.len() * 4).sum::<usize>()
++    );
++
++    let ctx = VerifierContext::default();
++    tracing::info!("Proving lift");
++    let mut compressed = lift(&segments[0]).unwrap();
++    for receipt in &segments[1..] {
++        tracing::info!("Proving lift");
++        let rec_receipt = lift(receipt).unwrap();
++        tracing::info!("Proving join");
++        compressed = join(&compressed, &rec_receipt).unwrap();
++    }
++
++    println!(
++        "poseidon2 seal bytes     : {}",
++        compressed.seal.len() * 4
++    );
++    println!(
++        "poseidon2 receipt bytes  : {}",
++        bincode::serialize(&Receipt::new(
++            InnerReceipt::Succinct(compressed.clone()),
++            journal.bytes.clone()
++        ))
++        .unwrap()
++        .len()
++    );
++
++    let before = gsr_counters::snapshot();
++    let before_ops = gsr_ops::snapshot();
++    gsr_ops::enable(true);
++    compressed.verify_integrity_with_context(&ctx).unwrap();
++    gsr_ops::enable(false);
++    report("poseidon2 verify", before, gsr_counters::snapshot());
++    report_ops("poseidon2 verify", &before_ops, &gsr_ops::snapshot());
++
++    // Re-prove the final layer with each SHA-256 hash suite, the stock analogue of identity_p254.
++    // "sha-256" is RISC Zero's bare compression function; "sha-256-padded" is FIPS 180-4 SHA-256,
++    // which is what a Bitcoin Script OP_SHA256 verifier can recompute.
++    for name in ["sha-256", "sha-256-padded"] {
++        let (_, control_id) = zkr::identity(name).unwrap();
++        let opts = ProverOpts::succinct()
++            .with_hashfn(name.to_string())
++            .with_control_ids(vec![control_id]);
++        let mut prover = Prover::new_identity(&compressed, opts.clone()).unwrap();
++        let recursion_receipt = prover.run().unwrap();
++
++        let hashfn = opts.hash_suite().unwrap().hashfn;
++        let control_tree = MerkleGroup::new(opts.control_ids.clone()).unwrap();
++        let params = SuccinctReceiptVerifierParameters {
++            control_root: control_tree.calc_root(hashfn.as_ref()),
++            inner_control_root: Some(ALLOWED_CONTROL_ROOT),
++            proof_system_info: PROOF_SYSTEM_INFO,
++            circuit_info: CircuitImpl::CIRCUIT_INFO,
++        };
++        let receipt = SuccinctReceipt {
++            seal: recursion_receipt.seal,
++            hashfn: opts.hashfn,
++            control_id,
++            control_inclusion_proof: control_tree
++                .get_proof(&control_id, hashfn.as_ref())
++                .unwrap(),
++            claim: compressed.claim.clone(),
++            verifier_parameters: params.digest(),
++        };
++
++        println!("{name} control id        : {control_id}");
++        println!("{name} seal bytes        : {}", receipt.seal.len() * 4);
++        println!(
++            "{name} receipt bytes     : {}",
++            bincode::serialize(&Receipt::new(
++                InnerReceipt::Succinct(receipt.clone()),
++                journal.bytes.clone()
++            ))
++            .unwrap()
++            .len()
++        );
++
++        if let Ok(dir) = std::env::var("R0_GSR_SEAL_DIR") {
++            std::fs::write(
++                format!("{dir}/{name}-seal.bin"),
++                bytemuck::cast_slice::<u32, u8>(&receipt.seal),
++            )
++            .unwrap();
++        }
++
++        let ctx = VerifierContext::empty()
++            .with_suites(VerifierContext::default_hash_suites())
++            .with_succinct_verifier_parameters(params);
++        let before = gsr_counters::snapshot();
++        let before_ops = gsr_ops::snapshot();
++        gsr_ops::enable(true);
++        receipt.verify_integrity_with_context(&ctx).unwrap();
++        gsr_ops::enable(false);
++        report(&format!("{name} verify"), before, gsr_counters::snapshot());
++        report_ops(&format!("{name} verify"), &before_ops, &gsr_ops::snapshot());
++    }
++}
++
+ #[test_log::test]
+ fn test_recursion_lift_join_identity_p254_e2e() {
+     // Prove the base case
+diff --git a/risc0/zkvm/src/receipt.rs b/risc0/zkvm/src/receipt.rs
+index 55cb42b4..dd233d7b 100644
+--- a/risc0/zkvm/src/receipt.rs
++++ b/risc0/zkvm/src/receipt.rs
+@@ -31,6 +31,7 @@ use risc0_zkp::{
+         digest::Digest,
+         hash::{
+             blake2b::Blake2bCpuHashSuite, poseidon2::Poseidon2HashSuite, sha::Sha256HashSuite,
++            sha_padded::{PaddedSha256HashSuite, SHA256_PADDED},
+             HashSuite,
+         },
+     },
+@@ -935,6 +936,7 @@ impl VerifierContext {
+             ("blake2b".into(), Blake2bCpuHashSuite::new_suite()),
+             ("poseidon2".into(), Poseidon2HashSuite::new_suite()),
+             ("sha-256".into(), Sha256HashSuite::new_suite()),
++            (SHA256_PADDED.into(), PaddedSha256HashSuite::new_suite()),
+         ])
+     }
+ 

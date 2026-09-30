@@ -1,0 +1,15 @@
+ext_mul (Kronecker, reduced)                               64,078
+ext_add (lazy)                                              4,321
+ext_sub (lazy)                                              7,229
+ext_scalar_mul (ext x per-query base, reduced)             35,478
+vec_mac (constant x 50-lane vector, accumulate)            32,976
+vec_add (50 lanes)                                         10,942
+vec_reduce (Barrett, 50 lanes)                             77,905
+lane_extract (4 vectors -> packed ext at one query)        53,050
+row_ext (FRI row words -> packed ext)                      48,655
+ext_mul via OP_INVOKE                                      70,006
+phase vec_mac (22-lane vector)                             18,864
+phase vec_reduce (Barrett, 22 lanes)                       48,001
+ext_eq (hinted canonical equality)                         28,375
+lane_insert (scalar -> phase-vector lane)                   9,887
+ext_mul body bytes                                            226

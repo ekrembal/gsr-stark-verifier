@@ -45,6 +45,8 @@ These describe candidate systems and measurements, not implemented verifiers.
 
 - [`next-verifiers.md`](next-verifiers.md) — priced GSR cost model for candidate primitives, and the resulting ranking of which verifier to add next.
 - [`openvm-measurement.md`](openvm-measurement.md) — measured proof bytes and Poseidon2 verifier cost of a real OpenVM v2.0.2 aggregated proof, priced against a standard spend.
+- [`risc0-measurement.md`](risc0-measurement.md) — measured seal bytes and SHA-256 and Poseidon2 verifier cost of a real RISC Zero v3.0.6 succinct receipt, priced against a standard spend.
+- [`risc0-verifier-sizing.md`](risc0-verifier-sizing.md) — a FIPS-padded SHA-256 hash suite for RISC Zero's recursion layer, validated by proving and verifying a receipt under it, the measured BabyBear arithmetic of verifying that seal priced against a standard spend, and packed Tapscript v2 kernels metered in the pinned interpreter that project the verifier at 40% of one spend (a projection, not a written verifier).
 - [`potential-starks.md`](potential-starks.md) — survey of candidate STARK and post-quantum proof systems against GSR limits.
 - [`recursive-proof-system-decision.md`](recursive-proof-system-decision.md) — the recorded choice of OpenVM for the next recursive computation stack.
 - [`gsr-opcodes.md`](gsr-opcodes.md) — the opcodes GSR adds and restores.

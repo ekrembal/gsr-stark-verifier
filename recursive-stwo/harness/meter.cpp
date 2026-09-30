@@ -5,6 +5,8 @@
 #include <fstream>
 #include <iostream>
 #include <iterator>
+#include <memory>
+#include <optional>
 #include <vector>
 struct Measurements {
     std::array<uint64_t,256> opcodes{};
@@ -36,6 +38,9 @@ int main(int argc, char** argv) {
     execution.m_annex_present=false; execution.m_annex_init=true;
     uint64_t budget=request["budget"].getInt<uint64_t>();
     uint64_t weight=0;
+    std::optional<CTransaction> transaction;
+    PrecomputedTransactionData txdata;
+    std::unique_ptr<BaseSignatureChecker> checker=std::make_unique<BaseSignatureChecker>();
     if(!request["transaction_hex"].isNull()) {
         CMutableTransaction tx;
         if(!DecodeHexTx(tx,request["transaction_hex"].get_str()))return 2;
@@ -44,15 +49,21 @@ int main(int argc, char** argv) {
             auto bytes=ParseHex(item["script_pub_key"].get_str());
             spent.emplace_back(item["value"].getInt<int64_t>(),CScript(bytes.begin(),bytes.end()));
         }
-        const CTransaction transaction(tx);
-        weight=GetTransactionWeight(transaction);
-        budget=GetTransactionVaropsBudget(transaction,spent);
+        transaction.emplace(tx);
+        weight=GetTransactionWeight(*transaction);
+        budget=GetTransactionVaropsBudget(*transaction,spent);
         if(budget!=request["budget"].getInt<uint64_t>())return 3;
+        // Signature opcodes check against input 0 of this transaction, as in script-path validation of the leaf.
+        const CAmount amount=spent.at(0).nValue;
+        txdata.Init(*transaction,std::move(spent));
+        checker=std::make_unique<TransactionSignatureChecker>(&*transaction,0,amount,txdata,MissingDataBehavior::FAIL);
+        execution.m_tapleaf_hash=ComputeTapleafHash(TAPROOT_LEAF_TAPSCRIPT_V2,raw);
+        execution.m_tapleaf_hash_init=true;
     }
     varops::Budget meter(budget);
     ScriptError error=SCRIPT_ERR_UNKNOWN_ERROR;
     bool immediate=false;
-    const bool evaluated=EvalTapscriptV2(stack,script,STANDARD_SCRIPT_VERIFY_FLAGS | SCRIPT_VERIFY_SCRIPT_RESTORATION,BaseSignatureChecker{},execution,meter,&error,&immediate);
+    const bool evaluated=EvalTapscriptV2(stack,script,STANDARD_SCRIPT_VERIFY_FLAGS | SCRIPT_VERIFY_SCRIPT_RESTORATION,*checker,execution,meter,&error,&immediate);
     const auto final_stack=stack.GetStack();
     const bool ok=evaluated && !immediate && CheckTapscriptV2ScriptResult(stack,meter,&error);
     UniValue result(UniValue::VOBJ), counts(UniValue::VOBJ), top(UniValue::VARR);

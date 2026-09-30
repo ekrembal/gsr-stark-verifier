@@ -8,7 +8,7 @@ Implementations of zero-knowledge proof-system verifiers for Bitcoin's Great Scr
 
 ## Implemented verifiers
 
-- **[RISC Zero succinct receipt](risc0-succinct/README.md)** — verifies a RISC Zero v3.0.6 succinct (recursion-circuit) receipt, proven under a padded SHA-256 hash suite, in one standard Taproot spend: 388,398 WU and 2,083,395,104 of 3,883,980,000 varops, mined on activated regtest. It is checked against RISC Zero's native verifier on the valid receipt and 34 negative cases.
+- **[RISC Zero succinct receipt](risc0-succinct/README.md)** — verifies a RISC Zero v3.0.6 succinct (recursion-circuit) receipt, proven under a padded SHA-256 hash suite, in one standard Taproot spend: 388,398 WU and 2,083,395,104 of 3,883,980,000 varops, mined on activated regtest. It is checked against RISC Zero's native verifier on the valid receipt and 34 negative cases. A [covenant demo](risc0-succinct/README.md#covenant-demo-a-utxo-only-a-stark-proof-can-spend) locks a UTXO so that only a receipt of a demo guest can spend it, and only to the outputs in the guest's journal (389,079 WU, mined on regtest).
 - **[Recursive Stwo](recursive-stwo/README.md)** — a GSR port built on [Bitcoin Wildlife Sanctuary's recursive-stwo-bitcoin](https://github.com/Bitcoin-Wildlife-Sanctuary/recursive-stwo-bitcoin). It verifies the existing recursive proof bundle, including its delegated obligations, in one standard Taproot spend. The upstream project supplies the recursive proof pipeline and Bitcoin verifier; this implementation adapts its arithmetic, witness handling, and Script compilation to GSR.
 
 ## Current results and limits

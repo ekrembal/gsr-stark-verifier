@@ -1,0 +1,83 @@
+{
+  "image_id": "e57cedf4f6ea88bef1c91f1c2e19bfa7488fdd65ca36ef6b6a0e2762f9dc5e5e",
+  "journal": "c0e4022a01000000225120ebbb8193d78204bf6880fed5bd735d42d1e5abfb1be2f3acd8b190172cb2cc92",
+  "claim_digest": "07794b442ebef061478e143ea4d448d159c671c2789da999b36d958e6b9982e7",
+  "native": "NATIVE_OK",
+  "reference": "REFERENCE_OK",
+  "native_other_journal": "NATIVE_ERR journal digest mismatch detected",
+  "script_bytes": 158929,
+  "witness_items": 767,
+  "ok": true,
+  "error": "No error",
+  "transaction_weight": 389079,
+  "budget": 3890790000,
+  "varops": 2086008213,
+  "sha256_calls": 4716,
+  "function_calls": 15553,
+  "invoked_body_bytes": 3231577,
+  "peak_entries": 2666,
+  "peak_payload_bytes": 346589,
+  "peak_element_bytes": 16384,
+  "limits": {
+    "standard_weight": true,
+    "varops": true,
+    "invoked_body_bytes": true,
+    "function_ids": true,
+    "stack_entries": true,
+    "live_payload": true,
+    "single_element": true,
+    "no_op_success": true,
+    "verifier": true
+  },
+  "negative": {
+    "tx_outputs_differ_from_journal": "Invalid Schnorr signature",
+    "journal_rewritten_to_match_tx": "Script failed an OP_VERIFY operation",
+    "sig_over_journal_message_not_tx": "Invalid Schnorr signature",
+    "sighash_prefix_shifted": "Script failed an OP_VERIFY operation",
+    "sighash_all_65_byte_sig": "Script failed an OP_VERIFY operation",
+    "unknown_pubkey_type": "Script failed an OP_VERIFY operation",
+    "sig_from_other_key": "Invalid Schnorr signature",
+    "valid_proof_of_other_image": "Script failed an OP_VERIFY operation",
+    "tampered_seal": "Script failed an OP_VERIFY operation"
+  },
+  "regtest": {
+    "address": "bcrt1p65gyjfn8x36y79efp0jud295eue09qnz504nhpr6hz6dk8cgsj3swzuh8t",
+    "funding_txid": "70a11a1607fb092de6412cf566b696528617ae007de9f9fbf1b3add5ebe46899",
+    "redirected_spend_acceptance": [
+      {
+        "txid": "75ed470fd951e7429b0ee31ce297a8a9f1c03a07188feed3a7dc9a34a6728278",
+        "wtxid": "f2103dd487298b0892f608a842dda8897a6473a87ea4fb663e736e178a7d3c60",
+        "allowed": false,
+        "reject-reason": "mempool-script-verify-flag-failed (Invalid Schnorr signature)",
+        "reject-details": "mempool-script-verify-flag-failed (Invalid Schnorr signature), input 0 of 75ed470fd951e7429b0ee31ce297a8a9f1c03a07188feed3a7dc9a34a6728278 (wtxid f2103dd487298b0892f608a842dda8897a6473a87ea4fb663e736e178a7d3c60), spending 70a11a1607fb092de6412cf566b696528617ae007de9f9fbf1b3add5ebe46899:0"
+      }
+    ],
+    "weight": 389079,
+    "mempool_acceptance": [
+      {
+        "txid": "817cf8055434acc530e7d1a8881739e74500604aa79750e820b1cf72f314b1f8",
+        "wtxid": "f3566e0fd245d236635b4b0b9173254043feef31baa48cb914a4103fd2e728e8",
+        "allowed": true,
+        "vsize_adjusted": 97270,
+        "vsize": 97270,
+        "vsize_bip141": 97270,
+        "fees": {
+          "base": 0.002,
+          "effective-feerate": 2.056e-05,
+          "effective-includes": [
+            "f3566e0fd245d236635b4b0b9173254043feef31baa48cb914a4103fd2e728e8"
+          ]
+        }
+      }
+    ],
+    "txid": "817cf8055434acc530e7d1a8881739e74500604aa79750e820b1cf72f314b1f8",
+    "blockhash": "66fcbeb6844f6f1900cd7c53ed71df7bbea9f769954f850719e609e6f9eb84fc",
+    "mined": true,
+    "spend_outputs": [
+      {
+        "value": 49.998,
+        "scriptPubKey": "5120ebbb8193d78204bf6880fed5bd735d42d1e5abfb1be2f3acd8b190172cb2cc92"
+      }
+    ]
+  }
+}

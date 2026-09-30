@@ -46,7 +46,7 @@ BabyBear extension elements are held as one integer with four 96-bit lanes. Exte
 
 ## Reproduce
 
-Needs Python 3, Rust (RISC Zero's toolchain), CMake and a C++20 compiler. Build the shared pinned node and meter as in [recursive-stwo](../recursive-stwo/README.md) (`bash recursive-stwo/tools/build.sh`, which builds `build/bitcoin` and `recursive-stwo/build/harness/gsr-meter`). Then, for the native side, check out RISC Zero v3.0.6 (`1cc70cf05033a79ebc90f07c679cb4bd1cd301b9`) at `~/risc0` (or set `RISC0_DIR`) and apply [risc0-v3.0.6.patch](risc0-v3.0.6.patch), which adds the `sha-256-padded` suite, the `GSR_TRACE` instrumentation, and the `gsr_verify_file` test used as the native oracle.
+Needs Python 3, Rust (RISC Zero's toolchain), CMake and a C++20 compiler. Build the shared pinned node and meter as in [recursive-stwo](../recursive-stwo/README.md) (`bash recursive-stwo/tools/build.sh`, which builds `build/bitcoin` and `recursive-stwo/build/harness/gsr-meter`). Then, for the native side, check out RISC Zero v3.0.6 (`1cc70cf05033a79ebc90f07c679cb4bd1cd301b9`) at `~/risc0` (or set `RISC0_DIR`) and apply [risc0-v3.0.6.patch](risc0-v3.0.6.patch), which adds the `sha-256-padded` suite, the `GSR_TRACE` instrumentation, the `gsr_verify_file` test used as the native oracle, and the `gsr_covenant` demo guest with its `gsr_covenant_prove` test.
 
 ```sh
 cd risc0-succinct/tools
@@ -58,6 +58,43 @@ python3 ../../recursive-stwo/tools/regtest-demo.py <bundle with script_sha256>  
 
 `tools/test.sh` runs the first three. `fixtures/seal.bin` and `fixtures/receipt.json` were produced by the patched `gsr_measure` test with `R0_GSR_SEAL_DIR` set; `fixtures/circuit.json` by `tools/extract-circuit.py` from RISC Zero's generated circuit sources.
 
+## Covenant demo: a UTXO only a STARK proof can spend
+
+`tools/covenant.py` builds a Taproot output whose only spending path is a Script that verifies a receipt of the demo guest `gsr_covenant` (added by the patch, image ID `e57cedf4f6ea88bef1c91f1c2e19bfa7488fdd65ca36ef6b6a0e2762f9dc5e5e`) and forces the spending transaction's outputs to be exactly the guest's journal.
+
+- **Guest.** It reads a secret and a byte string, asserts `SHA256(secret)` equals a constant lock, checks the byte string parses as a list of Bitcoin outputs, and commits it as the journal. The journal format is BIP 341's `sha_outputs` preimage: for each output, `value` (u64 LE) ‖ compact-size length ‖ `scriptPubKey`. Only a prover who knows the secret gets a receipt, and the receipt fixes where the coins go.
+- **Claim from the journal.** The Script takes the journal from the witness and recomputes RISC Zero's claim digest, `tagged_struct("risc0.ReceiptClaim", [input, image_id, post, tagged_struct("risc0.Output", [SHA256(journal), assumptions])], [0, 0])`, with image ID, input, post-state, zero assumptions and exit code 0 as constants. It then requires output slot 1 of the seal to equal that digest. A different journal gives a different claim, which the STARK does not prove.
+- **Journal bound to the transaction.** There is no transaction-introspection opcode, so the Script uses a signature. The witness supplies a 64-byte signature, a 32-byte key, and the 138 bytes of the BIP 341 `SIGHASH_DEFAULT` message before `sha_outputs` plus the bytes after it. The Script builds `TaggedHash("TapSighash", prefix ‖ SHA256(journal) ‖ suffix)`, checks the signature on it with `OP_CHECKSIGFROMSTACK`, and then checks the same signature and key against the transaction with `OP_CHECKSIGVERIFY`. Schnorr signatures commit to their message, so both checks can only pass if the assembled message is the transaction's real signature message, whose `sha_outputs` is SHA256(journal). The key can be anyone's; the signature adds no trust. The fixed sizes stop a 65-byte signature with another sighash type and an unknown key type (non-32-byte keys make both opcodes succeed without checking).
+
+Measured spend (complete transaction, [reports/covenant.json](reports/covenant.json)): 389,079 WU; 2,086,008,213 of 3,890,790,000 varops; 158,929-byte Script; 767 witness items; 4,716 SHA-256 calls; 3,231,577 invoked function-body bytes; peak 2,666 entries; all limits pass. The covenant adds 681 WU and 2.6M varops to the fixed-statement verifier. On activated regtest the pinned node accepted the spend to the journal's output and mined it, and rejected the same proof spending to an output 1 sat smaller (`Invalid Schnorr signature`).
+
+RISC Zero's native verifier and the Python reference accept the receipt, and native rejects it with a different journal. The Script rejects, in the complete transaction:
+
+| Case | Rejected by |
+|---|---|
+| Transaction outputs differ from the journal | `CHECKSIGFROMSTACK` |
+| Journal rewritten to match the transaction | claim digest |
+| Signature over the journal-implied message, not the transaction's | `CHECKSIGVERIFY` |
+| Signature-message prefix shifted by one byte | size check |
+| 65-byte `SIGHASH_ALL` signature | size check |
+| 33-byte (unknown type) key | size check |
+| Signature from another key | `CHECKSIGFROMSTACK` |
+| Valid receipt of another image (the busy-loop fixture) | claim digest |
+| Tampered seal | STARK verification |
+
+Reproduce, with the patched RISC Zero checkout:
+
+```sh
+cd ~/risc0   # writes covenant-receipt.json / covenant-seal.bin
+R0_GSR_SEAL_DIR=<dir> R0_GSR_COVENANT_SECRET=$(printf 'gsr covenant demo secret' | xxd -p | tr -d '\n') \
+R0_GSR_COVENANT_OUTPUTS=c0e4022a01000000225120ebbb8193d78204bf6880fed5bd735d42d1e5abfb1be2f3acd8b190172cb2cc92 \
+  cargo test --release -p risc0-zkvm --features prove --lib gsr_covenant_prove -- --include-ignored --nocapture
+cd risc0-succinct/tools
+python3 covenant.py --regtest   # generate, meter, negative cases, fund/accept/mine on regtest
+```
+
+The outputs above pay 49.998 BTC to a key-path P2TR address derived from `SHA256("gsr covenant demo destination")`. Changing the destination needs a new proof but not a new Script; changing the guest needs a new Script. The transaction's inputs, version, locktime and sequences are not restricted by the journal, only its outputs.
+
 ## Scope
 
-This verifies one succinct receipt shape: the recursion circuit at `po2` 18, fixed control ID and root, and the padded hash suite. RISC Zero does not ship `sha-256-padded`; the patch adds it without changing the recursion circuit, so a prover must use the patched suite to produce receipts this Script accepts. Another statement needs a regenerated Script. The FRI configuration gives about 97 conjectured bits of security, as in stock RISC Zero. This is unaudited research code.
+This verifies one succinct receipt shape: the recursion circuit at `po2` 18, fixed control ID and root, and the padded hash suite. RISC Zero does not ship `sha-256-padded`; the patch adds it without changing the recursion circuit, so a prover must use the patched suite to produce receipts this Script accepts. Another statement needs a regenerated Script (in the covenant mode, another image ID). The FRI configuration gives about 97 conjectured bits of security, as in stock RISC Zero. This is unaudited research code.

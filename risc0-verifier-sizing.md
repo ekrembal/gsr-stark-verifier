@@ -1,5 +1,7 @@
 # Sizing a BabyBear FRI verifier for the RISC Zero seal
 
+> **Superseded by a measurement.** The full verifier now exists: [`risc0-succinct/`](risc0-succinct/README.md) verifies this receipt in one standard spend at 388,398 WU and 2,083,395,104 varops. The projections below are kept as the design record.
+
 [`risc0-measurement.md`](risc0-measurement.md) priced the *hashing* of a real RISC Zero v3.0.6
 succinct receipt and found it cheap: 30.5M varops, 0.76% of a maximal standard spend. It left two
 questions open. This note answers both, then revisits the second with metered Script kernels.

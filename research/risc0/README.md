@@ -19,6 +19,9 @@ Files:
   arithmetic by phase plus padded SHA-256 hashing.
 - `fri-structure.py`, `fri-structure.txt` — derives the proof's Merkle and FRI structure from the
   pinned constants and checks it against the measured hash counts.
+- `kernels/` — packed BabyBear kernels written as real Tapscript v2, metered in the pinned
+  interpreter, and composed into a projection of an optimised verifier; see
+  [`kernels/README.md`](kernels/README.md).
 
 ```sh
 git clone --depth 1 --branch v3.0.6 https://github.com/risc0/risc0.git

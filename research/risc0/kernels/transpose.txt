@@ -1,0 +1,24 @@
+179 columns:
+  build row-major matrix (pad + concatenate 50 rows)       1,241,626
+  delta swap b=32 (incl. in-Script mask)                   1,301,036
+  delta swap b=16 (incl. in-Script mask)                   2,164,707
+  delta swap b=8 (incl. in-Script mask)                    2,661,364
+  delta swap b=4 (incl. in-Script mask)                    2,943,800
+  delta swap b=2 (incl. in-Script mask)                    3,103,764
+  delta swap b=1 (incl. in-Script mask)                    3,194,828
+  split into 192 column items (64 x 4-byte lanes)          4,279,060
+  spread 179 columns into 3 x 12-byte-lane vectors         6,384,133
+  total rearrangement                                     27,274,318
+  script bytes excluding spread                                6,694
+371 columns:
+  build row-major matrix (pad + concatenate 50 rows)       2,034,202
+  delta swap b=32 (incl. in-Script mask)                   2,566,896
+  delta swap b=16 (incl. in-Script mask)                   4,290,727
+  delta swap b=8 (incl. in-Script mask)                    5,278,910
+  delta swap b=4 (incl. in-Script mask)                    5,837,823
+  delta swap b=2 (incl. in-Script mask)                    6,151,387
+  delta swap b=1 (incl. in-Script mask)                    6,326,931
+  split into 384 column items (64 x 4-byte lanes)          8,734,612
+  spread 371 columns into 3 x 12-byte-lane vectors        13,233,466
+  total rearrangement                                     54,454,954
+  script bytes excluding spread                                8,823

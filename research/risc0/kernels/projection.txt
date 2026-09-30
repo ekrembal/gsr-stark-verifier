@@ -1,0 +1,52 @@
+phase       work                                                         count      unit         varops  source
+setup       tap evaluations, Horner over 163 registers (sum s(s-1))      2,792    64,078    178,905,776  kernel
+setup       mix powers and combo_u accumulation (179 + 659) + remaining 90     928    64,078     59,464,384  kernel
+setup       extension additions                                          4,110     4,321     17,759,310  kernel
+setup       9 distinct tap points z * w^back                                 9    35,478        319,302  kernel
+setup       remaining base-field powers                                  2,208     7,720     17,045,760  scalar
+constraint  extension multiplications (measured)                         7,287    64,078    466,936,386  kernel
+constraint  extension additions (measured)                               5,289     4,321     22,853,769  kernel
+constraint  extension subtractions (measured)                            1,385     7,229     10,012,165  kernel
+invoke      OP_INVOKE overhead for single-point ext_mul calls           11,007     5,928     65,249,496  kernel
+final poly  256-point NTT twiddles                                       1,024    35,478     36,329,472  kernel
+final poly  256-point NTT additions/subtractions                         2,048     5,775     11,827,200  kernel
+final poly  per-query table read + equality                                 50    77,030      3,851,500  kernel
+rearrange   transpose 50 x 371 opened words into phase vectors               1 54,454,954     54,454,954  kernel
+deep        tap sums: 179 terms x 4 coords x 3 phases                    2,148    18,864     40,519,872  kernel
+deep        combo polynomials u_i(x): 21 terms                             252    18,864      4,753,728  kernel
+deep        divisor polynomials: 27 terms                                  324    18,864      6,111,936  kernel
+deep        reduce numerators and divisors (12 ext)                        144    48,001      6,912,144  kernel
+deep        numerator subtraction (6 ext)                                   72    10,942        787,824  kernel
+deep        x^1..x^6 per query                                             300     7,720      2,316,000  scalar
+deep        insert x powers into lanes                                     350     9,887      3,460,450  kernel
+deep        per query: extract 12 ext values                               600    53,050     31,830,000  kernel
+deep        per query: div * inv hint, check == 1                          300    92,453     27,735,900  kernel
+deep        per query: num * inv, sum                                      300    68,399     20,519,700  kernel
+fri         16-point inverse NTT twiddles (49) on vectors                1,764    66,865    117,949,860  kernel
+fri         16-point inverse NTT add/sub (64) on vectors                 2,304    10,942     25,210,368  kernel
+fri         scale c_i by mix^i (15 terms x 16 products)                  2,160    18,864     40,746,240  kernel
+fri         reduce scaled coefficients                                     576    48,001     27,648,576  kernel
+fri         per query-round: extract 16 coefficients                     2,400    53,050    127,320,000  kernel
+fri         per query-round: Horner in w_q (15 steps)                    2,250    39,799     89,547,750  kernel
+fri         per query-round: w_q table power                               150    25,000      3,750,000  est
+fri         per query-round: goal check (select + equality)                150    81,425     12,213,750  kernel
+hash        padded SHA-256 Merkle + Fiat-Shamir (priced)                     1 30,451,946     30,451,946  priced
+hash        Merkle direction handling                                    4,363     5,000     21,815,000  est
+
+setup            273,494,532
+constraint       499,802,320
+invoke            65,249,496
+final poly        52,008,172
+rearrange         54,454,954
+deep             144,947,554
+fri              444,386,544
+hash              52,266,946
+total          1,586,610,518
+of which unmetered estimates 25,565,000
+budget contributed by the seal alone (222,668 WU): 2,226,680,000
+budget of a 400,000 WU spend: 4,000,000,000
+glue x1.0: 1,586,610,518 varops = 158,661 WU of budget
+glue x1.5: 2,379,915,777 varops = 237,992 WU of budget
+glue x2.0: 3,173,221,036 varops = 317,322 WU of budget
+invoked ext_mul body bytes: 11,607 calls x 226 B = 2,623,182 of 4,000,000
+scalar-model extension multiplication: 216,304; packed kernel: 64,078

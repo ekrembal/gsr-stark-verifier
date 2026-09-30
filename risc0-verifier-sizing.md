@@ -2,16 +2,20 @@
 
 [`risc0-measurement.md`](risc0-measurement.md) priced the *hashing* of a real RISC Zero v3.0.6
 succinct receipt and found it cheap: 30.5M varops, 0.76% of a maximal standard spend. It left two
-questions open. This note answers both, and the answers point in opposite directions.
+questions open. This note answers both, then revisits the second with metered Script kernels.
 
 1. RISC Zero's `"sha-256"` suite is the raw compression function, so `OP_SHA256` cannot reproduce
    its digests. A padded suite plus regenerated control IDs was inferred to be enough. **It is:** a
    `"sha-256-padded"` suite was implemented and a genuine succinct receipt proven and verified under
    it, with no change to the recursion circuit, no change to seal size, and identical hash counts.
-2. Hashing is a lower bound that ignores field arithmetic. **The arithmetic is the blocker.** With
-   every BabyBear operation in the verifier counted, the measured verifier needs 8,386,531,106
-   varops at the primitive lower bound — 210% of what a maximal 400,000 WU spend funds, and 849%
-   after the calibration factor. Hashing is 0.36% of that total.
+2. Hashing is a lower bound that ignores field arithmetic. With every BabyBear operation in the
+   verifier counted and priced as one scalar modular opcode each, the verifier needs 8,386,531,106
+   varops — 210% of what a maximal 400,000 WU spend funds. Hashing is 0.36% of that total.
+3. That scalar pricing is not a lower bound on a Script verifier, because GSR's per-opcode charge
+   dominates it and one opcode can operate on many packed field elements. **Section 5 meters real
+   packed Tapscript v2 kernels and projects an optimised verifier at 1,586,610,518 varops**, 40% of
+   a maximal spend and 71% of the budget the seal's own weight contributes. That is a projection
+   composed from metered kernels, not a measured verifier: no complete verifier script exists yet.
 
 Reproduction and raw artifacts: [`research/risc0/README.md`](research/risc0/README.md).
 
@@ -130,7 +134,8 @@ target and the roughly 300,000 WU that is practical once the 222,668-byte seal i
 witness. Script size has not been measured, since no verifier script was written; a rough, unmeasured
 estimate is 60–150 KB, dominated by the 12,359-step constraint program (table-driven or unrolled),
 against Recursive Stwo's 144,905-byte script. Either way it is not the binding constraint, and
-neither is proof size. Varops is, by a factor of at least two and probably eight.
+neither is proof size. Under this pricing varops is, by a factor of at least two and probably eight;
+section 5 revisits the pricing.
 
 For scale, the shipped Recursive Stwo verifier does 8,667 multiplications, 15,747 additions and
 10,562 subtractions in 370,387 WU. RISC Zero's recursion verifier does 79x the multiplications. That
@@ -161,10 +166,101 @@ The levers, in order of leverage:
 - **Fewer, larger FRI folds or fewer queries.** Both trade against the 97-bit conjectured security
   that `QUERIES = 50` already buys, and both only touch the per-query half.
 
-None of these is a Script-side optimization: they are all changes to the proof that gets produced.
-The conclusion for the ranking is that RISC Zero passes the proof-size screen and the hash screen
-and fails the arithmetic screen, and that the next measurement worth making is of a *deliberately
-small* outer recursion circuit rather than of another zkVM's default one.
+These are all changes to the proof that gets produced, and this section's reasoning assumed the
+scalar pricing of section 3 was a floor for the Script side. It is not: section 5 shows that packing
+lowers the Script cost of the same verification by about 5x, which moves the default recursion
+circuit from 210% of a maximal spend to a projected 40%. A smaller wrapper remains the lever with
+the most headroom, but it is no longer a prerequisite on the evidence here.
+
+## 5. Script-side packing, metered
+
+GSR prices an opcode at 1,250 varops before any per-byte work, while a BabyBear multiplication of
+4-byte operands costs a few hundred varops of actual arithmetic. The scalar model therefore spends
+most of its 8.4B on opcode dispatch. Big-integer opcodes operate on up to 4 MB operands at linear
+or quadratic per-byte cost, so several field elements can share one opcode, provided every lane
+stays below its spacing and reduction is done lane-wise. Kernels for that were written as real
+Script and run in the pinned interpreter
+([`research/risc0/kernels/`](research/risc0/kernels/README.md)):
+
+- **Extension elements** occupy four 96-bit lanes. A product is one `OP_MUL` (a Kronecker
+  substitution producing seven convolution lanes), a fold of the top three lanes by `x^4 = -11`
+  and a lane-wise Barrett reduction to `[0, 4p)`. Inputs below `2^35` are admissible, so
+  additions stay lazy.
+- **Query vectors** put the same value for all 50 queries in 50 96-bit lanes (4,800-bit integers),
+  so a constant times a column is one `OP_MUL` for all queries. After the seal rearrangement below,
+  columns arrive as three 22-lane *phase vectors*, which is the layout the projection uses.
+- **Reduction** is Barrett with masks, shifts, one `OP_MUL` and one `OP_SUB`; `OP_MULTI` has no
+  multiply or modulo. Worst-case lane bounds are asserted for every reduction instance.
+- **Equality** of lazily reduced values uses witness-supplied lane quotients, range-checked to 32
+  bits, so that `a - b = p * Q` lane-wise; negative cases are checked to fail.
+- **Seal rearrangement** turns 50 query rows of 4-byte words into lane vectors with a 64x64 word
+  transpose (six delta-swap stages, masks built in Script), then splits and spreads the result.
+
+Marginal costs, from [`kernels.txt`](research/risc0/kernels/kernels.txt) and
+[`transpose.txt`](research/risc0/kernels/transpose.txt):
+
+| Kernel | Varops | Scalar-model equivalent |
+| --- | ---: | ---: |
+| Extension multiply, reduced | 64,078 | 216,304 |
+| Extension multiply via `OP_INVOKE` | 70,006 | — |
+| Extension add / subtract, lazy | 4,321 / 7,229 | 23,208 / 33,448 |
+| Extension times per-query base, reduced | 35,478 | 30,880 + reduction |
+| Constant times 50-lane vector, accumulated | 32,976 | 676,100 (50 mul + add) |
+| Constant times 22-lane phase vector, accumulated | 18,864 | — |
+| Barrett reduction, 50 lanes / 22 lanes | 77,905 / 48,001 | — |
+| Hinted equality of two extension elements | 28,375 | — |
+| Extract one query's extension value from 4 vectors | 53,050 | — |
+| Rearrange 50 x 179 DEEP-ALI words | 27,274,318 | — |
+| Rearrange 50 x 371 DEEP-ALI and FRI words | 54,454,954 | — |
+
+Packing pays unevenly. Query-vector work is 10–20x cheaper per value than scalar, but single-point
+extension arithmetic gains only 3.4x, and moving a value between the packed and per-query forms
+costs about as much as a multiplication. The design that follows from that keeps work vectorised
+wherever the operation is the same for every query (tap sums, DEEP-ALI numerators and divisors, the
+16-point inverse NTT of each FRI round, and scaling by mix powers) and drops to per-query scalars
+only where the evaluation point differs per query (FRI Horner steps in `w_q`, DEEP-ALI inverses
+checked against witness hints, goal checks). The final polynomial is evaluated once on its whole
+256-point domain by an NTT and read by index per query, instead of 6,400 per-query extension
+multiplications.
+
+Composed with the measured operation counts ([`projection.txt`](research/risc0/kernels/projection.txt)):
+
+| Phase | Scalar model (section 3) | Packed projection |
+| --- | ---: | ---: |
+| Setup and mixing | 1,819,058,520 | 273,494,532 |
+| Constraint evaluation | 1,745,279,840 | 499,802,320 |
+| `OP_INVOKE` overhead, single-point ext mul | — | 65,249,496 |
+| Final polynomial | (in FRI) | 52,008,172 |
+| Seal rearrangement | — | 54,454,954 |
+| DEEP-ALI, 50 queries | 1,607,655,680 | 144,947,554 |
+| FRI folding, 3 rounds | 3,184,085,120 | 444,386,544 |
+| Hashing and Merkle direction handling | 30,451,946 | 52,266,946 |
+| **Total** | **8,386,531,106** | **1,586,610,518** |
+
+The projection needs 158,661 WU of varops budget. The seal alone is 222,668 WU of witness and so
+funds 2,226,680,000 varops; with a script of the estimated 60–150 KB the spend is roughly 290,000–
+375,000 WU. The verifier fits if the stack scheduling, control flow and parsing that the kernels do
+not include cost less than about 1.8–2.3x the kernel total, and at 2.0x it needs 317,322 WU of
+budget. The shipped Stwo verifier's 4.05x factor is not the right comparison, because it is measured
+against bare primitive prices while these kernel prices already include operand fetches and
+reduction.
+
+Two limits are closer than the varops total suggests. Invoking `ext_mul` as a defined function
+11,607 times uses 2,623,182 of the 4,000,000 cumulative invoked-body bytes, because the 226-byte
+body inlines its mask and fold constants; keeping those on the stack instead costs `OP_PICK`s.
+Constraint evaluation, at 500M, is now the largest single phase and gains least from packing, since
+its 7,287 multiplications are at a single point; deferring reductions across its sums of products,
+which this projection does not do, is the next lever there.
+
+What the projection does not contain: the composed verifier itself; Fiat-Shamir field sampling and
+query-index derivation; parsing the seal into witness items; canonical range checks on seal words;
+and the Montgomery form of seal words, which the design absorbs by folding `R^{-1}` into the
+constants that multiply them. Two unit prices are unmetered estimates (25,565,000 varops in total):
+root-of-unity table powers and Merkle direction handling. The conclusion stands on those terms:
+**RISC Zero's default recursion circuit is projected to verify in one standard spend with about 2x
+headroom for glue, and the evidence for that is a composition of metered kernels, not a verifier.**
+Writing the verifier, with a native reference differential test, is what would turn it into a
+measurement.
 
 ## Caveats
 
@@ -173,4 +269,6 @@ operand retrieval (`OP_PICK`/`OP_ROLL`), no witness parsing, no canonical range 
 `OP_INVOKE` overhead, and no stack plumbing. They are lower bounds in the same sense as the hashing
 rows, which is why the 4.05x calibration from the shipped Stwo verifier is reported alongside. The
 measurement is of RISC Zero's own Rust verifier; a Script verifier is free to compute different
-things (batching, witness hints), so these counts bound the *port*, not the *problem*.
+things (batching, witness hints), so these counts bound the *port*, not the *problem*. Section 5
+quantifies how much: its kernels are metered in the interpreter, but its operation schedule is
+derived from these counts, the tap set and the FRI structure, and its total is a projection.

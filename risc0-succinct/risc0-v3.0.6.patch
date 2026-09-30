@@ -747,10 +747,10 @@ index e7ddb1a2..56590960 100644
          // Extract the out buffer and po2 from slice while checking sizes.
 diff --git a/risc0/zkvm/methods/guest/src/bin/gsr_covenant.rs b/risc0/zkvm/methods/guest/src/bin/gsr_covenant.rs
 new file mode 100644
-index 00000000..b0e1d37c
+index 00000000..b8e7dbbd
 --- /dev/null
 +++ b/risc0/zkvm/methods/guest/src/bin/gsr_covenant.rs
-@@ -0,0 +1,72 @@
+@@ -0,0 +1,74 @@
 +// Copyright 2026 RISC Zero, Inc.
 +//
 +// Licensed under the Apache License, Version 2.0 (the "License");
@@ -796,13 +796,15 @@ index 00000000..b0e1d37c
 +    out
 +}
 +
++/// Bitcoin CompactSize, rejecting non-minimal encodings (OP_TX serializes outputs minimally).
 +fn compact_size(data: &[u8], pos: &mut usize) -> usize {
-+    let n = match take(data, pos, 1)[0] {
-+        0xfd => u16::from_le_bytes(take(data, pos, 2).try_into().unwrap()) as u64,
-+        0xfe => u32::from_le_bytes(take(data, pos, 4).try_into().unwrap()) as u64,
-+        0xff => u64::from_le_bytes(take(data, pos, 8).try_into().unwrap()),
-+        n => n as u64,
++    let (n, min) = match take(data, pos, 1)[0] {
++        0xfd => (u16::from_le_bytes(take(data, pos, 2).try_into().unwrap()) as u64, 0xfd),
++        0xfe => (u32::from_le_bytes(take(data, pos, 4).try_into().unwrap()) as u64, 0x1_0000),
++        0xff => (u64::from_le_bytes(take(data, pos, 8).try_into().unwrap()), 0x1_0000_0000),
++        n => (n as u64, 0),
 +    };
++    assert!(n >= min, "non-minimal compact size");
 +    usize::try_from(n).expect("length overflow")
 +}
 +
@@ -857,7 +859,7 @@ index 00a0bc9d..eff5bc63 100644
          "poseidon2" => &POSEIDON2_CONTROL_IDS,
          "sha-256" => &SHA256_CONTROL_IDS,
 diff --git a/risc0/zkvm/src/host/recursion/tests.rs b/risc0/zkvm/src/host/recursion/tests.rs
-index 51108aab..7d1b78b0 100644
+index 51108aab..da8b44f5 100644
 --- a/risc0/zkvm/src/host/recursion/tests.rs
 +++ b/risc0/zkvm/src/host/recursion/tests.rs
 @@ -22,7 +22,9 @@ use risc0_zkp::{
@@ -1043,7 +1045,7 @@ index 51108aab..7d1b78b0 100644
  #[test_log::test]
  fn test_recursion_lift_join_identity_p254_e2e() {
      // Prove the base case
-@@ -577,3 +735,173 @@ fn union() {
+@@ -577,3 +735,195 @@ fn union() {
      }
      let _ = mmr.root().unwrap();
  }
@@ -1216,6 +1218,28 @@ index 51108aab..7d1b78b0 100644
 +    .unwrap();
 +    println!("covenant image id : {}", Digest::from(GSR_COVENANT_ID));
 +    println!("covenant claim    : {}", receipt.claim.digest());
++}
++
++/// `OP_TX` serializes outputs with minimal CompactSize lengths, so the guest must reject any other
++/// encoding: its journal could never match a spending transaction.
++#[test]
++fn gsr_covenant_rejects_nonminimal_compact_size() {
++    let spk = [&[0x51u8, 0x20][..], &[0u8; 32]].concat();
++    let run = |prefix: &[u8]| {
++        let outputs = [&1u64.to_le_bytes()[..], prefix, &spk].concat();
++        let env = ExecutorEnv::builder()
++            .write(&b"gsr covenant demo secret".to_vec())
++            .unwrap()
++            .write(&outputs)
++            .unwrap()
++            .build()
++            .unwrap();
++        execute_elf(env, GSR_COVENANT_ELF)
++    };
++    assert!(run(&[0x22]).is_ok());
++    assert!(run(&[0xfd, 0x22, 0x00]).is_err());
++    assert!(run(&[0xfe, 0x22, 0x00, 0x00, 0x00]).is_err());
++    assert!(run(&[0xff, 0x22, 0, 0, 0, 0, 0, 0, 0]).is_err());
 +}
 diff --git a/risc0/zkvm/src/receipt.rs b/risc0/zkvm/src/receipt.rs
 index 55cb42b4..dd233d7b 100644

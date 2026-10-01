@@ -1,0 +1,10 @@
+[package]
+name = "pr-commitment-tree"
+edition.workspace = true
+license.workspace = true
+version.workspace = true
+
+[dependencies]
+pr-protocol-types.workspace = true
+pr-crypto.workspace = true
+serde.workspace = true

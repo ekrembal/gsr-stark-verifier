@@ -1,0 +1,12 @@
+[package]
+name = "pr-mempool"
+edition.workspace = true
+license.workspace = true
+version.workspace = true
+
+[dependencies]
+pr-protocol-types.workspace = true
+pr-bitcoin-adapter.workspace = true
+pr-state-transition.workspace = true
+pr-scanner.workspace = true
+serde.workspace = true

@@ -1,0 +1,56 @@
+{
+  "reject_forged_statement": "Error: rejected: Proof",
+  "reject_corrupt_proof": "Error: rejected: Proof",
+  "submit_seconds": 0.09,
+  "reject_resubmission": "Error: rejected: NullifierReserved",
+  "reject_missing_funding": "Error: rejected: Rule(FundingInput)",
+  "witness_equals_reference": true,
+  "guest_exec_seconds": 47.8,
+  "guest_log": [
+    "image id a55fa2f95eb766642b9bd933c834775aa90e71dd8054b129107eea7030cbf761",
+    "executed: 1215383914 cycles, 1276 segments, 47.80756625s"
+  ],
+  "guest_journal_equals_native": true,
+  "reject_after_settlement": "Error: rejected: NullifierSpent",
+  "accept_and_rollback": {
+    "before": {
+      "backing_sats": 10000,
+      "batch_number": 0,
+      "commitment_count": 0,
+      "nullifier_next_index": 1,
+      "pending": 1,
+      "rollup_id": "181e83faa3916307d316fd28fd792439464ed60145a313fa3b9b5f88354d2779",
+      "state_root": "1c69a5fc8c51392072295f4cdee7bb19d29e3748e0e8666ff4fe55683369e3d3",
+      "utxo": [
+        "0101010101010101010101010101010101010101010101010101010101010101",
+        0
+      ]
+    },
+    "after": {
+      "backing_sats": 29300,
+      "batch_number": 1,
+      "commitment_count": 2,
+      "nullifier_next_index": 3,
+      "pending": 0,
+      "rollup_id": "181e83faa3916307d316fd28fd792439464ed60145a313fa3b9b5f88354d2779",
+      "state_root": "a97383d86022667d1a5185b55ae609774684e680e537ca90dee01adbb4e28f41",
+      "utxo": [
+        "0202020202020202020202020202020202020202020202020202020202020202",
+        0
+      ]
+    },
+    "restored": {
+      "backing_sats": 10000,
+      "batch_number": 0,
+      "commitment_count": 0,
+      "nullifier_next_index": 1,
+      "pending": 0,
+      "rollup_id": "181e83faa3916307d316fd28fd792439464ed60145a313fa3b9b5f88354d2779",
+      "state_root": "1c69a5fc8c51392072295f4cdee7bb19d29e3748e0e8666ff4fe55683369e3d3",
+      "utxo": [
+        "0101010101010101010101010101010101010101010101010101010101010101",
+        0
+      ]
+    }
+  }
+}

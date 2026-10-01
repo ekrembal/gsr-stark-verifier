@@ -1,0 +1,16 @@
+[package]
+name = "pr-tests"
+edition.workspace = true
+license.workspace = true
+version.workspace = true
+publish = false
+
+[dependencies]
+pr-protocol-types.workspace = true
+pr-crypto.workspace = true
+pr-bitcoin-adapter.workspace = true
+pr-state-transition.workspace = true
+pr-wallet-core.workspace = true
+pr-mempool.workspace = true
+pr-scanner.workspace = true
+rand_core = { version = "0.6.4", features = ["getrandom"] }

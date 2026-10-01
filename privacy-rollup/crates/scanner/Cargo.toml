@@ -1,0 +1,13 @@
+[package]
+name = "pr-scanner"
+edition.workspace = true
+license.workspace = true
+version.workspace = true
+
+[dependencies]
+pr-protocol-types.workspace = true
+pr-commitment-tree.workspace = true
+pr-indexed-nullifier-tree.workspace = true
+pr-bitcoin-adapter.workspace = true
+pr-state-transition.workspace = true
+serde.workspace = true

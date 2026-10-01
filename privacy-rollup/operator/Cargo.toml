@@ -1,0 +1,17 @@
+[package]
+name = "pr-operator"
+edition.workspace = true
+license.workspace = true
+version.workspace = true
+
+[dependencies]
+pr-protocol-types.workspace = true
+pr-bitcoin-adapter.workspace = true
+pr-state-transition.workspace = true
+pr-scanner.workspace = true
+pr-mempool.workspace = true
+pr-provekit-adapter.workspace = true
+serde = { workspace = true, features = ["std"] }
+serde_json.workspace = true
+hex = { workspace = true, features = ["std"] }
+anyhow.workspace = true

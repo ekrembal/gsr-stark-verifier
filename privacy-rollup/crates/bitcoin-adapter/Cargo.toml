@@ -1,0 +1,9 @@
+[package]
+name = "pr-bitcoin-adapter"
+edition.workspace = true
+license.workspace = true
+version.workspace = true
+
+[dependencies]
+pr-protocol-types.workspace = true
+serde.workspace = true

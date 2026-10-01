@@ -59,8 +59,16 @@ int main(int argc, char** argv) {
         checker=std::make_unique<TransactionSignatureChecker>(&*transaction,0,amount,txdata,MissingDataBehavior::FAIL);
         execution.m_tapleaf_hash=ComputeTapleafHash(TAPROOT_LEAF_TAPSCRIPT_V2,raw);
         execution.m_tapleaf_hash_init=true;
-        // The last witness item is the control block, as in script-path validation (read by OP_TX).
-        const auto& control=transaction->vin.at(0).scriptWitness.stack.back();
+        // The last witness item is the control block (or the annex, then the control block), as in script-path
+        // validation (read by OP_TX).
+        const auto& witness=transaction->vin.at(0).scriptWitness.stack;
+        const bool has_annex=witness.size()>=2 && !witness.back().empty() && witness.back()[0]==ANNEX_TAG;
+        if(has_annex) {
+            execution.m_annex=witness.back();
+            execution.m_annex_hash=(HashWriter{}<<witness.back()).GetSHA256();
+            execution.m_annex_present=true;
+        }
+        const auto& control=witness.at(witness.size()-(has_annex?2:1));
         execution.m_control_block=control;
         execution.m_control_block_init=true;
         execution.m_taptree_root=ComputeTaprootMerkleRoot(control,execution.m_tapleaf_hash);

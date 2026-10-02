@@ -23,17 +23,34 @@ import measure
 from transaction import meter_request
 
 
+def check_expected_profile(receipt, profile):
+    # Verifier roots/parameters are trusted configuration, not values an
+    # arbitrary supplied receipt may choose for the generated Script.
+    fields = ('hashfn', 'circuit_info', 'proof_system_info', 'control_id',
+              'control_root', 'inner_control_root', 'verifier_parameters')
+    for field in fields:
+        if receipt[field] != profile[field]:
+            raise ValueError('receipt differs from expected profile: ' + field)
+    for field in ('input', 'post', 'sys_exit', 'user_exit', 'assumptions_digest'):
+        if receipt['claim'][field] != profile['claim'][field]:
+            raise ValueError('receipt differs from expected claim profile: ' + field)
+
+
 def main():
     p=argparse.ArgumentParser(description=__doc__)
     p.add_argument('--receipt',type=Path,required=True)
     p.add_argument('--seal',type=Path,required=True)
     p.add_argument('--journal',type=Path,required=True)
     p.add_argument('--image',required=True)
+    p.add_argument('--profile',type=Path,
+                   default=ROOT/'privacy-rollup/fixtures/apply-batch/receipt-template.json',
+                   help='Trusted expected padded verifier profile; guest image and journal are supplied separately')
     p.add_argument('--out',type=Path,required=True)
     a=p.parse_args()
     a.out.mkdir(parents=True,exist_ok=False)
     start=time.monotonic()
     receipt=json.loads(a.receipt.read_text());seal=a.seal.read_bytes()
+    check_expected_profile(receipt,json.loads(a.profile.read_text()))
     assert receipt['claim']['pre']==a.image
     assert bytes.fromhex(receipt['journal'])==a.journal.read_bytes()
     assert receipt['claim']['assumptions_digest']=='00'*32
@@ -74,6 +91,8 @@ def main():
             'image_id':a.image,'reference_verified':True,'limits':limits,
             'wrong_claim_output_rejected':True,'valid':good,'negative':bad,
             'seconds':time.monotonic()-start,'receipt_sha256':hashlib.sha256(a.receipt.read_bytes()).hexdigest(),
+            'expected_profile_sha256':hashlib.sha256(a.profile.read_bytes()).hexdigest(),
+            'expected_profile_matched':True,
             'seal_sha256':hashlib.sha256(seal).hexdigest()}
     (a.out/'report.json').write_text(json.dumps(report,indent=2)+'\n')
     keys=['ok','transaction_weight','budget','varops','peak_entries','peak_payload_bytes']

@@ -117,7 +117,7 @@ version = "1"
 default-features = false
 
 [target.'cfg(target_os = "zkvm")'.dependencies.risc0-bigint2]
-path = "../../../../../risc0/risc0/bigint2"
+path = "../../../../risc0/risc0/bigint2"
 
 [dev-dependencies.blake2]
 version = "0.10"

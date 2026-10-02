@@ -8,9 +8,9 @@ use tracing::{span, Event, Id, Metadata, Subscriber};
 
 #[derive(Default)]
 struct Profile {
-    names: Vec<&'static str>,
-    stack: Vec<(usize, u64)>,
-    totals: BTreeMap<&'static str, (u64, u64)>,
+    names: Vec<(&'static str, &'static str)>,
+    stack: Vec<(usize, u64, u64)>,
+    totals: BTreeMap<(&'static str, &'static str), (u64, u64, u64)>,
 }
 
 struct CycleSub(&'static Mutex<Profile>);
@@ -21,23 +21,33 @@ impl Subscriber for CycleSub {
     }
     fn new_span(&self, a: &span::Attributes<'_>) -> Id {
         let mut p = self.0.lock().unwrap();
-        p.names.push(a.metadata().name());
-        Id::from_u64(p.names.len() as u64)
+        let key = (a.metadata().module_path().unwrap_or(""), a.metadata().name());
+        let i = p.names.iter().position(|n| *n == key).unwrap_or_else(|| {
+            p.names.push(key);
+            p.names.len() - 1
+        });
+        Id::from_u64(i as u64 + 1)
     }
     fn record(&self, _: &Id, _: &span::Record<'_>) {}
     fn record_follows_from(&self, _: &Id, _: &Id) {}
     fn event(&self, _: &Event<'_>) {}
     fn enter(&self, id: &Id) {
-        self.0.lock().unwrap().stack.push((id.into_u64() as usize, env::cycle_count()));
+        self.0.lock().unwrap().stack.push((id.into_u64() as usize, env::cycle_count(), 0));
     }
-    fn exit(&self, _: &Id) {
+    fn exit(&self, id: &Id) {
         let now = env::cycle_count();
         let mut p = self.0.lock().unwrap();
-        let (i, t) = p.stack.pop().unwrap();
+        let (i, t, children) = p.stack.pop().unwrap();
+        assert_eq!(i as u64, id.into_u64(), "profile span nesting");
+        let elapsed = now - t;
+        if let Some(parent) = p.stack.last_mut() {
+            parent.2 += elapsed;
+        }
         let name = p.names[i - 1];
         let e = p.totals.entry(name).or_default();
-        e.0 += now - t;
-        e.1 += 1;
+        e.0 += elapsed;
+        e.1 += elapsed - children;
+        e.2 += 1;
     }
 }
 
@@ -91,14 +101,17 @@ fn main() {
     let vk = env::read_frame();
     let proof = env::read_frame();
     let t1 = env::cycle_count();
-    let mut verifier: Verifier = postcard::from_bytes(&vk).expect("verifier key");
+    let verifier: Verifier = postcard::from_bytes(&vk).expect("verifier key");
+    let t_vk = env::cycle_count();
     let proof: NoirProof = postcard::from_bytes(&proof).expect("proof");
     let t2 = env::cycle_count();
-    eprintln!("read {} deserialize {}", t1 - t0, t2 - t1);
-    verifier.verify(&proof).expect("join-split proof");
+    eprintln!("phase read: {} cycles", t1 - t0);
+    eprintln!("phase deserialize_vk: {} cycles", t_vk - t1);
+    eprintln!("phase deserialize_proof: {} cycles", t2 - t_vk);
+    verifier.verify_ref(&proof).expect("join-split proof");
     eprintln!("verify cycles: {}", env::cycle_count() - t2);
-    for (n, (c, k)) in &PROFILE.lock().unwrap().totals {
-        eprintln!("span {n}: {c} cycles over {k} entries");
+    for ((module, n), (inclusive, exclusive, calls)) in &PROFILE.lock().unwrap().totals {
+        eprintln!("span {module}::{n}: inclusive={inclusive} exclusive={exclusive} calls={calls}");
     }
     env::commit(&proof.public_inputs.0.len());
 }

@@ -31,6 +31,10 @@ ProveKit join-split proofs (Noir, WHIR over BN254, hash-only)
 
 ## Measurements
 
+The table below records the original PR measurements. The aggregation optimization
+measurements, phase profile, validation results and remaining limits are in
+[reports/aggregation-optimizations.md](reports/aggregation-optimizations.md).
+
 | Metric | Value |
 |---|---:|
 | Join-split R1CS constraints / witnesses | 38,819 / 51,805 (142 Poseidon2 permutations) |
@@ -66,11 +70,15 @@ Settlement weight does not depend on batch contents beyond the annex (one nullif
 
 ## Reproduce
 
-Dependencies are path dependencies on two sibling checkouts of the repository directory (`../../risc0`,
-`../../provekit` relative to this repository's root):
+Dependencies are path dependencies on two sibling checkouts of the repository directory (`../risc0`,
+`../provekit` relative to this repository's root):
 
 * RISC Zero v3.0.6 (`1cc70cf05033a79ebc90f07c679cb4bd1cd301b9`) with [`../risc0-succinct/risc0-v3.0.6.patch`](../risc0-succinct/risc0-v3.0.6.patch);
-* ProveKit `4ee40639fb8849aeeba37761fdda07f28367e81d` with [`patches/provekit-4ee40639.patch`](patches/provekit-4ee40639.patch).
+* ProveKit `4ee40639fb8849aeeba37761fdda07f28367e81d` with [`patches/provekit-4ee40639.patch`](patches/provekit-4ee40639.patch),
+  then [`patches/provekit-aggregation.patch`](patches/provekit-aggregation.patch).
+* WHIR remains version 0.2.0; the vendored published source has the local
+  [`patches/whir-blinding.patch`](patches/whir-blinding.patch) algorithmic optimization. Its original
+  archive checksum and necessary same-version lockfile source deviation are documented in the review report.
 
 Build the pinned node and meter first (`bash recursive-stwo/tools/build.sh` from the repository root).
 
@@ -79,7 +87,7 @@ cd privacy-rollup
 cargo test --workspace                                   # protocol, trees, transition, wallet, scanner, mempool, scenarios
 cargo build --release -p pr-operator -p pr-provekit-adapter
 (cd prover && cargo build --release)                     # builds the guest; prints its image id
-../../provekit/target/release/provekit-cli prepare circuits/joinsplit-2x2 -p js.pkp -v js.pkv   # byte-identical to fixtures/joinsplit
+../../provekit/target/release/provekit-cli prepare circuits/joinsplit-2x2 -p js.pkp -v js.pkv   # fixtures pin the exported verifier-key bytes
 python3 tools/operator_joinsplit.py                      # real ProveKit proof through the operator and the guest (executed) (copy in reports/operator-joinsplit.json)
 python3 tools/regtest_demo.py --batches 10               # proven empty batches settled on regtest -> build/privacy-rollup-regtest.json (copy in reports/regtest.json)
 ```

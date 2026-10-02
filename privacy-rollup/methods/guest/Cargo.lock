@@ -2672,8 +2672,6 @@ dependencies = [
 [[package]]
 name = "provekit-whir"
 version = "0.2.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e79f9438fb42671b8437826b5d03233b0584154a300e648de38b0dae6725db6b"
 dependencies = [
  "approx",
  "ark-ff 0.6.0",

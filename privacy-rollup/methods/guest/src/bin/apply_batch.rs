@@ -23,7 +23,7 @@ fn main() {
             let proof: NoirProof = postcard::from_bytes(&env::read_frame()).expect("proof");
             let statement: Vec<_> = t.public.public_inputs().iter().map(pr_crypto::to_fr).collect();
             assert!(proof.public_inputs.0 == statement, "proof public inputs differ from the statement");
-            verifier.clone().verify(&proof).expect("join-split proof");
+            verifier.verify_ref(&proof).expect("join-split proof");
         }
     }
     let effects = apply_batch(&witness).expect("state transition");

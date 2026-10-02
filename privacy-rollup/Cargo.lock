@@ -3106,6 +3106,7 @@ name = "pr-provekit-adapter"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "ark-ff 0.6.0",
  "hex",
  "postcard",
  "pr-crypto",
@@ -3117,6 +3118,7 @@ dependencies = [
  "provekit-common",
  "provekit-prover",
  "provekit-verifier",
+ "provekit-whir",
  "serde_json",
  "sha2 0.10.9",
 ]
@@ -3346,8 +3348,6 @@ dependencies = [
 [[package]]
 name = "provekit-whir"
 version = "0.2.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e79f9438fb42671b8437826b5d03233b0584154a300e648de38b0dae6725db6b"
 dependencies = [
  "approx",
  "ark-ff 0.6.0",

@@ -1,0 +1,112 @@
+[package]
+name = "provekit-whir"
+version = "0.2.0"
+edition = "2021"
+description = "An implementation of the WHIR polynomial commitment scheme"
+license = "MIT"
+repository = "https://github.com/worldfnd/whir"
+
+default-run = "main"
+rust-version = "1.87.0"
+
+[lib]
+name = "whir"
+
+[lints.clippy]
+# all lints that are on by default (correctness, suspicious, style, complexity, perf)
+all = { level = "warn", priority = -1 }
+
+# new lints that are still under development
+nursery = { level = "warn", priority = -1 }
+# avoid lints that are too pedantic
+doc_markdown = "allow"
+
+# lints which are rather strict or have occasional false positives
+pedantic = { level = "warn", priority = -1 }
+# avoid lints that are too pedantic
+must_use_candidate = "allow"
+cast_possible_truncation = "allow"
+cast_precision_loss = "allow"
+missing_errors_doc = "allow"
+missing_panics_doc = "allow"
+default_trait_access = "allow"
+module_name_repetitions = "allow"
+missing_safety_doc = "allow"
+many_single_char_names = "allow"
+should_panic_without_expect = "allow"
+suboptimal_flops = "allow"
+similar_names = "allow"
+redundant_closure_for_method_calls = "allow"
+
+[dependencies]
+ark-std = { version = "0.6", features = ["std"] }
+ark-ff = { version = "0.6", features = ["asm", "std"] }
+ark-serialize = "0.6"
+blake3 = { version = "=1.8.3", features = ["digest", "traits-preview"] }
+sha3 = { version = "0.10.7", features = ["asm", "oid"] }
+clap = { version = "4.4", features = ["derive"] }
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+spongefish = { package = "provekit-spongefish", version = "0.2.0", features = ["ark-ff"] }
+rayon = { version = "1.10", optional = true }
+itertools = "0.14"
+tracing = { version = "0.1", features = ["attributes"], optional = true }
+hex = "0.4"
+static_assertions = "1.1.0"
+ciborium = "0.2"
+digest = { version = "0.10.7", features = ["oid"] }
+sha2 = { version = "0.10.9", features = ["oid", "asm"] }
+zerocopy = "0.8.33"
+zeroize = { version = "1", features = ["zeroize_derive"] }
+hex-literal = "0.4.1"
+const-oid = "0.9.6"
+arrayvec = "0.7.6"
+derive-where = { version = "1.6.0", features = ["safe"] }
+approx = "0.5.1"
+ordered-float = { version = "5.1.0", features = ["serde"] }
+
+[dev-dependencies]
+proptest = "1.0"
+serde_json = "1.0"
+divan = { version = "4.2", package = "codspeed-divan-compat" }
+tracing-subscriber = { version = "0.3.22", features = ["env-filter"] }
+
+[profile.release]
+debug = "line-tables-only"
+lto = "fat"
+
+[features]
+default = ["parallel"]
+# Verifier panics instead of returning errors. Useful for debuging.
+verifier_panics = []
+parallel = ["dep:rayon"]
+rayon = ["dep:rayon"]
+asm = ["ark-ff/asm"]
+tracing = ["dep:tracing"]
+
+[[bench]]
+name = "expand_from_coeff"
+harness = false
+
+[[bench]]
+name = "sumcheck"
+harness = false
+
+# Disable untill fixed.
+# [[bench]]
+# name = "zk_whir"
+# harness = false
+
+[profile.dev]
+debug = 1
+opt-level = 1
+codegen-units = 16
+incremental = true
+
+[profile.samply]
+inherits = "release"
+lto = "thin" # LTO breaks line attribution.
+
+# Enable a large amount of optimization in the dev profile for dependencies.
+[profile.dev.package."*"]
+opt-level = 3

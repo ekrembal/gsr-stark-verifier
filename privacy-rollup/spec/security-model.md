@@ -7,8 +7,11 @@
   not audited.
 * **ProveKit / WHIR**: soundness of the ProveKit WHIR-R1CS verifier compiled into the guest, at the revision
   pinned in `crates/provekit-adapter/Cargo.toml`. Post-quantum: hash-based only. Its own verifier ignores a
-  returned `FinalClaim` in three places (compiler warnings in `provekit/verifier/src/whir_r1cs.rs`); this needs
-  upstream review.
+  returned `FinalClaim` in three places (compiler warnings in `provekit/verifier/src/whir_r1cs.rs`). In pinned
+  `provekit-whir` 0.2.0, the zkWHIR path checks that blinded linear-form claim inline and checks the
+  blinding polynomial's claim internally. These warnings therefore do not, by themselves, demonstrate
+  an omitted check in this version. This is source inspection, not a soundness proof; upstream review
+  and regression coverage are still needed. See [the optimization audit](../reports/aggregation-optimizations.md).
 * **Poseidon2 (BN254)** for notes, nullifiers and the commitment tree; **SHA-256** everywhere else;
   **ML-KEM-768 + XChaCha20-Poly1305** for note confidentiality.
 * **GSR** consensus rules at the pinned commit, including `OP_TX` semantics as implemented there.
@@ -36,7 +39,8 @@ the copy. Wallets and the operator follow only the outpoint chain that descends 
 ## Not implemented / not yet established
 
 * **Proving join-split batches.** A batch containing one ProveKit proof is executed in the guest
-  (1.21B cycles) with a journal identical to the native transition, but proving it takes an estimated ~100 h
+  (the original baseline was 1.21B cycles; see [current measurements](../reports/aggregation-optimizations.md))
+  with a journal identical to the native transition, but the original proving estimate was ~100 h
   on the available 8-core CPU, so no such receipt exists yet. Only empty (anchor-only) batches are proven
   and settled on regtest.
 * **Operator**: `pr-operator submit` verifies the ProveKit proof and reserves nullifiers and funding coins in a

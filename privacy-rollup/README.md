@@ -25,13 +25,14 @@ ProveKit join-split proofs (Noir, WHIR over BN254, hash-only)
 | ProveKit join-split circuit | Implemented; proofs generated and verified natively and inside the guest |
 | `apply_batch` guest | Implemented; journal equals the native transition byte for byte |
 | Empty / anchor-only batches | **Proven** (succinct receipt) and settled consecutively on activated regtest |
-| Batches containing join-splits | **No complete receipt yet**: latest unpublished experiment executes the frozen batch in 423.24M cycles / 475 segments; bounded real segment proofs are documented below |
+| Batches containing join-splits | **No complete receipt yet**: latest unpublished experiment executes the frozen batch in 423.49M cycles / 475 segments; bounded real segment proofs are documented below |
 | Covenant (`OP_TX` binding, successor leaf, `1 CSV`) | Implemented, metered, mined on regtest; altered spends rejected |
 | Relay | Consensus-valid; **nonstandard** under the pinned node's policy (annex) |
 
 ## Measurements
 
-The table below records the original PR measurements. The aggregation optimization
+The [unpublished review](reports/aggregation-review.md) summarizes the latest
+results and remaining proving obstacles. The table below records the original PR measurements. The aggregation optimization
 measurements, phase profile, validation results and remaining limits are in
 [reports/aggregation-optimizations.md](reports/aggregation-optimizations.md). The latest
 unpublished [lazy-covector experiment](reports/lazy-covector-optimization.md) follows
@@ -86,6 +87,9 @@ Dependencies are path dependencies on two sibling checkouts of the repository di
 * WHIR remains version 0.2.0; the vendored published source has the local
   [`patches/whir-blinding.patch`](patches/whir-blinding.patch) algorithmic optimization. Its original
   archive checksum and necessary same-version lockfile source deviation are documented in the review report.
+* Guest SHA-2 remains 0.10.9, with the official RISC Zero accelerator source pinned to
+  `8631fabdea7bdffa97b11868e04e73491d8e5bcf`; the native/client workspace retains its
+  registry source. See [the SHA experiment](reports/sha256-accelerator-experiment.md).
 
 Build the pinned node and meter first (`bash recursive-stwo/tools/build.sh` from the repository root).
 

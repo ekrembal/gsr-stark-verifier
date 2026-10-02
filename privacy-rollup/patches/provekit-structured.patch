@@ -6,10 +6,10 @@ index 346b7c43..d1ad548a 100644
 +pub mod structured_matrix;
 diff --git a/provekit/common/src/utils/structured_matrix.rs b/provekit/common/src/utils/structured_matrix.rs
 new file mode 100644
-index 00000000..c6d44fb5
+index 00000000..de74332f
 --- /dev/null
 +++ b/provekit/common/src/utils/structured_matrix.rs
-@@ -0,0 +1,367 @@
+@@ -0,0 +1,372 @@
 +//! Exact linear evaluator for the pinned privacy-rollup JoinSplit matrices.
 +//!
 +//! This is a matrix operation, not a proof verifier. The caller must bind the
@@ -344,10 +344,9 @@ index 00000000..c6d44fb5
 +
 +    #[tracing::instrument(skip_all, name = "fixed_matrix_mle")]
 +    fn mle_evaluate(&self, point: &[FieldElement]) -> FieldElement {
-+        assert_eq!(
-+            point.len(),
-+            self.shared.domain_size.trailing_zeros() as usize
-+        );
++        let dimension = self.shared.domain_size.trailing_zeros() as usize;
++        assert!(point.len() >= dimension);
++        let leading = point.len()-dimension;
 +        let mut cache = self
 +            .shared
 +            .cache
@@ -360,8 +359,14 @@ index 00000000..c6d44fb5
 +        }
 +        // Index zero is the start of this commitment, not global witness zero.
 +        // In particular the second commitment uses column index c-5530.
-+        let columns = calculate_evaluations_over_boolean_hypercube_for_eq(point, self.shared.len);
-+        let values = evaluate_bilinear(&self.shared.rows, &columns, self.shared.offset);
++        // LinearForm also permits extra leading coordinates. Factor those
++        // zeros out explicitly, avoiding shifts by an unbounded point length.
++        let columns = calculate_evaluations_over_boolean_hypercube_for_eq(&point[leading..], self.shared.len);
++        let mut values = evaluate_bilinear(&self.shared.rows, &columns, self.shared.offset);
++        if leading > 0 {
++            let factor: FieldElement = point[..leading].iter().map(|x| FieldElement::from(1u64)-x).product();
++            for value in &mut values { *value *= factor; }
++        }
 +        *cache = Some((point.to_vec(), values));
 +        values[self.matrix]
 +    }

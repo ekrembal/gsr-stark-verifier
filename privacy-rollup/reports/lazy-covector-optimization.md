@@ -1,5 +1,7 @@
 # Lazy covectors for the fixed JoinSplit matrices
 
+The original lazy checkpoint is `76ae74a`; its measurements below remain
+recorded separately from the final contract extension described at the end.
 This unpublished follow-up to `7f7c303` avoids constructing three full witness
 weight vectors and folding six padded commitment prefixes. It evaluates the
 same three matrix bilinear forms directly at each WHIR commitment's final point.
@@ -117,3 +119,26 @@ Use new evidence labels. Raw paired measurements and validation evidence are in
 execution measurements. Normal-size real segment proving is documented in
 `normal-segment-proving.md`. Lower guest cycles alone do not establish feasible
 full aggregation or close the outstanding protocol audit requirements.
+
+## Final linear-form contract extension
+
+The final implementation also accepts evaluation points longer than the domain
+dimension, as required by `LinearForm`. Extra leading zero-padding factors are
+computed separately, so even a point longer than the machine word does not cause
+an oversized bit shift. Differential tests now include 19- and 65-coordinate
+points, changed/repeated cache keys, and the original exact-dimension points.
+All 40 native tests and all nine guest rejection cases pass. A fresh operator
+proof also passes native/guest journal equality, replay rejection, accept and
+rollback on the final image.
+
+Two final settlement runs both use 423,486,268 cycles and 475 segments, taking
+14.4585 and 14.3285 seconds; peak host RSS is 85,556 KiB. Two diagnostic runs use
+405,890,640–657 cycles and 457 segments, taking 13.8703 and 13.8323 seconds; peak
+RSS is 90,688 KiB. This extension adds about 0.06% settlement cycles relative to
+`76ae74a`. The final settlement journal remains unchanged. Its image ID is
+`cb7562cfb2f17108502ebab6af755747ca88c16ee5ddd7429537b720ac8b319b`.
+
+Final artifacts and hashes are preserved in `build/aggregation/lazy-final-baseline/`;
+final measurements and validation are in `lazy-final-measurements.json`. The real
+normal-size partial receipt documented separately belongs to `76ae74a`, not this
+final image. No complete JoinSplit receipt is claimed for either image.

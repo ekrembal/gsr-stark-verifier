@@ -170,7 +170,9 @@ fn lazy_covectors_match_prefix_folds_and_cache_each_commitment_point() {
     });
     for seed in [0, 1, 2, 7, 19, 2, 0] {
         for (g, (actual, expected)) in groups.iter().enumerate() {
-            let point: Vec<_> = (0..17)
+            // Includes points longer than the domain dimension and machine word.
+            let dimension = match seed { 7 => 65, 19 => 19, _ => 17 };
+            let point: Vec<_> = (0..dimension)
                 .map(|i| match seed {
                     0 => FieldElement::ZERO,
                     1 => FieldElement::ONE,

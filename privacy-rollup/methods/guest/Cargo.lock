@@ -2665,9 +2665,11 @@ version = "1.0.2"
 dependencies = [
  "anyhow",
  "ark-std 0.6.0",
+ "postcard",
  "provekit-common",
  "provekit-whir",
  "rayon",
+ "sha2 0.10.9",
  "tracing",
 ]
 

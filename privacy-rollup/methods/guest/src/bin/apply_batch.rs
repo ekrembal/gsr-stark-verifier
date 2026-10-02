@@ -6,19 +6,15 @@
 //! key is pinned by its SHA-256, so the image ID fixes the join-split circuit.
 use pr_protocol_types::Canonical;
 use pr_state_transition::{apply_batch, BatchWitness};
-use provekit_common::{NoirProof, Verifier};
-use provekit_verifier::Verify;
+use provekit_common::NoirProof;
+use provekit_verifier::FixedJoinSplitVerifier;
 use risc0_zkvm::guest::env;
-use risc0_zkvm::sha::{Impl, Sha256};
-
-const VERIFIER_KEY_SHA256: [u8; 32] = *include_bytes!("../../../../fixtures/joinsplit/verifier-key.sha256");
 
 fn main() {
     let witness: BatchWitness = postcard::from_bytes(&env::read_frame()).expect("batch witness");
     if !witness.transactions.is_empty() {
         let vk = env::read_frame();
-        assert_eq!(Impl::hash_bytes(&vk).as_bytes(), &VERIFIER_KEY_SHA256, "join-split verifier key");
-        let verifier: Verifier = postcard::from_bytes(&vk).expect("verifier key");
+        let verifier = FixedJoinSplitVerifier::from_postcard(&vk).expect("verifier key");
         for t in &witness.transactions {
             let proof: NoirProof = postcard::from_bytes(&env::read_frame()).expect("proof");
             let statement: Vec<_> = t.public.public_inputs().iter().map(pr_crypto::to_fr).collect();

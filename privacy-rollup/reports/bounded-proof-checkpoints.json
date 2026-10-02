@@ -1,0 +1,168 @@
+[
+  {
+    "directory": "build/feasibility/sha-row18",
+    "capture": {
+      "complete": false,
+      "count": 2,
+      "first": 500,
+      "image_id": "44cbd31cd444a09f2bd7c4a115a7247e19d8182e3ed81aa6e4d1bb9d9bd365a4",
+      "paging_cycles": 192277691,
+      "reserved_cycles": 114689973,
+      "segments": 3943,
+      "selected": [
+        {
+          "bytes": 68368,
+          "index": 500,
+          "po2": 18
+        },
+        {
+          "bytes": 36554,
+          "index": 501,
+          "po2": 18
+        }
+      ],
+      "total_cycles": 1033633792,
+      "user_cycles": 726666128
+    },
+    "files": [
+      {
+        "name": "capture.json",
+        "bytes": 437,
+        "sha256": "4a64d28c49a024b8aeae2b7f1d6faf60956a45198b5f10fd8283766b480821e3"
+      },
+      {
+        "name": "joined.pc",
+        "bytes": 271266,
+        "sha256": "254e874abf66c751b423dec2dcf6e0e81f8a3c1c143f372c01ef6a2c59fb5999"
+      },
+      {
+        "name": "journal.bin",
+        "bytes": 8,
+        "sha256": "a4bd89d0c3e16ec03c5436d0b9b8eb1a934beeac808447459e5ee2f9a23e97d7"
+      },
+      {
+        "name": "lift-500.pc",
+        "bytes": 271050,
+        "sha256": "9ac24fb7783baac790981fb7accd9fd4f1c6be999cc65be0f3b89e10d1d7a5b6"
+      },
+      {
+        "name": "lift-501.pc",
+        "bytes": 271098,
+        "sha256": "b405408176147b574f68982dda6d879c98becdde3d0425c73475dc30fd9c9bf1"
+      },
+      {
+        "name": "padded-parameters.pc",
+        "bytes": 112,
+        "sha256": "819709414c1091a304e8f59de054e98b8bee490a74522136b378a8c76a11d797"
+      },
+      {
+        "name": "padded.pc",
+        "bytes": 273428,
+        "sha256": "22656b83a90498a94bdb457eb003f7c8b82f6fe077faa90ece4463918afb9c94"
+      },
+      {
+        "name": "receipt-500.pc",
+        "bytes": 305093,
+        "sha256": "ac593ffba26bd73ae6f5f991f1687a8bede13f473af9f0eda0cc9476aa97e975"
+      },
+      {
+        "name": "receipt-501.pc",
+        "bytes": 304925,
+        "sha256": "447fd1f22fe8c33d749c5f1f17b4b82da91e725dd81ef84014721825f70d26bf"
+      },
+      {
+        "name": "segment-500.pc",
+        "bytes": 68368,
+        "sha256": "9f64b5bf0a9083a292f66bdf1e7c19638bb2c849a120b1fd5a92e8e279c45200"
+      },
+      {
+        "name": "segment-501.pc",
+        "bytes": 36554,
+        "sha256": "e68ec202c1a5c3ac0e3d4cbbc6580c7f068b48c305c8a2fe5f1db84ed0ede0a3"
+      }
+    ]
+  },
+  {
+    "directory": "build/feasibility/kernel-base400",
+    "capture": {
+      "complete": true,
+      "count": 2,
+      "first": 0,
+      "image_id": "7450be65c5c225bd58f2fc4dd6cc87fcd6f6fefbe120afb95c207070a0710449",
+      "paging_cycles": 27835,
+      "reserved_cycles": 43739,
+      "segments": 2,
+      "selected": [
+        {
+          "bytes": 35733,
+          "index": 0,
+          "po2": 17
+        },
+        {
+          "bytes": 50302,
+          "index": 1,
+          "po2": 16
+        }
+      ],
+      "total_cycles": 196608,
+      "user_cycles": 125034
+    },
+    "files": [
+      {
+        "name": "capture.json",
+        "bytes": 412,
+        "sha256": "94af0bef2f5b443be1f6d42a814a2629fb8e68c7fd88affccbb327926c6f24ba"
+      },
+      {
+        "name": "joined.pc",
+        "bytes": 271230,
+        "sha256": "621dfefc23894e99e5def133d68870f65423b4abfe4c12d4726615320ffc2027"
+      },
+      {
+        "name": "journal.bin",
+        "bytes": 32,
+        "sha256": "556448cf3295a655c267e1c35653306e9c4dc2e2c20c550974e256782471cb83"
+      },
+      {
+        "name": "lift-0.pc",
+        "bytes": 271200,
+        "sha256": "2076e02228e610229a23c8d3a3e67c3e40ead60ed8b8995c6f4b458a3a877685"
+      },
+      {
+        "name": "lift-1.pc",
+        "bytes": 271065,
+        "sha256": "cd4004df44cae241cab065789172b1ff7b88a8b49c1543bb43c9f2d8cd51c6f5"
+      },
+      {
+        "name": "padded-parameters.pc",
+        "bytes": 112,
+        "sha256": "819709414c1091a304e8f59de054e98b8bee490a74522136b378a8c76a11d797"
+      },
+      {
+        "name": "padded.pc",
+        "bytes": 273596,
+        "sha256": "8bbcad299eed1802534ae1eb77aa01a42efba04218e7b5b917d20a784424c191"
+      },
+      {
+        "name": "receipt-0.pc",
+        "bytes": 295731,
+        "sha256": "d99d4dfe77f6a726154d57bf4c27ce29cd4081f7c2ce8350090e2e8906a6d0c6"
+      },
+      {
+        "name": "receipt-1.pc",
+        "bytes": 268515,
+        "sha256": "9e672bd5152552d76cc4462863c78a3a8118abbf1056efad67c7d39329e092f0"
+      },
+      {
+        "name": "segment-0.pc",
+        "bytes": 35733,
+        "sha256": "d57d3ddac1cca908f9860faeedbe67480ea68bfdbb90a0e8af90200e4656c962"
+      },
+      {
+        "name": "segment-1.pc",
+        "bytes": 50302,
+        "sha256": "7a5dfd3e2076f40639b73adab60e65b18d2e63dd85e5374b024d03cb676ab6f7"
+      }
+    ]
+  }
+]

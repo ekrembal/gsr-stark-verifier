@@ -89,6 +89,11 @@ fn real_proof_acceptance_and_rejection_regressions() {
     .unwrap();
     let verifier = pr_provekit_adapter::load_verifier(&fixture("joinsplit.pkv")).unwrap();
     verifier.clone().verify(&proof).unwrap();
+    let fixed = provekit_verifier::FixedJoinSplitVerifier::from_postcard(
+        &pr_provekit_adapter::guest_verifier_bytes(&verifier).unwrap(),
+    )
+    .unwrap();
+    fixed.verify_ref(&proof).unwrap();
     // This immutable call must leave the configuration usable for the next proof.
     verifier.verify_ref(&proof).unwrap();
     verifier.verify_ref(&proof).unwrap();
@@ -125,7 +130,9 @@ fn real_proof_acceptance_and_rejection_regressions() {
     for (index, changed) in negatives.iter().enumerate() {
         assert!(verifier.clone().verify(changed).is_err(), "consuming accepted case {index}");
         assert!(verifier.verify_ref(changed).is_err(), "borrowed accepted case {index}");
+        assert!(fixed.verify_ref(changed).is_err(), "structured verifier accepted case {index}");
         // Failed proofs must not leave transcript state in the reusable key.
         verifier.verify_ref(&proof).unwrap();
+        fixed.verify_ref(&proof).unwrap();
     }
 }

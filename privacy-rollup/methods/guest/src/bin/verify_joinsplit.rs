@@ -1,8 +1,8 @@
 //! Verifies one ProveKit join-split proof and commits its public inputs.
 use std::{collections::BTreeMap, sync::Mutex};
 
-use provekit_common::{NoirProof, Verifier};
-use provekit_verifier::Verify;
+use provekit_common::NoirProof;
+use provekit_verifier::FixedJoinSplitVerifier;
 use risc0_zkvm::guest::env;
 use tracing::{span, Event, Id, Metadata, Subscriber};
 
@@ -101,7 +101,7 @@ fn main() {
     let vk = env::read_frame();
     let proof = env::read_frame();
     let t1 = env::cycle_count();
-    let verifier: Verifier = postcard::from_bytes(&vk).expect("verifier key");
+    let verifier = FixedJoinSplitVerifier::from_postcard(&vk).expect("verifier key");
     let t_vk = env::cycle_count();
     let proof: NoirProof = postcard::from_bytes(&proof).expect("proof");
     let t2 = env::cycle_count();

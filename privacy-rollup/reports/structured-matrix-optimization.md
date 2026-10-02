@@ -1,5 +1,9 @@
 # Fixed JoinSplit structured-matrix evaluator
 
+Historical checkpoint: `9773e0fc96a48c65a9d2c39ee680cfbbe3062c23`.
+The numbers and original generator plan below describe that checkpoint.
+Subsequent fixed-key specialization is recorded separately.
+
 Unpublished experiment based on local SHA-accelerated commit
 `5a2b71d81cdd9f7ebf309ac0f8ac30eaee43dca0`. No AIR, transcript, proof format,
 security parameter, or client proving change is introduced.

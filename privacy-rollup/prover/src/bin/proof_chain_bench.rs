@@ -17,7 +17,7 @@ fn save(path: &Path, bytes: &[u8]) -> Result<()> {
 
 fn main() -> Result<()> {
     let a: Vec<String> = std::env::args().collect();
-    ensure!(a.len() >= 4, "usage: proof_chain_bench <capture|prove|lift|join|padded> <directory> <args...>");
+    ensure!(a.len() >= 4, "usage: proof_chain_bench <encode-witness|capture|prove|lift|join|padded> <directory> <args...>");
     // Direct local prover; explicitly reject environment-enabled fake proofs.
     ensure!(std::env::var("RISC0_DEV_MODE").is_err(), "unset RISC0_DEV_MODE");
     let out = Path::new(&a[2]);
@@ -27,6 +27,16 @@ fn main() -> Result<()> {
     let opts = ProverOpts::composite().with_dev_mode(false);
     let prover = get_prover_server(&opts)?;
     let result = match a[1].as_str() {
+        "encode-witness" => {
+            use pr_protocol_types::Canonical;
+            let witness: pr_state_transition::BatchWitness = serde_json::from_slice(&fs::read(&a[3])?)?;
+            let expected = pr_state_transition::apply_batch(&witness)
+                .map_err(|e| anyhow::anyhow!("native transition: {e:?}"))?.journal.encode();
+            let frame = postcard::to_allocvec(&witness)?;
+            save(&out.join("witness.pc"), &frame)?;
+            save(&out.join("expected-journal.bin"), &expected)?;
+            serde_json::json!({"frame_bytes":frame.len(),"journal_bytes":expected.len()})
+        }
         "capture" => {
             ensure!(a.len() >= 8, "capture dir program expected-journal first count po2 [frames...]");
             let program = fs::read(&a[3])?;
@@ -120,7 +130,7 @@ fn main() -> Result<()> {
     };
     println!(
         "{}",
-        serde_json::json!({"operation":a[1],"seconds":start.elapsed().as_secs_f64(),"real_local_proof":a[1] != "capture","result":result})
+        serde_json::json!({"operation":a[1],"seconds":start.elapsed().as_secs_f64(),"real_local_proof":!matches!(a[1].as_str(), "capture" | "encode-witness"),"result":result})
     );
     Ok(())
 }

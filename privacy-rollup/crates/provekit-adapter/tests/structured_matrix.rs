@@ -43,12 +43,14 @@ fn reverse_evaluator_matches_every_matrix_column() {
             })
             .collect();
         assert_eq!(structured_matrix::evaluate_with_eq(&eq, r1cs), reference(&eq, r1cs), "seed={seed}");
+        assert_eq!(structured_matrix::evaluate_fixed_with_eq(&eq), reference(&eq, r1cs), "compiled residual seed={seed}");
     }
     // Unit vectors cross full/partial-round and block/unstructured boundaries.
     for row in [0, 306, 307, 309, 318, 354, 355, 522, 523, 570, 571, 574, 575, 38362, 38818] {
         let mut eq = vec![FieldElement::ZERO; r1cs.num_constraints()];
         eq[row] = -FieldElement::ONE;
         assert_eq!(structured_matrix::evaluate_with_eq(&eq, r1cs), reference(&eq, r1cs), "unit row={row}");
+        assert_eq!(structured_matrix::evaluate_fixed_with_eq(&eq), reference(&eq, r1cs), "compiled residual unit row={row}");
     }
 }
 
@@ -61,7 +63,20 @@ fn reverse_evaluator_matches_sumcheck_point_layout() {
             structured_matrix::evaluate(&alpha, &verifier.r1cs),
             calculate_external_row_by_scatter(&alpha, &verifier.r1cs)
         );
+        assert_eq!(structured_matrix::evaluate_fixed(&alpha), calculate_external_row_by_scatter(&alpha, &verifier.r1cs));
     }
+}
+
+#[test]
+fn embedded_configuration_matches_every_pinned_parameter() {
+    let verifier = fixture();
+    // Same dependency path as this crate's Cargo.toml, resolved from its manifest.
+    let path = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../../../provekit/provekit/verifier/src/joinsplit_whir.pc");
+    let encoded = std::fs::read(path).unwrap();
+    let embedded: provekit_common::WhirR1CSScheme = postcard::from_bytes(&encoded).unwrap();
+    let expected = verifier.whir_for_witness.as_ref().unwrap();
+    assert_eq!(&embedded, expected);
+    assert_eq!(encoded, postcard::to_allocvec(expected).unwrap());
 }
 
 #[test]

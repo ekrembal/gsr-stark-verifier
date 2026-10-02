@@ -106,9 +106,13 @@ def derive(data):
                            initial=[sorted(f.items()) for f in initial]))
         row += 268
     assert len(blocks) == 142
+    replaced = {r for block in blocks for r in range(block['row'], block['row']+268)}
+    residual = [(row, [sorted(form(m, row).items()) for m in range(3)])
+                for row in range(data['rows']) if row not in replaced]
+    assert len(residual) == 763
     return dict(vk_sha256=VK_SHA, rows=data['rows'], columns=data['columns'],
                 w1_size=data['w1_size'], diagonal=DIAG, round_constants=common_rc,
-                blocks=blocks, checked_rows=len(blocks)*268,
+                blocks=blocks, residual=residual, checked_rows=len(blocks)*268,
                 checked_matrix_rows=len(blocks)*268*3)
 
 
@@ -137,6 +141,11 @@ def main():
             for form in block['initial']:
                 lines.append('&['+','.join(f'({c},{fe(v)})' for c,v in form)+'],')
             lines.append(']},')
+        lines.append('];')
+        lines.append('static RESIDUAL_ROWS: &[(u16, [&[(u16, FieldElement)]; 3])] = &[')
+        for row, matrices in result['residual']:
+            entries = ['&['+','.join(f'({c},{fe(v)})' for c,v in form)+']' for form in matrices]
+            lines.append(f'({row}, ['+','.join(entries)+']),')
         lines.append('];')
         args.rust_output.write_text('\n'.join(lines)+'\n')
     print(json.dumps({k: result[k] for k in ['vk_sha256', 'checked_rows', 'checked_matrix_rows']} | {

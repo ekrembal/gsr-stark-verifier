@@ -9,10 +9,13 @@ use std::{
 
 fn main() -> Result<()> {
     let args: Vec<_> = std::env::args().collect();
-    ensure!(args.len() == 3, "usage: matrix-dump vk.pc output.json");
+    ensure!(args.len() == 3 || args.len() == 4, "usage: matrix-dump vk.pc output.json [whir-config.pc]");
     let bytes = fs::read(&args[1])?;
     let verifier: Verifier = postcard::from_bytes(&bytes)?;
     let r1cs = &verifier.r1cs;
+    if let Some(path) = args.get(3) {
+        fs::write(path, postcard::to_allocvec(verifier.whir_for_witness.as_ref().unwrap())?)?;
+    }
     let matrices: Vec<_> = [&r1cs.a, &r1cs.b, &r1cs.c]
         .into_iter()
         .map(|matrix| {

@@ -1,0 +1,474 @@
+diff --git a/risc0/circuit/rv32im-sys/build.rs b/risc0/circuit/rv32im-sys/build.rs
+--- a/risc0/circuit/rv32im-sys/build.rs
++++ b/risc0/circuit/rv32im-sys/build.rs
+@@ -29,13 +29,65 @@
+ 
+ fn build_cpu_kernels() {
+     rerun_if_changed("kernels/cxx");
++    rerun_if_changed("kernels/cxx_batch");
++    println!("cargo:rerun-if-env-changed=GSR_BUILD_CPU_BATCH");
++    let batch = match env::var("GSR_BUILD_CPU_BATCH").as_deref() {
++        Err(env::VarError::NotPresent) | Ok("0") => false,
++        Ok("1") => true,
++        _ => panic!("GSR_BUILD_CPU_BATCH must be unset, 0, or 1"),
++    };
++    let files: Vec<_> = glob_paths("kernels/cxx/*.cpp")
++        .into_iter()
++        .filter(|p| !batch || p.file_name().unwrap() != "gsr_batch_stub.cpp")
++        .collect();
+     KernelBuild::new(KernelType::Cpp)
+-        .files(glob_paths("kernels/cxx/*.cpp"))
++        .files(files)
+         .deps(glob_paths("kernels/cxx/*.h"))
+         .deps(glob_paths("kernels/cxx/*.cpp.inc"))
+         .deps(glob_paths("kernels/cxx/*.h.inc"))
+         .include(env::var("DEP_RISC0_SYS_CXX_ROOT").unwrap())
+         .compile("risc0_rv32im_cpu");
++    if batch {
++        build_batch_cpu_kernels();
++    }
++}
++
++fn build_batch_cpu_kernels() {
++    // Explicitly opt in to a machine-specific experiment. Never cross-compile
++    // native flags or change the default portable scalar build.
++    assert_eq!(env::var("TARGET").unwrap(), env::var("HOST").unwrap());
++    assert_eq!(env::var("CARGO_CFG_TARGET_ARCH").unwrap(), "x86_64");
++    let out = PathBuf::from(env::var_os("OUT_DIR").unwrap()).join("cpu_poly_batch");
++    let headers = env::var("DEP_RISC0_SYS_CXX_ROOT").unwrap();
++    let status = std::process::Command::new("python3")
++        .args(["kernels/cxx_batch/generate.py", "kernels/cxx", &headers])
++        .arg(&out)
++        .status()
++        .expect("run the pinned polynomial generator");
++    assert!(status.success(), "polynomial generation failed");
++    let mut build = cc::Build::new();
++    build
++        .cpp(true)
++        .debug(false)
++        .opt_level(2)
++        .std("c++17")
++        .flag("-march=native")
++        // Explicit vector operations already express the parallel arithmetic;
++        // automatic vectorization of this large circuit is costly to compile.
++        .flag("-fno-tree-slp-vectorize")
++        .flag("-fno-tree-loop-vectorize")
++        .include(headers)
++        .include("kernels/cxx_batch")
++        .include(&out)
++        .file("kernels/cxx_batch/ffi.cpp");
++    assert!(
++        build.get_compiler().is_like_gnu(),
++        "native evaluator requires GCC"
++    );
++    for unit in 0..4 {
++        build.file(out.join(format!("packed_poly_fp_{unit}.cpp")));
++    }
++    build.compile("risc0_rv32im_cpu_batch");
+ }
+ 
+ fn build_cuda_kernels() {
+diff --git a/risc0/circuit/rv32im-sys/kernels/cxx/gsr_batch_stub.cpp b/risc0/circuit/rv32im-sys/kernels/cxx/gsr_batch_stub.cpp
+new file mode 100644
+--- /dev/null
++++ b/risc0/circuit/rv32im-sys/kernels/cxx/gsr_batch_stub.cpp
+@@ -0,0 +1,9 @@
++// The portable default build never compiles the optional native evaluator.
++#include "fp.h"
++#include "fpext.h"
++#include <cstring>
++extern "C" bool risc0_circuit_rv32im_cpu_poly_fp_batch_available() { return false; }
++extern "C" const char* risc0_circuit_rv32im_cpu_poly_fp_batch(
++    size_t, size_t, const risc0::FpExt*, const risc0::Fp* const*, risc0::FpExt*) {
++  return strdup("rebuild with GSR_BUILD_CPU_BATCH=1 to enable the native evaluator");
++}
+diff --git a/risc0/circuit/rv32im-sys/kernels/cxx_batch/ffi.cpp b/risc0/circuit/rv32im-sys/kernels/cxx_batch/ffi.cpp
+new file mode 100644
+--- /dev/null
++++ b/risc0/circuit/rv32im-sys/kernels/cxx_batch/ffi.cpp
+@@ -0,0 +1,32 @@
++// Optional host prover evaluator; the scalar circuit and verifier are unchanged.
++#include "packed_fpext.h"
++#include <cstring>
++#include <exception>
++#include <type_traits>
++
++extern "C" bool risc0_circuit_rv32im_cpu_poly_fp_batch_available() { return true; }
++
++extern "C" const char* risc0_circuit_rv32im_cpu_poly_fp_batch(
++    size_t cycle, size_t steps, const risc0::FpExt* mixes,
++    const risc0::Fp* const* args, risc0::FpExt* result) {
++  static_assert(sizeof(risc0::Fp) == sizeof(uint32_t));
++  static_assert(std::is_trivially_copyable_v<risc0::Fp>);
++  static_assert(std::is_standard_layout_v<risc0::Fp>);
++  static_assert(sizeof(risc0::FpExt) == 4 * sizeof(risc0::Fp));
++  try {
++    auto packed = gsr_poly_batch::poly_fp(cycle, steps, {mixes}, args);
++    for (size_t lane = 0; lane < 8; ++lane) {
++      for (size_t component = 0; component < 4; ++component) {
++        // Copy the exact Montgomery word; invoking Fp(uint32_t) would encode
++        // it again. memcpy is valid for this trivially copyable scalar type.
++        uint32_t word = packed.elems[component].raw(lane);
++        std::memcpy(&result[lane].elems[component], &word, sizeof word);
++      }
++    }
++  } catch (const std::exception& error) {
++    return strdup(error.what());
++  } catch (...) {
++    return strdup("batched polynomial evaluation failed");
++  }
++  return nullptr;
++}
+diff --git a/risc0/circuit/rv32im-sys/kernels/cxx_batch/generate.py b/risc0/circuit/rv32im-sys/kernels/cxx_batch/generate.py
+new file mode 100644
+--- /dev/null
++++ b/risc0/circuit/rv32im-sys/kernels/cxx_batch/generate.py
+@@ -0,0 +1,110 @@
++#!/usr/bin/env python3
++"""Generate a prover-only eight-cycle evaluator of the pinned scalar constraints.
++
++No AIR, constraint coefficient, field representation, or verifier is changed.
++Raw matrix reads retain their original index expression separately for each
++lane. Scratch arrays carry eight independent evaluations. Generated output
++belongs in OUT_DIR, not in the source tree. Python assertions must be enabled.
++"""
++if not __debug__:
++ raise SystemExit('run the generator without Python optimization')
++from pathlib import Path
++import re, json, hashlib
++import argparse
++parser=argparse.ArgumentParser(description=__doc__)
++parser.add_argument('src',type=Path)
++parser.add_argument('sys_headers',type=Path)
++parser.add_argument('out',type=Path)
++options=parser.parse_args()
++src,sys_headers,out=options.src,options.sys_headers,options.out
++out.mkdir(parents=True,exist_ok=True)
++
++# Fail closed on a different circuit/field source, before applying the narrow
++# syntax transformation. This generator is specific to the pinned RISC Zero
++# revision. Changing these hashes requires re-review and differential validation.
++EXPECTED = {'rust_poly_fp_0.cpp': '11b5280f30d8284ac3fbeb567292b72ff5586ffa97d593d77c2fc299c677df75', 'rust_poly_fp_1.cpp': 'dc994ffaff0da1aaa0bd3060d3e37e7ac63dd1b0e03d8188f03ee121df5c561e', 'rust_poly_fp_2.cpp': '8d4a12023b457b58e6b05af93968bc96f9b9368258f262378f4e54aee0aa2f66', 'rust_poly_fp_3.cpp': 'aade9d4948171552e7089972c8bab5d57071fe22d792c9d83f8aa0079f7cb04a', 'fp.h': '1f1cb927854060d06ed6bb53d52978de9cd89c711338ead0de9b805cb18633ad', 'fpext.h': '194bf07cb14abcead498da69c62ff8464f05139fd75e8271d11c703be6471213'}
++for name,expected in EXPECTED.items():
++ p=(sys_headers if name.endswith('.h') else src)/name
++ if hashlib.sha256(p.read_bytes()).hexdigest()!=expected:
++  raise SystemExit('unsupported scalar source digest: '+str(p))
++texts={p.name:p.read_text() for p in sorted(src.glob('rust_poly_fp_*.cpp'))}
++functions={}
++for text in texts.values():
++ for m in re.finditer(r'^FpExt (\w+)\(([^;\n]+)\) \{\n(.*?)^\}',text,re.M|re.S):
++  name,signature,body=m.groups();params=[]
++  for p in signature.split(', '):
++   typ,var=p.rsplit(' ',1);params.append((typ,var))
++  assert name not in functions
++  functions[name]=(params,body)
++assert set(functions)=={'poly_fp'}|{f'rv32im_v2_{i}' for i in range(20)}
++roles={'poly_fp':{}}
++pending=['poly_fp']
++while pending:
++ name=pending.pop();params,body=functions[name];known=roles[name].copy()
++ for typ,var,length in re.findall(r'\b(Fp|FpExt) (x\d+)\[(\d+)\];',body):
++  if typ=='Fp':known[var]='packed'
++ calls=list(re.finditer(r'\b(rv32im_v2_\d+)\(([^;\n]+)\)',body))
++ assert len(calls)==(name!='rv32im_v2_0'),name
++ for m in calls:
++  target,actual=m.groups();actual=re.sub(r'/\*.*?\*/','',actual).split(', ')
++  assert len(actual)==len(functions[target][0])
++  target_roles={}
++  for (typ,var),value in zip(functions[target][0],actual):
++   if typ=='Fp*':
++    target_roles[var]='raw' if re.fullmatch(r'args\[[0-3]\]',value) else known[value]
++  if target in roles:assert roles[target]==target_roles
++  else:roles[target]=target_roles;pending.append(target)
++assert len(roles)==21
++counts={}
++def signature(m):
++ name,args=m.groups();parts=[]
++ for typ,var in functions[name][0]:
++  if var=='poly_mix':typ='UniformMix'
++  if typ=='Fp*' and roles[name][var]=='raw':typ='const ScalarFp*'
++  if typ=='Fp**':typ='const ScalarFp* const*'
++  parts.append(typ+' '+var)
++ return 'FpExt '+name+'('+', '.join(parts)+')'
++def transform_body(name,body):
++ # Exact generated scalar input reads, including per-lane wraparound. Scratch
++ # arrays are already packed and retain their original indices/stores.
++ raw=set(var for var,role in roles[name].items() if role=='raw')
++ pattern=r'(args\[[0-3]\]|'+('|'.join(sorted(raw)) if raw else r'NEVER_MATCH')+r')\[([^\[\]\n]+)\]'
++ def load(m):
++  ptr,index=m.groups();counts[name]=counts.get(name,0)+1
++  if 'cycle' in index:
++   index=re.sub(r'\bcycle\b','(cycle + lane)',index)
++   return f'Fp::load({ptr}, [&](size_t lane) {{ return {index}; }})'
++  return f'Fp::broadcast({ptr}[{index}])'
++ changed=re.sub(pattern,load,body)
++ # Every input load must have passed through this restricted transformation.
++ return changed
++for filename,text in texts.items():
++ def body_transform(m):
++  name,sig,body=m.groups();return f'FpExt {name}({sig}) {{\n'+transform_body(name,body)+'}'
++ text=re.sub(r'^FpExt (\w+)\(([^;\n]+)\) \{\n(.*?)^\}',body_transform,text,flags=re.M|re.S)
++ text=re.sub(r'^FpExt (\w+)\(([^;\n]+)\)',signature,text,flags=re.M)
++ text=text.replace('#include "fp.h"\n#include "fpext.h"','#include "packed_fpext.h"')
++ text=text.replace('namespace risc0::circuit::rv32im_v2','namespace gsr_poly_batch')
++ # Original fixed constants are still constant-foldable; avoid requiring GCC
++ # vector operations to be C++ constant expressions.
++ text=text.replace('constexpr Fp ', 'const Fp ').replace('constexpr FpExt ', 'const FpExt ')
++ (out/filename.replace('rust_poly_fp','packed_poly_fp')).write_text(text)
++# Reuse the complete original extension arithmetic with only its namespace and
++# base field type changed. All extension formulas, constants and signs remain.
++ext=(sys_headers/'fpext.h').read_text()
++ext=ext.replace('#include "fp.h"','#include "packed_fp.h"\n#include "fpext.h"')
++ext=ext.replace('namespace risc0 {','namespace gsr_poly_batch {').replace('constexpr ','')
++ext+='''\nnamespace gsr_poly_batch {
++struct UniformMix {
++  const risc0::FpExt* ptr;
++  FpExt operator[](size_t i) const {
++    return FpExt(Fp::broadcast(ptr[i].elems[0]), Fp::broadcast(ptr[i].elems[1]),
++                 Fp::broadcast(ptr[i].elems[2]), Fp::broadcast(ptr[i].elems[3]));
++  }
++};
++FpExt poly_fp(size_t, size_t, UniformMix, const ScalarFp* const*);
++}\n'''
++(out/'packed_fpext.h').write_text(ext)
++(out/'generation.json').write_text(json.dumps({'source_sha256':{n:hashlib.sha256(t.encode()).hexdigest() for n,t in texts.items()},'parameter_roles':roles,'transformed_raw_loads':counts},indent=2)+'\n')
++assert sum(counts.values()) == 3526, counts
++print('functions',len(functions),'input loads',sum(counts.values()))
+diff --git a/risc0/circuit/rv32im-sys/kernels/cxx_batch/packed_fp.h b/risc0/circuit/rv32im-sys/kernels/cxx_batch/packed_fp.h
+new file mode 100644
+--- /dev/null
++++ b/risc0/circuit/rv32im-sys/kernels/cxx_batch/packed_fp.h
+@@ -0,0 +1,42 @@
++// Experimental prover-only eight-lane arithmetic. No circuit or verifier change.
++#pragma once
++#include "fp.h"
++#include <cstddef>
++#include <cstdint>
++namespace gsr_poly_batch {
++using ScalarFp = risc0::Fp;
++using U32 = uint32_t __attribute__((vector_size(32)));
++using U64 = uint64_t __attribute__((vector_size(64)));
++class Fp {
++  U32 v;
++  explicit Fp(U32 raw):v(raw){}
++  static U32 splat(uint32_t x) { return U32{x,x,x,x,x,x,x,x}; }
++public:
++  static constexpr uint32_t P=ScalarFp::P;
++  Fp():v{}{}
++  Fp(uint32_t x):v(splat(ScalarFp(x).asRaw())){}
++  static Fp broadcast(ScalarFp x) { return Fp(splat(x.asRaw())); }
++  template<class Index> static Fp load(const ScalarFp* ptr, Index index) {
++    return Fp(U32{ptr[index(0)].asRaw(),ptr[index(1)].asRaw(),ptr[index(2)].asRaw(),ptr[index(3)].asRaw(),ptr[index(4)].asRaw(),ptr[index(5)].asRaw(),ptr[index(6)].asRaw(),ptr[index(7)].asRaw()});
++  }
++  static Fp invalid() {return Fp(splat(ScalarFp::INVALID));}
++  uint32_t raw(size_t lane) const {return v[lane];}
++  Fp operator+(Fp rhs) const {U32 s=v+rhs.v; return Fp(s>=P?s-P:s);}
++  Fp operator-(Fp rhs) const {U32 s=v-rhs.v; return Fp(s>P?s+P:s);}
++  Fp operator-() const {return Fp()-*this;}
++  Fp operator*(Fp rhs) const {
++    U64 product=__builtin_convertvector(v,U64)*__builtin_convertvector(rhs.v,U64);
++    U32 red=uint32_t(0x88000001)*(-__builtin_convertvector(product,U32));
++    U64 total=product+__builtin_convertvector(red,U64)*uint64_t(P);
++    U32 reduced=__builtin_convertvector(total>>32,U32);
++    return Fp(reduced>=P?reduced-P:reduced);
++  }
++  Fp operator+=(Fp x){*this=*this+x;return *this;}
++  Fp operator-=(Fp x){*this=*this-x;return *this;}
++  Fp operator*=(Fp x){*this=*this*x;return *this;}
++  bool operator==(Fp x) const {for(size_t i=0;i<8;++i)if(v[i]!=x.v[i])return false;return true;}
++  bool operator!=(Fp x) const {return !(*this==x);}
++};
++inline Fp pow(Fp x,size_t n){Fp r(1);while(n){if(n%2)r*=x;n/=2;x*=x;}return r;}
++inline Fp inv(Fp x){return pow(x,Fp::P-2);}
++}
+diff --git a/risc0/circuit/rv32im-sys/src/lib.rs b/risc0/circuit/rv32im-sys/src/lib.rs
+--- a/risc0/circuit/rv32im-sys/src/lib.rs
++++ b/risc0/circuit/rv32im-sys/src/lib.rs
+@@ -94,6 +94,19 @@
+         cycles: u32,
+     ) -> *const std::os::raw::c_char;
+ 
++    /// Whether the optional native eight-cycle evaluator was compiled.
++    pub fn risc0_circuit_rv32im_cpu_poly_fp_batch_available() -> bool;
++
++    /// Same inputs as the scalar evaluator; result must hold eight extension
++    /// elements, for cycles cycle..cycle+8 with original masked input indexing.
++    pub fn risc0_circuit_rv32im_cpu_poly_fp_batch(
++        cycle: usize,
++        steps: usize,
++        poly_mixs: *const BabyBearExtElem,
++        args_ptr: *const *const BabyBearElem,
++        result: *mut BabyBearExtElem,
++    ) -> *const std::os::raw::c_char;
++
+     pub fn risc0_circuit_rv32im_cpu_poly_fp(
+         cycle: usize,
+         steps: usize,
+diff --git a/risc0/circuit/rv32im/src/prove/hal/cpu.rs b/risc0/circuit/rv32im/src/prove/hal/cpu.rs
+--- a/risc0/circuit/rv32im/src/prove/hal/cpu.rs
++++ b/risc0/circuit/rv32im/src/prove/hal/cpu.rs
+@@ -18,6 +18,7 @@
+ use rayon::prelude::*;
+ use risc0_circuit_rv32im_sys::{
+     risc0_circuit_rv32im_cpu_accum, risc0_circuit_rv32im_cpu_poly_fp,
++    risc0_circuit_rv32im_cpu_poly_fp_batch, risc0_circuit_rv32im_cpu_poly_fp_batch_available,
+     risc0_circuit_rv32im_cpu_witgen, RawAccumBuffers, RawBuffer, RawExecBuffers, RawPreflightTrace,
+ };
+ use risc0_core::scope;
+@@ -57,6 +58,22 @@
+ 
+ #[derive(Default)]
+ pub struct CpuCircuitHal;
++
++// The pinned generated evaluator is a chain of 21 functions with substantial
++// temporary storage. Eight packed lanes exceed the default worker stack.
++// Isolate the opt-in evaluator in a pool with explicit stack space instead of
++// requiring a process-wide RUST_MIN_STACK override. The pool retains the
++// caller's Rayon worker count; the scalar path continues in its original pool.
++fn batch_eval_pool() -> &'static rayon::ThreadPool {
++    static POOL: std::sync::OnceLock<rayon::ThreadPool> = std::sync::OnceLock::new();
++    POOL.get_or_init(|| {
++        rayon::ThreadPoolBuilder::new()
++            .num_threads(rayon::current_num_threads())
++            .stack_size(8 * 1024 * 1024)
++            .build()
++            .expect("create CPU polynomial evaluation pool")
++    })
++}
+ 
+ impl CircuitWitnessGenerator<CpuHal> for CpuCircuitHal {
+     fn generate_witness(
+@@ -173,57 +190,88 @@
+         let domain = steps * INV_RATE;
+         let poly_mix_pows = map_pow(poly_mix, POLY_MIX_POWERS);
+ 
+-        // SAFETY: Convert a borrow of a cell into a raw const slice so that we can pass
+-        // it over the thread boundary. This should be safe because the scope of the
+-        // usage is within this function and each thread access will not overlap with
+-        // each other.
+-
++        let batch_requested = std::env::var("GSR_BATCH_EVAL_CPU").as_deref() == Ok("1");
++        if batch_requested {
++            assert!(
++                unsafe { risc0_circuit_rv32im_cpu_poly_fp_batch_available() },
++                "GSR_BATCH_EVAL_CPU requires a GSR_BUILD_CPU_BATCH=1 host build"
++            );
++        }
++        let width = if batch_requested && domain % 8 == 0 {
++            8
++        } else {
++            1
++        };
+         let data = groups[REGISTER_GROUP_DATA].as_slice();
+         let accum = groups[REGISTER_GROUP_ACCUM].as_slice();
+         let mix = globals[GLOBAL_MIX].as_slice();
+         let out = globals[GLOBAL_OUT].as_slice();
+-        let check = check.as_slice();
+-
+-        let data = unsafe { std::slice::from_raw_parts(data.as_ptr(), data.len()) };
+-        let accum = unsafe { std::slice::from_raw_parts(accum.as_ptr(), accum.len()) };
+-        let mix = unsafe { std::slice::from_raw_parts(mix.as_ptr(), mix.len()) };
+-        let out = unsafe { std::slice::from_raw_parts(out.as_ptr(), out.len()) };
+-        let check = unsafe { std::slice::from_raw_parts(check.as_ptr(), check.len()) };
++        let args: [&[Val]; 4] = [&accum, &data, &out, &mix];
+         let poly_mix_pows = poly_mix_pows.as_slice();
+ 
+-        let args: &[&[Val]] = &[accum, data, out, mix];
+-
+-        (0..domain).into_par_iter().for_each(|cycle| {
+-            // Four input groups have a fixed layout. Stack storage preserves
+-            // pointer order/lifetime and avoids a heap allocation per cycle.
+-            let args: [*const Val; 4] = core::array::from_fn(|i| args[i].as_ptr());
+-            let mut tot = ExtVal::ZERO;
+-            unsafe {
+-                risc0_circuit_rv32im_cpu_poly_fp(
+-                    cycle,
+-                    domain,
+-                    poly_mix_pows.as_ptr(),
+-                    args.as_ptr(),
+-                    &mut tot,
+-                )
+-            };
+-            let quotient = if let Some(weights) = periodic.as_ref() {
+-                weights[cycle % INV_RATE]
+-            } else {
+-                let x = Val::ROU_FWD[po2 + EXP_PO2].pow(cycle);
+-                let y = (Val::new(3) * x).pow(1 << po2);
+-                (y - Val::new(1)).inv()
+-            };
+-            let ret = tot * quotient;
+-
+-            // SAFETY: This conversion is to make the check slice mutable, which should be
+-            // safe because each thread access will not overlap with each other.
+-            let check =
+-                unsafe { std::slice::from_raw_parts_mut(check.as_ptr() as *mut Val, check.len()) };
+-            for i in 0..ExtVal::EXT_SIZE {
+-                check[i * domain + cycle] = ret.elems()[i];
+-            }
+-        });
++        // Hold the exclusive output lock and give Rayon disjoint chunks of
++        // each extension component. No shared slice is cast to mutable memory.
++        let mut check = check.as_slice_mut();
++        assert_eq!(check.len(), ExtVal::EXT_SIZE * domain);
++        assert_eq!(ExtVal::EXT_SIZE, 4);
++        let (c0, rest) = check.split_at_mut(domain);
++        let (c1, rest) = rest.split_at_mut(domain);
++        let (c2, c3) = rest.split_at_mut(domain);
++        let mut evaluate = || {
++            c0.par_chunks_mut(width)
++                .zip(c1.par_chunks_mut(width))
++                .zip(c2.par_chunks_mut(width))
++                .zip(c3.par_chunks_mut(width))
++                .enumerate()
++                .for_each(|(block, (((c0, c1), c2), c3))| {
++                    let cycle = block * width;
++                    let pointers: [*const Val; 4] = core::array::from_fn(|i| args[i].as_ptr());
++                    let mut values = [ExtVal::ZERO; 8];
++                    // SAFETY: The four pinned circuit inputs and mix-power array
++                    // remain borrowed through the call. The batch ABI writes only
++                    // eight extension elements; the scalar ABI writes one.
++                    ffi_wrap(|| unsafe {
++                        if width == 8 {
++                            risc0_circuit_rv32im_cpu_poly_fp_batch(
++                                cycle,
++                                domain,
++                                poly_mix_pows.as_ptr(),
++                                pointers.as_ptr(),
++                                values.as_mut_ptr(),
++                            )
++                        } else {
++                            risc0_circuit_rv32im_cpu_poly_fp(
++                                cycle,
++                                domain,
++                                poly_mix_pows.as_ptr(),
++                                pointers.as_ptr(),
++                                values.as_mut_ptr(),
++                            )
++                        }
++                    })
++                    .expect("CPU constraint evaluation failed");
++                    let mut outputs = [c0, c1, c2, c3];
++                    for lane in 0..width {
++                        let at = cycle + lane;
++                        let quotient = if let Some(weights) = periodic.as_ref() {
++                            weights[at % INV_RATE]
++                        } else {
++                            let x = Val::ROU_FWD[po2 + EXP_PO2].pow(at);
++                            let y = (Val::new(3) * x).pow(1 << po2);
++                            (y - Val::new(1)).inv()
++                        };
++                        let ret = values[lane] * quotient;
++                        for (i, output) in outputs.iter_mut().enumerate() {
++                            output[lane] = ret.elems()[i];
++                        }
++                    }
++                })
++        };
++        if width == 8 {
++            batch_eval_pool().install(evaluate);
++        } else {
++            evaluate();
++        }
+         if let Some(start) = profile_start {
+             eprintln!(
+                 "gsr_cpu_op circuit_eval_check {}",

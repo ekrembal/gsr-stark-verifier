@@ -36,8 +36,7 @@ Exact commands and resource evidence are in
 documented in the CPU batching report. The 69 other RV32IM tests were filtered
 out; this is not a claim that the full circuit test suite ran.
 
-The remaining evaluator comprises 52,622 generated C++ lines. A separate,
-bounded, prover-only batching prototype is being compared against that exact
-scalar polynomial. It has not been integrated into the SDK at this checkpoint.
-Its compiler cost and validation must be measured before making a performance
-or feasibility claim. No custom AIR or direct WHIR recursion is implemented.
+The remaining evaluator comprises 52,622 generated C++ lines. The subsequent
+[optional CPU polynomial experiment](cpu-polynomial-batching.md) batches that
+same scalar polynomial, with separate differential and real-proof validation.
+No custom AIR or direct WHIR recursion is implemented.

@@ -24,8 +24,11 @@ batching field operations alone does not eliminate the full proof workload.
 Host C++ `-march=native` was tested on the same saved 2^18 trace: 100.58 versus
 100.31 supervisor seconds, with essentially identical memory and seal size. No
 improvement was established. Adding host-only Rust CPU/codegen tuning took
-105.89 seconds on that same trace. Neither candidate is adopted; see the
-[compiler experiment](host-compiler-experiments.md).
+105.89 seconds on that same trace. Neither scalar-hash compiler candidate is adopted; see the
+[compiler experiment](host-compiler-experiments.md). Subsequent optional packed
+hashing and polynomial evaluation change the host computation schedule, while
+retaining the same AIR and scalar verifier. Their separate native compiler
+results and real-proof validation are recorded in the CPU experiment reports.
 
 The pinned SDK rejects segment-proof hash functions other than Poseidon2 in
 `risc0/zkvm/src/host/server/prove/prover_impl.rs`; its `sha256_hashfn_fails` test

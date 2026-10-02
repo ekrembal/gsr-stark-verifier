@@ -31,10 +31,10 @@ ProveKit join-split proofs (Noir, WHIR over BN254, hash-only)
 
 ## Measurements
 
-The [unpublished review](reports/aggregation-review.md) summarizes the latest
+The [current unpublished review](reports/aggregation-current-review.md) summarizes the latest
 results and remaining proving obstacles. The table below records the original PR measurements. The aggregation optimization
 measurements, phase profile, validation results and remaining limits are in
-[reports/aggregation-optimizations.md](reports/aggregation-optimizations.md). The latest
+[reports/aggregation-optimizations.md](reports/aggregation-optimizations.md). The earlier
 unpublished [lazy-covector experiment](reports/lazy-covector-optimization.md) follows
 [fixed-key specialization](reports/fixed-config-optimization.md).
 [Normal-size real segment proving](reports/normal-segment-proving.md) measures actual

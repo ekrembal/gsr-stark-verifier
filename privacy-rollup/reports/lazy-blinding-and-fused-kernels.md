@@ -20,7 +20,7 @@ input/binary digests, image IDs, phase costs, wall time and peak host RSS.
 | Also iterative equality tables | 191,119,146–171 | 208 |
 | Final source with original field backend | 237,933,282–307 | 255 |
 
-The last configuration executes in 6.053–6.059 seconds, at at most 78,640 KiB
+The 191.12M-cycle configuration executes in 6.053–6.059 seconds, at at most 78,640 KiB
 peak host process RSS. Its diagnostic verifier uses 178,765,205–209 cycles;
 exclusive costs include 77.45M for direct matrix evaluation, 26.11M for equality
 tables, 13.95M for Merkle verification and 10.74M for leaf encoding/hashing.
@@ -161,3 +161,9 @@ profiling and batching patches investigate wall time while retaining the same
 guest, AIR, hash suite, proof parameters and receipts.
 Material AIR/covenant changes and direct WHIR recursion remain unimplemented
 and require a separate concrete proposal and approval.
+
+Subsequent optional host polynomial/hash batching reduces that same saved
+normal-size segment to 140.443 prover seconds at 9,601,988 KiB peak RSS. It
+retains byte-identical guest programs and independently verified partial receipt
+integrity. See the [current review](aggregation-current-review.md) for the latest
+measurements, defaults, limitations and full-proof requirements.

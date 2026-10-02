@@ -1,6 +1,7 @@
 # Unpublished aggregation optimization review
 
-This document records checkpoint `45a1bc6`. The subsequent unpublished
+This document records checkpoint `45a1bc6`. For the latest guest and real CPU
+prover results, start with [the current review](aggregation-current-review.md). The subsequent unpublished
 [lazy blinding and fused-kernel investigation](lazy-blinding-and-fused-kernels.md)
 reduces settlement execution to approximately 191.12M cycles / 208 segments
 and includes complete small real kernel receipts. Those results still do not

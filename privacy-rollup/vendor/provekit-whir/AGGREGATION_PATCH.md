@@ -23,3 +23,12 @@ The registry's cache bookkeeping and upstream standalone `Cargo.lock` are
 excluded. The parent workspace and guest lockfiles select this same-version
 local source through explicit `[patch.crates-io]` entries. Their source change
 is documented in [the review report](../../reports/aggregation-optimizations.md).
+
+The separate, unpublished sparse-prefix experiment additionally applies
+[`whir-sparse-ntt.patch`](../../patches/whir-sparse-ntt.patch) after the first patch.
+It substitutes a bounded sparse-input, prefix-output forward NTT in the zkVM
+guest. Native/client builds retain the existing full NTT. The same subgroup
+classification, exact discrete-log reconstruction, arbitrary-point fallback,
+root convention and periodic extension remain in place. See the
+[experiment report](../../reports/sparse-ntt-experiment.md) for differential
+validation, guest measurements and the remaining formal coverage gap.

@@ -2,6 +2,7 @@
 
 mod cooley_tukey;
 mod matrix;
+mod sparse_prefix;
 
 #[cfg(test)]
 pub(crate) mod test_utils;
@@ -27,6 +28,7 @@ pub use self::{
     transpose::transpose,
     wavelet::{inverse_wavelet_transform, wavelet_transform},
 };
+pub use sparse_prefix::sparse_ntt_prefix;
 use crate::{
     algebra::fields,
     type_map::{self, TypeMap},

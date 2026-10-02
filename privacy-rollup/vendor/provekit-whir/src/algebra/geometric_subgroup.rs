@@ -37,15 +37,24 @@ pub fn geometric_accumulate_subgroup<F: FftField>(accumulator: &mut [F], scalars
         return geometric_accumulate(accumulator, scalars, points);
     }
     let generator_inverse = generator.inverse().expect("subgroup generator is nonzero");
-    let mut coefficients = vec![F::ZERO; period];
-    for j in in_domain {
-        let index = discrete_log(points[j], generator, generator_inverse, period.trailing_zeros());
-        // Repeated points must add, including collisions after a squaring ladder.
-        coefficients[index] += scalars[j];
-    }
+    let indexed = in_domain
+        .into_iter()
+        .map(|j| (discrete_log(points[j], generator, generator_inverse, period.trailing_zeros()), scalars[j]));
     // Forward convention: output[k] = sum_i coefficients[i] * generator^(i*k).
     // No inverse or normalization is involved. Periodic extension is exact.
-    ntt::ntt(&mut coefficients);
+    #[cfg(target_os = "zkvm")]
+    let coefficients = ntt::sparse_ntt_prefix(period, &indexed.collect::<Vec<_>>(), accumulator.len().min(period));
+    // Retain the parallel native/client implementation. Only the guest uses
+    // the sparse transform; differential tests exercise it directly on host.
+    #[cfg(not(target_os = "zkvm"))]
+    let coefficients = {
+        let mut coefficients = vec![F::ZERO; period];
+        for (index, scalar) in indexed {
+            coefficients[index] += scalar;
+        }
+        ntt::ntt(&mut coefficients);
+        coefficients
+    };
     for (entry, contribution) in accumulator.iter_mut().zip(coefficients.iter().cycle()) {
         *entry += contribution;
     }

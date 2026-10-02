@@ -37,8 +37,8 @@ fn padded_mle(table: &[F], point: &[F]) -> F {
 #[test]
 fn lazy_projection_matches_enumerated_coefficients_and_mles() {
     let root = F::get_root_of_unity(32768).unwrap();
-    let zs = [F::ZERO, F::ONE, -F::ONE, F::from(7u64), root, root.pow([9])];
-    let scalars = [F::ONE, F::ZERO, -F::ONE, F::from(13u64), F::from(27u64), F::ONE];
+    let zs = [F::ZERO, F::ONE, -F::ONE, F::from(7u64), root, root.pow([9]), F::from(11u64)];
+    let scalars = [F::ONE, F::from(3u64), -F::ONE, F::from(13u64), F::from(27u64), F::ONE, F::ZERO];
     for (mu, ell, folded) in [(4, 3, 0), (6, 4, 2), (7, 3, 3), (3, 3, 3), (13, 12, 3), (16, 12, 3)] {
         // Arbitrary weights deliberately need not sum to one.
         let eq: Vec<_> = (0..1 << folded).map(|i| F::from((i * i + 3) as u64)).collect();

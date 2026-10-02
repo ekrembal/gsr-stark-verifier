@@ -1,0 +1,344 @@
+{
+  "scope": "Optional host quotient-factor cache and stack argument buffer; no AIR/verifier change",
+  "profile": {
+    "scope": "Host CPU operation wall times, including Rayon workers; not CPU-time samples",
+    "timer_env": "GSR_PROFILE_CPU=1",
+    "proof_result": {
+      "operation": "prove",
+      "real_local_proof": true,
+      "result": {
+        "index": 0,
+        "integrity_verified": true,
+        "po2": 18,
+        "seal_bytes": 255656
+      },
+      "seconds": 66.193135282
+    },
+    "resources": {
+      "command": [
+        "privacy-rollup/prover/target/release/proof_chain_bench",
+        "prove",
+        "build/feasibility/dot32-cpu-periodic",
+        "0"
+      ],
+      "exit_code": 0,
+      "stopped_by": null,
+      "seconds": 66.31758966800044,
+      "sampled_peak_group_rss_kib": 2372008,
+      "minimum_free_disk_bytes": 1565167616,
+      "sampling_seconds": 0.25,
+      "limits": {
+        "seconds": 300,
+        "rss_mib": 4096,
+        "free_mib": 1024
+      }
+    },
+    "phases": [
+      {
+        "name": "circuit_eval_check",
+        "calls": 1,
+        "seconds": 44.848710161,
+        "largest_call_seconds": 44.848710161,
+        "fraction_of_prover_time": 0.6775432221171095
+      },
+      {
+        "name": "batch_expand_into_evaluate_ntt",
+        "calls": 7,
+        "seconds": 5.725948524,
+        "largest_call_seconds": 3.43566752,
+        "fraction_of_prover_time": 0.08650366083440476
+      },
+      {
+        "name": "hash_rows",
+        "calls": 7,
+        "seconds": 4.478320586,
+        "largest_call_seconds": 2.63963264,
+        "fraction_of_prover_time": 0.06765536285479132
+      },
+      {
+        "name": "batch_evaluate_any",
+        "calls": 4,
+        "seconds": 2.816764384,
+        "largest_call_seconds": 2.326318554,
+        "fraction_of_prover_time": 0.04255372361499194
+      },
+      {
+        "name": "zk_shift",
+        "calls": 3,
+        "seconds": 2.3279943,
+        "largest_call_seconds": 1.536677738,
+        "fraction_of_prover_time": 0.035169724021715205
+      },
+      {
+        "name": "batch_interpolate_ntt",
+        "calls": 4,
+        "seconds": 1.432104759,
+        "largest_call_seconds": 0.880835443,
+        "fraction_of_prover_time": 0.02163524590425972
+      },
+      {
+        "name": "mix_poly_coeffs",
+        "calls": 4,
+        "seconds": 0.746210513,
+        "largest_call_seconds": 0.373064868,
+        "fraction_of_prover_time": 0.011273231126172657
+      },
+      {
+        "name": "hash_fold",
+        "calls": 116,
+        "seconds": 0.715396098,
+        "largest_call_seconds": 0.08567964,
+        "fraction_of_prover_time": 0.01080770830618955
+      },
+      {
+        "name": "alloc_elem",
+        "calls": 19,
+        "seconds": 0.601640501,
+        "largest_call_seconds": 0.236116019,
+        "fraction_of_prover_time": 0.00908916760683498
+      },
+      {
+        "name": "eltwise_copy_elem",
+        "calls": 4,
+        "seconds": 0.210344303,
+        "largest_call_seconds": 0.205442195,
+        "fraction_of_prover_time": 0.0031777359102855376
+      },
+      {
+        "name": "batch_bit_reverse",
+        "calls": 6,
+        "seconds": 0.089034573,
+        "largest_call_seconds": 0.054109265,
+        "fraction_of_prover_time": 0.0013450726064068354
+      },
+      {
+        "name": "alloc_digest",
+        "calls": 7,
+        "seconds": 0.076743599,
+        "largest_call_seconds": 0.01935694,
+        "fraction_of_prover_time": 0.0011593890918303277
+      },
+      {
+        "name": "fri_fold",
+        "calls": 3,
+        "seconds": 0.028946449,
+        "largest_call_seconds": 0.027239529,
+        "fraction_of_prover_time": 0.0004373028846070002
+      },
+      {
+        "name": "scatter",
+        "calls": 2,
+        "seconds": 0.014144436,
+        "largest_call_seconds": 0.013774332,
+        "fraction_of_prover_time": 0.00021368433357539293
+      },
+      {
+        "name": "eltwise_zeroize_elem",
+        "calls": 4,
+        "seconds": 0.007716475,
+        "largest_call_seconds": 0.004442111,
+        "fraction_of_prover_time": 0.00011657515491789
+      },
+      {
+        "name": "alloc_extelem",
+        "calls": 5,
+        "seconds": 0.005653473,
+        "largest_call_seconds": 0.005649266,
+        "fraction_of_prover_time": 8.540875086086695e-05
+      },
+      {
+        "name": "eltwise_sum_extelem",
+        "calls": 1,
+        "seconds": 0.001955345,
+        "largest_call_seconds": 0.001955345,
+        "fraction_of_prover_time": 2.9539996733342827e-05
+      },
+      {
+        "name": "copy_from_elem",
+        "calls": 2,
+        "seconds": 5.247e-06,
+        "largest_call_seconds": 3.285e-06,
+        "fraction_of_prover_time": 7.926803856089325e-08
+      },
+      {
+        "name": "copy_from_u32",
+        "calls": 8,
+        "seconds": 4.466e-06,
+        "largest_call_seconds": 1.002e-06,
+        "fraction_of_prover_time": 6.746923198264709e-08
+      },
+      {
+        "name": "copy_from_extelem",
+        "calls": 4,
+        "seconds": 1.423e-06,
+        "largest_call_seconds": 5.91e-07,
+        "fraction_of_prover_time": 2.1497697517086163e-08
+      }
+    ],
+    "profiled_call_seconds": 64.12763961499999,
+    "hal_call_seconds": 19.278929454
+  },
+  "targeted_test_passed": 1,
+  "tested_periodicity_cases": 2580,
+  "runtime_env": {
+    "RAYON_NUM_THREADS": "4",
+    "GSR_BATCH_CPU": "1",
+    "GSR_PROFILE_CPU": "1",
+    "GSR_PERIODIC_CPU": "1"
+  },
+  "operations": {
+    "cpu-periodic-sdk-tests": {
+      "resources": {
+        "command": [
+          "cargo",
+          "+1.97",
+          "test",
+          "--manifest-path",
+          "/workspace/risc0/Cargo.toml",
+          "--locked",
+          "--release",
+          "-p",
+          "risc0-circuit-rv32im",
+          "--features",
+          "prove",
+          "--lib",
+          "periodic_divisors_match_reference",
+          "--",
+          "--test-threads=1"
+        ],
+        "exit_code": 0,
+        "stopped_by": null,
+        "seconds": 142.29746028799855,
+        "sampled_peak_group_rss_kib": 1940276,
+        "minimum_free_disk_bytes": 1572511744,
+        "sampling_seconds": 0.25,
+        "limits": {
+          "seconds": 300,
+          "rss_mib": 8192,
+          "free_mib": 1024
+        }
+      }
+    },
+    "cpu-periodic-build": {
+      "resources": {
+        "command": [
+          "cargo",
+          "build",
+          "--locked",
+          "--release",
+          "--bin",
+          "proof_chain_bench"
+        ],
+        "exit_code": 0,
+        "stopped_by": null,
+        "seconds": 40.93455663900022,
+        "sampled_peak_group_rss_kib": 1658100,
+        "minimum_free_disk_bytes": 1563025408,
+        "sampling_seconds": 0.25,
+        "limits": {
+          "seconds": 300,
+          "rss_mib": 8192,
+          "free_mib": 1024
+        }
+      }
+    },
+    "dot32-cpu-periodic-prove": {
+      "proof_result": {
+        "operation": "prove",
+        "real_local_proof": true,
+        "result": {
+          "index": 0,
+          "integrity_verified": true,
+          "po2": 18,
+          "seal_bytes": 255656
+        },
+        "seconds": 66.193135282
+      },
+      "resources": {
+        "command": [
+          "privacy-rollup/prover/target/release/proof_chain_bench",
+          "prove",
+          "build/feasibility/dot32-cpu-periodic",
+          "0"
+        ],
+        "exit_code": 0,
+        "stopped_by": null,
+        "seconds": 66.31758966800044,
+        "sampled_peak_group_rss_kib": 2372008,
+        "minimum_free_disk_bytes": 1565167616,
+        "sampling_seconds": 0.25,
+        "limits": {
+          "seconds": 300,
+          "rss_mib": 4096,
+          "free_mib": 1024
+        }
+      }
+    },
+    "dot32-cpu-periodic-independent-lift": {
+      "proof_result": {
+        "operation": "lift",
+        "real_local_proof": true,
+        "result": {
+          "index": 0,
+          "integrity_verified": true,
+          "seal_bytes": 222668
+        },
+        "seconds": 43.064515795
+      },
+      "resources": {
+        "command": [
+          "build/aggregation/dot32-iterative-baseline/proof_chain_bench",
+          "lift",
+          "build/feasibility/dot32-cpu-periodic",
+          "0"
+        ],
+        "exit_code": 0,
+        "stopped_by": null,
+        "seconds": 43.21225930000219,
+        "sampled_peak_group_rss_kib": 1445268,
+        "minimum_free_disk_bytes": 1564258304,
+        "sampling_seconds": 0.25,
+        "limits": {
+          "seconds": 180,
+          "rss_mib": 4096,
+          "free_mib": 1024
+        }
+      }
+    },
+    "dot32-cpu-periodic-independent-padded": {
+      "proof_result": {
+        "operation": "padded",
+        "real_local_proof": true,
+        "result": {
+          "complete_guest_verified": true,
+          "corrupt_seal_rejected": true,
+          "hashfn": "sha-256-padded",
+          "integrity_verified": true,
+          "seal_bytes": 222668
+        },
+        "seconds": 20.943861929
+      },
+      "resources": {
+        "command": [
+          "build/aggregation/dot32-iterative-baseline/proof_chain_bench",
+          "padded",
+          "build/feasibility/dot32-cpu-periodic",
+          "lift-0"
+        ],
+        "exit_code": 0,
+        "stopped_by": null,
+        "seconds": 21.11575381000148,
+        "sampled_peak_group_rss_kib": 1440844,
+        "minimum_free_disk_bytes": 1563975680,
+        "sampling_seconds": 0.25,
+        "limits": {
+          "seconds": 180,
+          "rss_mib": 4096,
+          "free_mib": 1024
+        }
+      }
+    }
+  },
+  "timing_conclusion": "Single unpaired 66.193s versus prior 67.966s is insufficient for a reliable speedup claim.",
+  "patch_sha256": "1fc6277e36cf1bdca513744d056fe2c55caf2828e3f8515902fa7a30ba1f230a"
+}

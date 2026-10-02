@@ -1,9 +1,9 @@
 # Sparse-prefix NTT experiment — 2026-10-02
 
-The unpublished experiment reduces fixed-input settlement execution from the
-published pass's **971,363,493–971,363,543 cycles / 1,067 segments** to
+The validated sparse-prefix NTT pass reduces fixed-input settlement execution from the
+previous pass's **971,363,493–971,363,543 cycles / 1,067 segments** to
 **852,104,533–852,104,558 cycles / 948 segments**. This is **12.28% fewer cycles**
-and 119 fewer segments than [draft PR #11](https://github.com/ekrembal/gsr-stark-verifier/pull/11),
+and 119 fewer segments than the first version of [draft PR #11](https://github.com/ekrembal/gsr-stark-verifier/pull/11),
 or **29.93% fewer cycles** than the original instrumented PR #10 baseline.
 The same 196-byte settlement journal is produced. The 500M-cycle goal remains unmet.
 
@@ -12,9 +12,11 @@ generated, and these measurements do not establish aggregation proving feasibili
 
 ## Scope and source
 
-- Parent commit: `cdf514f0bb1e2ac8ca5038858b9d71affb09be97`, the published PR #11 head.
-- Local branch: `local/sparse-ntt-experiment`. These changes remain unpublished;
-  PR #11 is unchanged.
+- Baseline commit: `cdf514f0bb1e2ac8ca5038858b9d71affb09be97`, the first PR #11 pass.
+- Validated implementation commit: `03ccc827f191d8536e99ebd7d07ea1b5905d993d`.
+- Published in the existing draft PR #11 on `codex/proof-aggregation-optimizations`
+  after explicit approval. The original private review archive remains a historical
+  snapshot from before publication.
 - Incremental source patch: [`whir-sparse-ntt.patch`](../patches/whir-sparse-ntt.patch),
   applied after `whir-blinding.patch` inside `vendor/provekit-whir`.
 - Implementation: [`sparse_prefix.rs`](../vendor/provekit-whir/src/algebra/ntt/sparse_prefix.rs).

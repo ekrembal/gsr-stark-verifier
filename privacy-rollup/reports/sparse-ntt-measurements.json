@@ -1,9 +1,8 @@
 {
   "date": "2026-10-02",
   "base_commit": "cdf514f0bb1e2ac8ca5038858b9d71affb09be97",
-  "branch": "local/sparse-ntt-experiment",
-  "unpublished": true,
-  "published_pr_unchanged": "https://github.com/ekrembal/gsr-stark-verifier/pull/11",
+  "branch": "codex/proof-aggregation-optimizations",
+  "unpublished": false,
   "execution_only": true,
   "real_joinsplit_receipt_produced": false,
   "methodology": "Two sequential paired samples per variant and entry point, reusing the saved baseline. No concurrent builds or validation jobs during profiles. Rejection checks ran concurrently only after profiling completed. RSS is host-executor RSS.",
@@ -1522,5 +1521,7 @@
       "bytes": 612,
       "sha256": "e5804a4f6935a0eabca0cae34ccbc6cc5116ee39c3326a9f5e789792d5baf422"
     }
-  ]
+  ],
+  "published_pr": "https://github.com/ekrembal/gsr-stark-verifier/pull/11",
+  "validated_implementation_commit": "03ccc827f191d8536e99ebd7d07ea1b5905d993d"
 }

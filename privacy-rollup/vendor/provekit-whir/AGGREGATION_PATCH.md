@@ -24,7 +24,7 @@ excluded. The parent workspace and guest lockfiles select this same-version
 local source through explicit `[patch.crates-io]` entries. Their source change
 is documented in [the review report](../../reports/aggregation-optimizations.md).
 
-The separate, unpublished sparse-prefix experiment additionally applies
+The subsequent validated sparse-prefix optimization additionally applies
 [`whir-sparse-ntt.patch`](../../patches/whir-sparse-ntt.patch) after the first patch.
 It substitutes a bounded sparse-input, prefix-output forward NTT in the zkVM
 guest. Native/client builds retain the existing full NTT. The same subgroup

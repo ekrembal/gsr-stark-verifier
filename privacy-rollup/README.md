@@ -25,11 +25,20 @@ ProveKit join-split proofs (Noir, WHIR over BN254, hash-only)
 | ProveKit join-split circuit | Implemented; proofs generated and verified natively and inside the guest |
 | `apply_batch` guest | Implemented; journal equals the native transition byte for byte |
 | Empty / anchor-only batches | **Proven** (succinct receipt) and settled consecutively on activated regtest |
-| Batches containing join-splits | **Executed, not proven**: 1.22B cycles per transaction, ~100 h estimated on the 8-core CPU used |
+| Batches containing join-splits | **Full proving in progress; no complete receipt yet**: optional optimized guest executes the frozen batch in 191.12M cycles / 208 segments. Same-segment CPU proving improves from 411.34 s to 140.44 s; see the current review. |
 | Covenant (`OP_TX` binding, successor leaf, `1 CSV`) | Implemented, metered, mined on regtest; altered spends rejected |
 | Relay | Consensus-valid; **nonstandard** under the pinned node's policy (annex) |
 
 ## Measurements
+
+The [current draft-PR review](reports/aggregation-current-review.md) summarizes the latest
+results and remaining proving obstacles. The table below records the original PR measurements. The aggregation optimization
+measurements, phase profile, validation results and remaining limits are in
+[reports/aggregation-optimizations.md](reports/aggregation-optimizations.md). The earlier
+[lazy-covector experiment](reports/lazy-covector-optimization.md) follows
+[fixed-key specialization](reports/fixed-config-optimization.md).
+[Normal-size real segment proving](reports/normal-segment-proving.md) measures actual
+CPU/memory cost; execution improvements do not establish full aggregation feasibility.
 
 | Metric | Value |
 |---|---:|
@@ -66,11 +75,21 @@ Settlement weight does not depend on batch contents beyond the annex (one nullif
 
 ## Reproduce
 
-Dependencies are path dependencies on two sibling checkouts of the repository directory (`../../risc0`,
-`../../provekit` relative to this repository's root):
+Dependencies are path dependencies on two sibling checkouts of the repository directory (`../risc0`,
+`../provekit` relative to this repository's root):
 
 * RISC Zero v3.0.6 (`1cc70cf05033a79ebc90f07c679cb4bd1cd301b9`) with [`../risc0-succinct/risc0-v3.0.6.patch`](../risc0-succinct/risc0-v3.0.6.patch);
-* ProveKit `4ee40639fb8849aeeba37761fdda07f28367e81d` with [`patches/provekit-4ee40639.patch`](patches/provekit-4ee40639.patch).
+* ProveKit `4ee40639fb8849aeeba37761fdda07f28367e81d` with [`patches/provekit-4ee40639.patch`](patches/provekit-4ee40639.patch),
+  then [`patches/provekit-aggregation.patch`](patches/provekit-aggregation.patch),
+  then the cumulative [`patches/provekit-structured.patch`](patches/provekit-structured.patch)
+  with `git apply --unidiff-zero`. The last patch includes the hash-bound compiled
+  configuration and exact matrix specialization; it is required by the current guest.
+* WHIR remains version 0.2.0; the vendored published source has the local
+  [`patches/whir-blinding.patch`](patches/whir-blinding.patch) algorithmic optimization. Its original
+  archive checksum and necessary same-version lockfile source deviation are documented in the review report.
+* Guest SHA-2 remains 0.10.9, with the official RISC Zero accelerator source pinned to
+  `8631fabdea7bdffa97b11868e04e73491d8e5bcf`; the native/client workspace retains its
+  registry source. See [the SHA experiment](reports/sha256-accelerator-experiment.md).
 
 Build the pinned node and meter first (`bash recursive-stwo/tools/build.sh` from the repository root).
 
@@ -79,7 +98,7 @@ cd privacy-rollup
 cargo test --workspace                                   # protocol, trees, transition, wallet, scanner, mempool, scenarios
 cargo build --release -p pr-operator -p pr-provekit-adapter
 (cd prover && cargo build --release)                     # builds the guest; prints its image id
-../../provekit/target/release/provekit-cli prepare circuits/joinsplit-2x2 -p js.pkp -v js.pkv   # byte-identical to fixtures/joinsplit
+../../provekit/target/release/provekit-cli prepare circuits/joinsplit-2x2 -p js.pkp -v js.pkv   # fixtures pin the exported verifier-key bytes
 python3 tools/operator_joinsplit.py                      # real ProveKit proof through the operator and the guest (executed) (copy in reports/operator-joinsplit.json)
 python3 tools/regtest_demo.py --batches 10               # proven empty batches settled on regtest -> build/privacy-rollup-regtest.json (copy in reports/regtest.json)
 ```

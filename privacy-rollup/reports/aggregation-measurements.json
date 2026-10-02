@@ -1,0 +1,1823 @@
+{
+  "base_commit": "86649820f8c68733617c84c4efeaae48e07e9268",
+  "branch": "local/proof-aggregation-optimizations",
+  "execution_only": true,
+  "full_joinsplit_receipt_produced": false,
+  "environment": {
+    "base_commit": "86649820f8c68733617c84c4efeaae48e07e9268",
+    "source_pr": "https://github.com/ekrembal/gsr-stark-verifier/pull/10",
+    "host": "Linux-6.18.44-x86_64-with-glibc2.41",
+    "cpu_affinity_count": 5,
+    "cpus_reported_by_os": 5,
+    "dependencies": {
+      "provekit": "4ee40639fb8849aeeba37761fdda07f28367e81d",
+      "risc0": "1cc70cf05033a79ebc90f07c679cb4bd1cd301b9",
+      "bitcoin": "d2799052604eb138c5a79acf88514a0c8b07f4ef"
+    },
+    "lockfiles_modified": false,
+    "cpu_quota": "400000 100000",
+    "memory_limit_bytes": 17179869184,
+    "timing_samples_per_guest_variant": 2,
+    "rust_host": "1.97.1",
+    "rust_guest": "RISC Zero r0.1.97.0",
+    "lean": "4.34.0"
+  },
+  "pins": {
+    "provekit": "4ee40639fb8849aeeba37761fdda07f28367e81d",
+    "risc0": "1cc70cf05033a79ebc90f07c679cb4bd1cd301b9",
+    "bitcoin": "d2799052604eb138c5a79acf88514a0c8b07f4ef",
+    "whir_local_patch": {
+      "version": "0.2.0",
+      "original_crate_sha256": "e79f9438fb42671b8437826b5d03233b0584154a300e648de38b0dae6725db6b",
+      "upstream_git": "d986dee918dbec7e4e245dcd7b431450da1fc8da",
+      "patch": "privacy-rollup/patches/whir-blinding.patch"
+    }
+  },
+  "patch_sha256": {
+    "privacy-rollup/patches/provekit-4ee40639.patch": "954ef3fe6f06c2cba7b88a826ed6048f666e142c1d3b6ab495fd4fa7b77a31ee",
+    "privacy-rollup/patches/provekit-aggregation.patch": "2e6250c674b877bb7c5b3c0fbe09c46bf54eeb5abc2c792bb04960fe7cb5b259",
+    "privacy-rollup/patches/provekit-profile-baseline.patch": "b16a52f9f1bd4c900de8d7203171e9993cd13368ad4961063cf9fc5494a45ecc",
+    "privacy-rollup/patches/aggregation-profile-baseline.patch": "3f0fa4b9f071317edb47bb1dab6e5d4f77c71a2f95ab8a38bab3a80bac2c86f1",
+    "risc0-succinct/risc0-v3.0.6.patch": "4bab9f2a2a12f8e98d82947b7ffdfc71d06648b3ce86786ebaa52ae62809cf1e",
+    "privacy-rollup/patches/whir-blinding.patch": "77c049661f7c703a118fb93bf07a79d6b6b1a95032304e389343a02fe49329f2"
+  },
+  "existing_lockfiles_unchanged": false,
+  "guest": {
+    "baseline_verifier": {
+      "label": "baseline-serial",
+      "kind": "verify",
+      "execution_only": true,
+      "inputs": {
+        "vk.pc": {
+          "bytes": 3213548,
+          "sha256": "bc1384089b1dc1654e61561089523ae521d2cf9b664589ec1e965108b4e2a183"
+        },
+        "proof0.pc": {
+          "bytes": 635142,
+          "sha256": "e3ed84cde408df6b83ace47e77358dd3eb6cf34d092d01a9f256702cb7f256fa"
+        },
+        "witness.json": {
+          "bytes": 29326,
+          "sha256": "0beabb1cb720abaf578400dc3f8116ec2838e8589fc1087f7b157d208d34a0f8"
+        }
+      },
+      "binary_sha256": "ef99f381c54d4042f56aae7142e0c805f0dc2c7a399d95e3cfa735c071cc96e2",
+      "elf_sha256": "2409c2b5bf556c2bba0a6004fc6873616854c638830a5b5d5b549721f7fc9f5d",
+      "cpu_count": 5,
+      "runs": [
+        {
+          "cycles": 1185019587,
+          "journal": "0f00000000000000",
+          "proof_bytes": 635142,
+          "runtime_seconds": 33.646301001,
+          "segments": 1238,
+          "vk_bytes": 3213548,
+          "phases": {
+            "read": 353884,
+            "deserialize_vk": 78802968,
+            "deserialize_proof": 6994049,
+            "verify": 1097606454
+          },
+          "spans": [
+            {
+              "name": "provekit_common::prefix_covector::offset_mle",
+              "inclusive_cycles": 271319,
+              "exclusive_cycles": 271319,
+              "calls": 1
+            },
+            {
+              "name": "provekit_common::prefix_covector::prefix_mle",
+              "inclusive_cycles": 95760329,
+              "exclusive_cycles": 95760329,
+              "calls": 7
+            },
+            {
+              "name": "provekit_common::prefix_covector::sparse_mle",
+              "inclusive_cycles": 8630,
+              "exclusive_cycles": 8630,
+              "calls": 1
+            },
+            {
+              "name": "provekit_common::utils::sumcheck::calculate_evaluations_over_boolean_hypercube_for_eq",
+              "inclusive_cycles": 21425233,
+              "exclusive_cycles": 21425233,
+              "calls": 1
+            },
+            {
+              "name": "provekit_common::utils::sumcheck::calculate_external_row_by_scatter",
+              "inclusive_cycles": 331130164,
+              "exclusive_cycles": 309704931,
+              "calls": 1
+            },
+            {
+              "name": "provekit_verifier::verify",
+              "inclusive_cycles": 1097602878,
+              "exclusive_cycles": 8450,
+              "calls": 1
+            },
+            {
+              "name": "provekit_verifier::whir_r1cs::run_sumcheck_verifier",
+              "inclusive_cycles": 1815196,
+              "exclusive_cycles": 1815196,
+              "calls": 1
+            },
+            {
+              "name": "provekit_verifier::whir_r1cs::verify",
+              "inclusive_cycles": 1097594428,
+              "exclusive_cycles": 13281788,
+              "calls": 1
+            },
+            {
+              "name": "whir::protocols::irs_commit::receive_commitment",
+              "inclusive_cycles": 1451764,
+              "exclusive_cycles": 1172481,
+              "calls": 18
+            },
+            {
+              "name": "whir::protocols::irs_commit::verify",
+              "inclusive_cycles": 114947766,
+              "exclusive_cycles": 10998650,
+              "calls": 18
+            },
+            {
+              "name": "whir::protocols::matrix_commit::receive_commitment",
+              "inclusive_cycles": 279283,
+              "exclusive_cycles": 279283,
+              "calls": 18
+            },
+            {
+              "name": "whir::protocols::matrix_commit::verify",
+              "inclusive_cycles": 118352785,
+              "exclusive_cycles": 118352785,
+              "calls": 20
+            },
+            {
+              "name": "whir::protocols::sumcheck::verify",
+              "inclusive_cycles": 3883732,
+              "exclusive_cycles": 3883732,
+              "calls": 22
+            },
+            {
+              "name": "whir::protocols::whir::verifier::whir::verify",
+              "inclusive_cycles": 59605336,
+              "exclusive_cycles": 6642022,
+              "calls": 2
+            },
+            {
+              "name": "whir::protocols::whir_zk::utils::build_beq_tables",
+              "inclusive_cycles": 478428717,
+              "exclusive_cycles": 478428717,
+              "calls": 2
+            },
+            {
+              "name": "whir::protocols::whir_zk::verifier::verify",
+              "inclusive_cycles": 751080313,
+              "exclusive_cycles": 35569332,
+              "calls": 2
+            }
+          ],
+          "command": [
+            "/workspace/gsr-stark-verifier/build/aggregation/baseline/exec_joinsplit",
+            "/workspace/gsr-stark-verifier/build/aggregation/inputs/vk.pc",
+            "/workspace/gsr-stark-verifier/build/aggregation/inputs/proof0.pc",
+            "/workspace/gsr-stark-verifier/build/aggregation/baseline/verify_joinsplit.bin"
+          ],
+          "peak_host_rss_kib": 126488
+        },
+        {
+          "cycles": 1185019562,
+          "journal": "0f00000000000000",
+          "proof_bytes": 635142,
+          "runtime_seconds": 35.79813928,
+          "segments": 1238,
+          "vk_bytes": 3213548,
+          "phases": {
+            "read": 353884,
+            "deserialize_vk": 78802968,
+            "deserialize_proof": 6994049,
+            "verify": 1097606429
+          },
+          "spans": [
+            {
+              "name": "provekit_common::prefix_covector::offset_mle",
+              "inclusive_cycles": 271319,
+              "exclusive_cycles": 271319,
+              "calls": 1
+            },
+            {
+              "name": "provekit_common::prefix_covector::prefix_mle",
+              "inclusive_cycles": 95760329,
+              "exclusive_cycles": 95760329,
+              "calls": 7
+            },
+            {
+              "name": "provekit_common::prefix_covector::sparse_mle",
+              "inclusive_cycles": 8630,
+              "exclusive_cycles": 8630,
+              "calls": 1
+            },
+            {
+              "name": "provekit_common::utils::sumcheck::calculate_evaluations_over_boolean_hypercube_for_eq",
+              "inclusive_cycles": 21425233,
+              "exclusive_cycles": 21425233,
+              "calls": 1
+            },
+            {
+              "name": "provekit_common::utils::sumcheck::calculate_external_row_by_scatter",
+              "inclusive_cycles": 331130164,
+              "exclusive_cycles": 309704931,
+              "calls": 1
+            },
+            {
+              "name": "provekit_verifier::verify",
+              "inclusive_cycles": 1097602853,
+              "exclusive_cycles": 8450,
+              "calls": 1
+            },
+            {
+              "name": "provekit_verifier::whir_r1cs::run_sumcheck_verifier",
+              "inclusive_cycles": 1815196,
+              "exclusive_cycles": 1815196,
+              "calls": 1
+            },
+            {
+              "name": "provekit_verifier::whir_r1cs::verify",
+              "inclusive_cycles": 1097594403,
+              "exclusive_cycles": 13281788,
+              "calls": 1
+            },
+            {
+              "name": "whir::protocols::irs_commit::receive_commitment",
+              "inclusive_cycles": 1451764,
+              "exclusive_cycles": 1172481,
+              "calls": 18
+            },
+            {
+              "name": "whir::protocols::irs_commit::verify",
+              "inclusive_cycles": 114947766,
+              "exclusive_cycles": 10998650,
+              "calls": 18
+            },
+            {
+              "name": "whir::protocols::matrix_commit::receive_commitment",
+              "inclusive_cycles": 279283,
+              "exclusive_cycles": 279283,
+              "calls": 18
+            },
+            {
+              "name": "whir::protocols::matrix_commit::verify",
+              "inclusive_cycles": 118352785,
+              "exclusive_cycles": 118352785,
+              "calls": 20
+            },
+            {
+              "name": "whir::protocols::sumcheck::verify",
+              "inclusive_cycles": 3883732,
+              "exclusive_cycles": 3883732,
+              "calls": 22
+            },
+            {
+              "name": "whir::protocols::whir::verifier::whir::verify",
+              "inclusive_cycles": 59605336,
+              "exclusive_cycles": 6642022,
+              "calls": 2
+            },
+            {
+              "name": "whir::protocols::whir_zk::utils::build_beq_tables",
+              "inclusive_cycles": 478428717,
+              "exclusive_cycles": 478428717,
+              "calls": 2
+            },
+            {
+              "name": "whir::protocols::whir_zk::verifier::verify",
+              "inclusive_cycles": 751080288,
+              "exclusive_cycles": 35569307,
+              "calls": 2
+            }
+          ],
+          "command": [
+            "/workspace/gsr-stark-verifier/build/aggregation/baseline/exec_joinsplit",
+            "/workspace/gsr-stark-verifier/build/aggregation/inputs/vk.pc",
+            "/workspace/gsr-stark-verifier/build/aggregation/inputs/proof0.pc",
+            "/workspace/gsr-stark-verifier/build/aggregation/baseline/verify_joinsplit.bin"
+          ],
+          "peak_host_rss_kib": 126460
+        }
+      ]
+    },
+    "optimized_verifier": {
+      "label": "blinding-serial",
+      "kind": "verify",
+      "execution_only": true,
+      "inputs": {
+        "vk.pc": {
+          "bytes": 3213548,
+          "sha256": "bc1384089b1dc1654e61561089523ae521d2cf9b664589ec1e965108b4e2a183"
+        },
+        "proof0.pc": {
+          "bytes": 635142,
+          "sha256": "e3ed84cde408df6b83ace47e77358dd3eb6cf34d092d01a9f256702cb7f256fa"
+        },
+        "witness.json": {
+          "bytes": 29326,
+          "sha256": "0beabb1cb720abaf578400dc3f8116ec2838e8589fc1087f7b157d208d34a0f8"
+        }
+      },
+      "binary_sha256": "43ee1b4e73d70a0a3cfbdd7322472df33e029b4f3c96426409da684291e09ab6",
+      "program_sha256": "c50a80424b2b9c423708383f407545b755152d60079fd60129621735dd8ced8b",
+      "cpu_count": 5,
+      "platform": "Linux-6.18.44-x86_64-with-glibc2.41",
+      "cpu_quota": "400000 100000",
+      "memory_limit_bytes": "17179869184",
+      "runs": [
+        {
+          "cycles": 950071895,
+          "journal": "0f00000000000000",
+          "proof_bytes": 635142,
+          "runtime_seconds": 29.692881458,
+          "segments": 1045,
+          "vk_bytes": 3213548,
+          "phases": {
+            "read": 353884,
+            "deserialize_vk": 78805615,
+            "deserialize_proof": 6994049,
+            "verify": 862653309
+          },
+          "spans": [
+            {
+              "name": "provekit_common::prefix_covector::offset_mle",
+              "inclusive_cycles": 271319,
+              "exclusive_cycles": 271319,
+              "calls": 1
+            },
+            {
+              "name": "provekit_common::prefix_covector::prefix_mle",
+              "inclusive_cycles": 95760329,
+              "exclusive_cycles": 95760329,
+              "calls": 7
+            },
+            {
+              "name": "provekit_common::prefix_covector::sparse_mle",
+              "inclusive_cycles": 8630,
+              "exclusive_cycles": 8630,
+              "calls": 1
+            },
+            {
+              "name": "provekit_common::utils::sumcheck::calculate_evaluations_over_boolean_hypercube_for_eq",
+              "inclusive_cycles": 21425235,
+              "exclusive_cycles": 21425235,
+              "calls": 1
+            },
+            {
+              "name": "provekit_common::utils::sumcheck::calculate_external_row_by_scatter",
+              "inclusive_cycles": 296858668,
+              "exclusive_cycles": 275433433,
+              "calls": 1
+            },
+            {
+              "name": "provekit_verifier::verify_ref",
+              "inclusive_cycles": 862649733,
+              "exclusive_cycles": 7449,
+              "calls": 1
+            },
+            {
+              "name": "provekit_verifier::whir_r1cs::run_sumcheck_verifier",
+              "inclusive_cycles": 1816566,
+              "exclusive_cycles": 1816566,
+              "calls": 1
+            },
+            {
+              "name": "provekit_verifier::whir_r1cs::verify",
+              "inclusive_cycles": 862642284,
+              "exclusive_cycles": 13281896,
+              "calls": 1
+            },
+            {
+              "name": "whir::algebra::geometric_subgroup::geometric_accumulate_subgroup",
+              "inclusive_cycles": 273247375,
+              "exclusive_cycles": 273247375,
+              "calls": 4
+            },
+            {
+              "name": "whir::protocols::irs_commit::receive_commitment",
+              "inclusive_cycles": 1455125,
+              "exclusive_cycles": 1175842,
+              "calls": 18
+            },
+            {
+              "name": "whir::protocols::irs_commit::verify",
+              "inclusive_cycles": 114948616,
+              "exclusive_cycles": 10999500,
+              "calls": 18
+            },
+            {
+              "name": "whir::protocols::matrix_commit::receive_commitment",
+              "inclusive_cycles": 279283,
+              "exclusive_cycles": 279283,
+              "calls": 18
+            },
+            {
+              "name": "whir::protocols::matrix_commit::verify",
+              "inclusive_cycles": 118352785,
+              "exclusive_cycles": 118352785,
+              "calls": 20
+            },
+            {
+              "name": "whir::protocols::sumcheck::verify",
+              "inclusive_cycles": 3889741,
+              "exclusive_cycles": 3889741,
+              "calls": 22
+            },
+            {
+              "name": "whir::protocols::whir::verifier::whir::verify",
+              "inclusive_cycles": 59647387,
+              "exclusive_cycles": 6680272,
+              "calls": 2
+            },
+            {
+              "name": "whir::protocols::whir_zk::utils::build_beq_tables",
+              "inclusive_cycles": 277542750,
+              "exclusive_cycles": 4295375,
+              "calls": 2
+            },
+            {
+              "name": "whir::protocols::whir_zk::verifier::verify",
+              "inclusive_cycles": 550397501,
+              "exclusive_cycles": 35724703,
+              "calls": 2
+            }
+          ],
+          "command": [
+            "/workspace/gsr-stark-verifier/privacy-rollup/prover/target/release/exec_joinsplit",
+            "/workspace/gsr-stark-verifier/build/aggregation/inputs/vk.pc",
+            "/workspace/gsr-stark-verifier/build/aggregation/inputs/proof0.pc",
+            "/workspace/gsr-stark-verifier/privacy-rollup/prover/target/riscv-guest/pr-methods/pr-guest/riscv32im-risc0-zkvm-elf/release/verify_joinsplit.bin"
+          ],
+          "peak_host_rss_kib": 144756
+        },
+        {
+          "cycles": 950071895,
+          "journal": "0f00000000000000",
+          "proof_bytes": 635142,
+          "runtime_seconds": 29.428938680999998,
+          "segments": 1045,
+          "vk_bytes": 3213548,
+          "phases": {
+            "read": 353884,
+            "deserialize_vk": 78805615,
+            "deserialize_proof": 6994049,
+            "verify": 862653309
+          },
+          "spans": [
+            {
+              "name": "provekit_common::prefix_covector::offset_mle",
+              "inclusive_cycles": 271319,
+              "exclusive_cycles": 271319,
+              "calls": 1
+            },
+            {
+              "name": "provekit_common::prefix_covector::prefix_mle",
+              "inclusive_cycles": 95760329,
+              "exclusive_cycles": 95760329,
+              "calls": 7
+            },
+            {
+              "name": "provekit_common::prefix_covector::sparse_mle",
+              "inclusive_cycles": 8630,
+              "exclusive_cycles": 8630,
+              "calls": 1
+            },
+            {
+              "name": "provekit_common::utils::sumcheck::calculate_evaluations_over_boolean_hypercube_for_eq",
+              "inclusive_cycles": 21425235,
+              "exclusive_cycles": 21425235,
+              "calls": 1
+            },
+            {
+              "name": "provekit_common::utils::sumcheck::calculate_external_row_by_scatter",
+              "inclusive_cycles": 296858668,
+              "exclusive_cycles": 275433433,
+              "calls": 1
+            },
+            {
+              "name": "provekit_verifier::verify_ref",
+              "inclusive_cycles": 862649733,
+              "exclusive_cycles": 7449,
+              "calls": 1
+            },
+            {
+              "name": "provekit_verifier::whir_r1cs::run_sumcheck_verifier",
+              "inclusive_cycles": 1816566,
+              "exclusive_cycles": 1816566,
+              "calls": 1
+            },
+            {
+              "name": "provekit_verifier::whir_r1cs::verify",
+              "inclusive_cycles": 862642284,
+              "exclusive_cycles": 13281896,
+              "calls": 1
+            },
+            {
+              "name": "whir::algebra::geometric_subgroup::geometric_accumulate_subgroup",
+              "inclusive_cycles": 273247375,
+              "exclusive_cycles": 273247375,
+              "calls": 4
+            },
+            {
+              "name": "whir::protocols::irs_commit::receive_commitment",
+              "inclusive_cycles": 1455125,
+              "exclusive_cycles": 1175842,
+              "calls": 18
+            },
+            {
+              "name": "whir::protocols::irs_commit::verify",
+              "inclusive_cycles": 114948616,
+              "exclusive_cycles": 10999500,
+              "calls": 18
+            },
+            {
+              "name": "whir::protocols::matrix_commit::receive_commitment",
+              "inclusive_cycles": 279283,
+              "exclusive_cycles": 279283,
+              "calls": 18
+            },
+            {
+              "name": "whir::protocols::matrix_commit::verify",
+              "inclusive_cycles": 118352785,
+              "exclusive_cycles": 118352785,
+              "calls": 20
+            },
+            {
+              "name": "whir::protocols::sumcheck::verify",
+              "inclusive_cycles": 3889741,
+              "exclusive_cycles": 3889741,
+              "calls": 22
+            },
+            {
+              "name": "whir::protocols::whir::verifier::whir::verify",
+              "inclusive_cycles": 59647387,
+              "exclusive_cycles": 6680272,
+              "calls": 2
+            },
+            {
+              "name": "whir::protocols::whir_zk::utils::build_beq_tables",
+              "inclusive_cycles": 277542750,
+              "exclusive_cycles": 4295375,
+              "calls": 2
+            },
+            {
+              "name": "whir::protocols::whir_zk::verifier::verify",
+              "inclusive_cycles": 550397501,
+              "exclusive_cycles": 35724703,
+              "calls": 2
+            }
+          ],
+          "command": [
+            "/workspace/gsr-stark-verifier/privacy-rollup/prover/target/release/exec_joinsplit",
+            "/workspace/gsr-stark-verifier/build/aggregation/inputs/vk.pc",
+            "/workspace/gsr-stark-verifier/build/aggregation/inputs/proof0.pc",
+            "/workspace/gsr-stark-verifier/privacy-rollup/prover/target/riscv-guest/pr-methods/pr-guest/riscv32im-risc0-zkvm-elf/release/verify_joinsplit.bin"
+          ],
+          "peak_host_rss_kib": 144132
+        }
+      ]
+    },
+    "baseline_settlement": {
+      "label": "baseline-serial",
+      "kind": "batch",
+      "execution_only": true,
+      "inputs": {
+        "vk.pc": {
+          "bytes": 3213548,
+          "sha256": "bc1384089b1dc1654e61561089523ae521d2cf9b664589ec1e965108b4e2a183"
+        },
+        "proof0.pc": {
+          "bytes": 635142,
+          "sha256": "e3ed84cde408df6b83ace47e77358dd3eb6cf34d092d01a9f256702cb7f256fa"
+        },
+        "witness.json": {
+          "bytes": 29326,
+          "sha256": "0beabb1cb720abaf578400dc3f8116ec2838e8589fc1087f7b157d208d34a0f8"
+        }
+      },
+      "binary_sha256": "a1336049e361aac526004516955cc6acdee4c3431406dcebc7dd369849e211fc",
+      "program_sha256": null,
+      "cpu_count": 5,
+      "platform": "Linux-6.18.44-x86_64-with-glibc2.41",
+      "cpu_quota": "400000 100000",
+      "memory_limit_bytes": "17179869184",
+      "runs": [
+        {
+          "cycles": 1216081365,
+          "segments": 1278,
+          "runtime_seconds": 36.275805447,
+          "image_id": "e1e2e8a0e10c8b32bee990badc7bbd8e339f14f365eb15d543f9d7b4cf1294d9",
+          "journal_sha256": "4e366d165e21f04fcb31f5cd46b0abfecd9d6503f8d542c3f45399256890b43f",
+          "command": [
+            "/workspace/gsr-stark-verifier/build/aggregation/baseline/settle",
+            "exec",
+            "/workspace/gsr-stark-verifier/build/aggregation/inputs/witness.json",
+            "/workspace/gsr-stark-verifier/build/aggregation/baseline-serial-batch-0-journal",
+            "/workspace/gsr-stark-verifier/build/aggregation/inputs/vk.pc",
+            "/workspace/gsr-stark-verifier/build/aggregation/inputs/proof0.pc"
+          ],
+          "peak_host_rss_kib": 143160
+        },
+        {
+          "cycles": 1216081348,
+          "segments": 1278,
+          "runtime_seconds": 35.199183932,
+          "image_id": "e1e2e8a0e10c8b32bee990badc7bbd8e339f14f365eb15d543f9d7b4cf1294d9",
+          "journal_sha256": "4e366d165e21f04fcb31f5cd46b0abfecd9d6503f8d542c3f45399256890b43f",
+          "command": [
+            "/workspace/gsr-stark-verifier/build/aggregation/baseline/settle",
+            "exec",
+            "/workspace/gsr-stark-verifier/build/aggregation/inputs/witness.json",
+            "/workspace/gsr-stark-verifier/build/aggregation/baseline-serial-batch-1-journal",
+            "/workspace/gsr-stark-verifier/build/aggregation/inputs/vk.pc",
+            "/workspace/gsr-stark-verifier/build/aggregation/inputs/proof0.pc"
+          ],
+          "peak_host_rss_kib": 143008
+        }
+      ]
+    },
+    "optimized_settlement": {
+      "label": "blinding",
+      "kind": "batch",
+      "execution_only": true,
+      "inputs": {
+        "vk.pc": {
+          "bytes": 3213548,
+          "sha256": "bc1384089b1dc1654e61561089523ae521d2cf9b664589ec1e965108b4e2a183"
+        },
+        "proof0.pc": {
+          "bytes": 635142,
+          "sha256": "e3ed84cde408df6b83ace47e77358dd3eb6cf34d092d01a9f256702cb7f256fa"
+        },
+        "witness.json": {
+          "bytes": 29326,
+          "sha256": "0beabb1cb720abaf578400dc3f8116ec2838e8589fc1087f7b157d208d34a0f8"
+        }
+      },
+      "binary_sha256": "7f15f6cbdf2213c952705f2f3fdaa8cd6b8f85916866b6e3064188c45e6f7199",
+      "program_sha256": null,
+      "cpu_count": 5,
+      "platform": "Linux-6.18.44-x86_64-with-glibc2.41",
+      "cpu_quota": "400000 100000",
+      "memory_limit_bytes": "17179869184",
+      "runs": [
+        {
+          "cycles": 971363543,
+          "segments": 1067,
+          "runtime_seconds": 30.248628467,
+          "image_id": "4eeebe2102c05669c9fc17c68ab9040d7acbc9bc40d955df325ff99fbd860ee6",
+          "journal_sha256": "4e366d165e21f04fcb31f5cd46b0abfecd9d6503f8d542c3f45399256890b43f",
+          "command": [
+            "/workspace/gsr-stark-verifier/privacy-rollup/prover/target/release/settle",
+            "exec",
+            "/workspace/gsr-stark-verifier/build/aggregation/inputs/witness.json",
+            "/workspace/gsr-stark-verifier/build/aggregation/blinding-batch-0-journal",
+            "/workspace/gsr-stark-verifier/build/aggregation/inputs/vk.pc",
+            "/workspace/gsr-stark-verifier/build/aggregation/inputs/proof0.pc"
+          ],
+          "peak_host_rss_kib": 147660
+        },
+        {
+          "cycles": 971363518,
+          "segments": 1067,
+          "runtime_seconds": 30.214490683,
+          "image_id": "4eeebe2102c05669c9fc17c68ab9040d7acbc9bc40d955df325ff99fbd860ee6",
+          "journal_sha256": "4e366d165e21f04fcb31f5cd46b0abfecd9d6503f8d542c3f45399256890b43f",
+          "command": [
+            "/workspace/gsr-stark-verifier/privacy-rollup/prover/target/release/settle",
+            "exec",
+            "/workspace/gsr-stark-verifier/build/aggregation/inputs/witness.json",
+            "/workspace/gsr-stark-verifier/build/aggregation/blinding-batch-1-journal",
+            "/workspace/gsr-stark-verifier/build/aggregation/inputs/vk.pc",
+            "/workspace/gsr-stark-verifier/build/aggregation/inputs/proof0.pc"
+          ],
+          "peak_host_rss_kib": 148000
+        }
+      ]
+    },
+    "first_review_verifier": {
+      "label": "final",
+      "kind": "verify",
+      "execution_only": true,
+      "inputs": {
+        "vk.pc": {
+          "bytes": 3213548,
+          "sha256": "bc1384089b1dc1654e61561089523ae521d2cf9b664589ec1e965108b4e2a183"
+        },
+        "proof0.pc": {
+          "bytes": 635142,
+          "sha256": "e3ed84cde408df6b83ace47e77358dd3eb6cf34d092d01a9f256702cb7f256fa"
+        },
+        "witness.json": {
+          "bytes": 29326,
+          "sha256": "0beabb1cb720abaf578400dc3f8116ec2838e8589fc1087f7b157d208d34a0f8"
+        }
+      },
+      "binary_sha256": "e9a3e4776ea18553a9d58e4cdd189fe21a95a6588de75c49a764ef41621eee59",
+      "program_sha256": "2aedfd5a96330a52f7a88ff39dbffdb886e6fd577eb85fed6f46121174b2b5df",
+      "cpu_count": 5,
+      "platform": "Linux-6.18.44-x86_64-with-glibc2.41",
+      "cpu_quota": "400000 100000",
+      "memory_limit_bytes": "17179869184",
+      "runs": [
+        {
+          "cycles": 1148926951,
+          "journal": "0f00000000000000",
+          "proof_bytes": 635142,
+          "runtime_seconds": 32.020465888,
+          "segments": 1208,
+          "vk_bytes": 3213548,
+          "phases": {
+            "read": 353884,
+            "deserialize_vk": 78805615,
+            "deserialize_proof": 6994049,
+            "verify": 1061510302
+          },
+          "spans": [
+            {
+              "name": "provekit_common::prefix_covector::offset_mle",
+              "inclusive_cycles": 271319,
+              "exclusive_cycles": 271319,
+              "calls": 1
+            },
+            {
+              "name": "provekit_common::prefix_covector::prefix_mle",
+              "inclusive_cycles": 95760329,
+              "exclusive_cycles": 95760329,
+              "calls": 7
+            },
+            {
+              "name": "provekit_common::prefix_covector::sparse_mle",
+              "inclusive_cycles": 8630,
+              "exclusive_cycles": 8630,
+              "calls": 1
+            },
+            {
+              "name": "provekit_common::utils::sumcheck::calculate_evaluations_over_boolean_hypercube_for_eq",
+              "inclusive_cycles": 21425235,
+              "exclusive_cycles": 21425235,
+              "calls": 1
+            },
+            {
+              "name": "provekit_common::utils::sumcheck::calculate_external_row_by_scatter",
+              "inclusive_cycles": 295035330,
+              "exclusive_cycles": 273610095,
+              "calls": 1
+            },
+            {
+              "name": "provekit_verifier::verify_ref",
+              "inclusive_cycles": 1061506726,
+              "exclusive_cycles": 7448,
+              "calls": 1
+            },
+            {
+              "name": "provekit_verifier::whir_r1cs::run_sumcheck_verifier",
+              "inclusive_cycles": 1815184,
+              "exclusive_cycles": 1815184,
+              "calls": 1
+            },
+            {
+              "name": "provekit_verifier::whir_r1cs::verify",
+              "inclusive_cycles": 1061499278,
+              "exclusive_cycles": 13281484,
+              "calls": 1
+            },
+            {
+              "name": "whir::protocols::irs_commit::receive_commitment",
+              "inclusive_cycles": 1451764,
+              "exclusive_cycles": 1172481,
+              "calls": 18
+            },
+            {
+              "name": "whir::protocols::irs_commit::verify",
+              "inclusive_cycles": 114947766,
+              "exclusive_cycles": 10998650,
+              "calls": 18
+            },
+            {
+              "name": "whir::protocols::matrix_commit::receive_commitment",
+              "inclusive_cycles": 279283,
+              "exclusive_cycles": 279283,
+              "calls": 18
+            },
+            {
+              "name": "whir::protocols::matrix_commit::verify",
+              "inclusive_cycles": 118352785,
+              "exclusive_cycles": 118352785,
+              "calls": 20
+            },
+            {
+              "name": "whir::protocols::sumcheck::verify",
+              "inclusive_cycles": 3883732,
+              "exclusive_cycles": 3883732,
+              "calls": 22
+            },
+            {
+              "name": "whir::protocols::whir::verifier::whir::verify",
+              "inclusive_cycles": 59605336,
+              "exclusive_cycles": 6642022,
+              "calls": 2
+            },
+            {
+              "name": "whir::protocols::whir_zk::utils::build_beq_tables",
+              "inclusive_cycles": 478428717,
+              "exclusive_cycles": 478428717,
+              "calls": 2
+            },
+            {
+              "name": "whir::protocols::whir_zk::verifier::verify",
+              "inclusive_cycles": 751080313,
+              "exclusive_cycles": 35569332,
+              "calls": 2
+            }
+          ],
+          "command": [
+            "/workspace/gsr-stark-verifier/privacy-rollup/prover/target/release/exec_joinsplit",
+            "/workspace/gsr-stark-verifier/build/aggregation/inputs/vk.pc",
+            "/workspace/gsr-stark-verifier/build/aggregation/inputs/proof0.pc",
+            "/workspace/gsr-stark-verifier/privacy-rollup/prover/target/riscv-guest/pr-methods/pr-guest/riscv32im-risc0-zkvm-elf/release/verify_joinsplit.bin"
+          ],
+          "peak_host_rss_kib": 126992
+        },
+        {
+          "cycles": 1148926951,
+          "journal": "0f00000000000000",
+          "proof_bytes": 635142,
+          "runtime_seconds": 35.122164531,
+          "segments": 1208,
+          "vk_bytes": 3213548,
+          "phases": {
+            "read": 353884,
+            "deserialize_vk": 78805615,
+            "deserialize_proof": 6994049,
+            "verify": 1061510302
+          },
+          "spans": [
+            {
+              "name": "provekit_common::prefix_covector::offset_mle",
+              "inclusive_cycles": 271319,
+              "exclusive_cycles": 271319,
+              "calls": 1
+            },
+            {
+              "name": "provekit_common::prefix_covector::prefix_mle",
+              "inclusive_cycles": 95760329,
+              "exclusive_cycles": 95760329,
+              "calls": 7
+            },
+            {
+              "name": "provekit_common::prefix_covector::sparse_mle",
+              "inclusive_cycles": 8630,
+              "exclusive_cycles": 8630,
+              "calls": 1
+            },
+            {
+              "name": "provekit_common::utils::sumcheck::calculate_evaluations_over_boolean_hypercube_for_eq",
+              "inclusive_cycles": 21425235,
+              "exclusive_cycles": 21425235,
+              "calls": 1
+            },
+            {
+              "name": "provekit_common::utils::sumcheck::calculate_external_row_by_scatter",
+              "inclusive_cycles": 295035330,
+              "exclusive_cycles": 273610095,
+              "calls": 1
+            },
+            {
+              "name": "provekit_verifier::verify_ref",
+              "inclusive_cycles": 1061506726,
+              "exclusive_cycles": 7473,
+              "calls": 1
+            },
+            {
+              "name": "provekit_verifier::whir_r1cs::run_sumcheck_verifier",
+              "inclusive_cycles": 1815184,
+              "exclusive_cycles": 1815184,
+              "calls": 1
+            },
+            {
+              "name": "provekit_verifier::whir_r1cs::verify",
+              "inclusive_cycles": 1061499253,
+              "exclusive_cycles": 13281484,
+              "calls": 1
+            },
+            {
+              "name": "whir::protocols::irs_commit::receive_commitment",
+              "inclusive_cycles": 1451764,
+              "exclusive_cycles": 1172481,
+              "calls": 18
+            },
+            {
+              "name": "whir::protocols::irs_commit::verify",
+              "inclusive_cycles": 114947766,
+              "exclusive_cycles": 10998650,
+              "calls": 18
+            },
+            {
+              "name": "whir::protocols::matrix_commit::receive_commitment",
+              "inclusive_cycles": 279283,
+              "exclusive_cycles": 279283,
+              "calls": 18
+            },
+            {
+              "name": "whir::protocols::matrix_commit::verify",
+              "inclusive_cycles": 118352785,
+              "exclusive_cycles": 118352785,
+              "calls": 20
+            },
+            {
+              "name": "whir::protocols::sumcheck::verify",
+              "inclusive_cycles": 3883732,
+              "exclusive_cycles": 3883732,
+              "calls": 22
+            },
+            {
+              "name": "whir::protocols::whir::verifier::whir::verify",
+              "inclusive_cycles": 59605336,
+              "exclusive_cycles": 6642022,
+              "calls": 2
+            },
+            {
+              "name": "whir::protocols::whir_zk::utils::build_beq_tables",
+              "inclusive_cycles": 478428717,
+              "exclusive_cycles": 478428717,
+              "calls": 2
+            },
+            {
+              "name": "whir::protocols::whir_zk::verifier::verify",
+              "inclusive_cycles": 751080288,
+              "exclusive_cycles": 35569307,
+              "calls": 2
+            }
+          ],
+          "command": [
+            "/workspace/gsr-stark-verifier/privacy-rollup/prover/target/release/exec_joinsplit",
+            "/workspace/gsr-stark-verifier/build/aggregation/inputs/vk.pc",
+            "/workspace/gsr-stark-verifier/build/aggregation/inputs/proof0.pc",
+            "/workspace/gsr-stark-verifier/privacy-rollup/prover/target/riscv-guest/pr-methods/pr-guest/riscv32im-risc0-zkvm-elf/release/verify_joinsplit.bin"
+          ],
+          "peak_host_rss_kib": 126816
+        }
+      ]
+    },
+    "first_review_settlement": {
+      "label": "final",
+      "kind": "batch",
+      "execution_only": true,
+      "inputs": {
+        "vk.pc": {
+          "bytes": 3213548,
+          "sha256": "bc1384089b1dc1654e61561089523ae521d2cf9b664589ec1e965108b4e2a183"
+        },
+        "proof0.pc": {
+          "bytes": 635142,
+          "sha256": "e3ed84cde408df6b83ace47e77358dd3eb6cf34d092d01a9f256702cb7f256fa"
+        },
+        "witness.json": {
+          "bytes": 29326,
+          "sha256": "0beabb1cb720abaf578400dc3f8116ec2838e8589fc1087f7b157d208d34a0f8"
+        }
+      },
+      "binary_sha256": "03a11d3cad8003577ce9ab93a3f7f8e9ded39a183bff8a20f89edd65fab19330",
+      "program_sha256": null,
+      "cpu_count": 5,
+      "platform": "Linux-6.18.44-x86_64-with-glibc2.41",
+      "cpu_quota": "400000 100000",
+      "memory_limit_bytes": "17179869184",
+      "runs": [
+        {
+          "cycles": 1172496499,
+          "segments": 1231,
+          "runtime_seconds": 32.887646136,
+          "image_id": "4fe8fe7553c3cd2903b868020865561545244d8f2d853cebf97257595489d9b7",
+          "journal_sha256": "4e366d165e21f04fcb31f5cd46b0abfecd9d6503f8d542c3f45399256890b43f",
+          "command": [
+            "/workspace/gsr-stark-verifier/privacy-rollup/prover/target/release/settle",
+            "exec",
+            "/workspace/gsr-stark-verifier/build/aggregation/inputs/witness.json",
+            "/workspace/gsr-stark-verifier/build/aggregation/final-batch-0-journal",
+            "/workspace/gsr-stark-verifier/build/aggregation/inputs/vk.pc",
+            "/workspace/gsr-stark-verifier/build/aggregation/inputs/proof0.pc"
+          ],
+          "peak_host_rss_kib": 125636
+        },
+        {
+          "cycles": 1172496470,
+          "segments": 1231,
+          "runtime_seconds": 33.734552967,
+          "image_id": "4fe8fe7553c3cd2903b868020865561545244d8f2d853cebf97257595489d9b7",
+          "journal_sha256": "4e366d165e21f04fcb31f5cd46b0abfecd9d6503f8d542c3f45399256890b43f",
+          "command": [
+            "/workspace/gsr-stark-verifier/privacy-rollup/prover/target/release/settle",
+            "exec",
+            "/workspace/gsr-stark-verifier/build/aggregation/inputs/witness.json",
+            "/workspace/gsr-stark-verifier/build/aggregation/final-batch-1-journal",
+            "/workspace/gsr-stark-verifier/build/aggregation/inputs/vk.pc",
+            "/workspace/gsr-stark-verifier/build/aggregation/inputs/proof0.pc"
+          ],
+          "peak_host_rss_kib": 125620
+        }
+      ]
+    }
+  },
+  "native_matrix": {
+    "rayon_threads": 4,
+    "baseline": {
+      "constraints": 38819,
+      "equal": true,
+      "generic_terms": 921139,
+      "m": 16,
+      "m_0": 16,
+      "measurements": [
+        {
+          "scatter_seconds": 0.02899784,
+          "transpose_seconds": 0.034043031
+        },
+        {
+          "scatter_seconds": 0.029722847,
+          "transpose_seconds": 0.031093622
+        },
+        {
+          "scatter_seconds": 0.027409684,
+          "transpose_seconds": 0.034081868
+        },
+        {
+          "scatter_seconds": 0.027199806,
+          "transpose_seconds": 0.028978017
+        },
+        {
+          "scatter_seconds": 0.028227668,
+          "transpose_seconds": 0.024413052
+        }
+      ],
+      "num_challenges": 2,
+      "unique_row_products": 614423,
+      "w1_size": 5530,
+      "witnesses": 51805
+    },
+    "optimized": {
+      "constraints": 38819,
+      "equal": true,
+      "generic_terms": 921139,
+      "m": 16,
+      "m_0": 16,
+      "measurements": [
+        {
+          "scatter_seconds": 0.02629154,
+          "transpose_seconds": 0.026454349
+        },
+        {
+          "scatter_seconds": 0.024450442,
+          "transpose_seconds": 0.027753591
+        },
+        {
+          "scatter_seconds": 0.02898411,
+          "transpose_seconds": 0.024800152
+        },
+        {
+          "scatter_seconds": 0.024755711,
+          "transpose_seconds": 0.029461052
+        },
+        {
+          "scatter_seconds": 0.026936798,
+          "transpose_seconds": 0.024070874
+        }
+      ],
+      "num_challenges": 2,
+      "unique_row_products": 614423,
+      "w1_size": 5530,
+      "witnesses": 51805
+    },
+    "config_unchanged": true
+  },
+  "native_verifier_api_diagnostic": {
+    "runs": [
+      {
+        "borrowed_verify_seconds": 0.081612755,
+        "clone_and_verify_seconds": 0.090754253
+      },
+      {
+        "borrowed_verify_seconds": 0.081597878,
+        "clone_and_verify_seconds": 0.094472362
+      },
+      {
+        "borrowed_verify_seconds": 0.077518818,
+        "clone_and_verify_seconds": 0.10734397
+      },
+      {
+        "borrowed_verify_seconds": 0.071514363,
+        "clone_and_verify_seconds": 0.081236937
+      },
+      {
+        "borrowed_verify_seconds": 0.066369264,
+        "clone_and_verify_seconds": 0.078035837
+      }
+    ],
+    "concurrent_with_rejection_checks": true,
+    "median_clone_and_verify_seconds": 0.090754253,
+    "median_borrowed_verify_seconds": 0.077518818
+  },
+  "whir_config_summary": {
+    "blinded_polynomial": {
+      "codeword_length": 32768,
+      "interleaving_depth": 8,
+      "num_vectors": 1,
+      "in_domain_samples": 127,
+      "deduplicate_in_domain": false,
+      "johnson_slack": 0.025,
+      "initial_vector_size": 65536,
+      "folding_schedule": [
+        3,
+        3,
+        3,
+        3,
+        3
+      ],
+      "query_counts": [
+        127,
+        62,
+        41,
+        31,
+        24
+      ]
+    },
+    "blinding_polynomial": {
+      "codeword_length": 4096,
+      "interleaving_depth": 8,
+      "num_vectors": 2,
+      "in_domain_samples": 127,
+      "deduplicate_in_domain": false,
+      "johnson_slack": 0.025,
+      "initial_vector_size": 8192,
+      "folding_schedule": [
+        3,
+        3,
+        3,
+        3
+      ],
+      "query_counts": [
+        127,
+        62,
+        41,
+        31
+      ]
+    }
+  },
+  "validation": {
+    "baseline_workspace_tests_passed": 23,
+    "baseline_aggregation_tests_passed": 3,
+    "optimized_workspace_tests_passed": 28,
+    "padded_hash_tests_passed": 2,
+    "recursive_stwo_tests_passed": 4,
+    "recursive_stwo_sequence_passed": true,
+    "baseline_guest_rejections": {
+      "execution_only": true,
+      "cases": [
+        {
+          "kind": "verify",
+          "name": "public-input",
+          "returncode": 1,
+          "command": [
+            "build/aggregation/baseline/exec_joinsplit",
+            "build/aggregation/inputs/vk.pc",
+            "build/aggregation/cases/public-input.pc",
+            "build/aggregation/baseline/verify_joinsplit.bin"
+          ],
+          "log_sha256": "6895987fedfb49916ea48222a0fc6c3af1a6a9caca843e549f00e675927f202a"
+        },
+        {
+          "kind": "verify",
+          "name": "narg-first",
+          "returncode": 1,
+          "command": [
+            "build/aggregation/baseline/exec_joinsplit",
+            "build/aggregation/inputs/vk.pc",
+            "build/aggregation/cases/narg-first.pc",
+            "build/aggregation/baseline/verify_joinsplit.bin"
+          ],
+          "log_sha256": "6895987fedfb49916ea48222a0fc6c3af1a6a9caca843e549f00e675927f202a"
+        },
+        {
+          "kind": "verify",
+          "name": "hint-middle",
+          "returncode": 1,
+          "command": [
+            "build/aggregation/baseline/exec_joinsplit",
+            "build/aggregation/inputs/vk.pc",
+            "build/aggregation/cases/hint-middle.pc",
+            "build/aggregation/baseline/verify_joinsplit.bin"
+          ],
+          "log_sha256": "bdeaf19b13033164b53d6d7084ecc79cc7a2aa60ea7555b54b892cc6380b3597"
+        },
+        {
+          "kind": "verify",
+          "name": "narg-extra",
+          "returncode": 1,
+          "command": [
+            "build/aggregation/baseline/exec_joinsplit",
+            "build/aggregation/inputs/vk.pc",
+            "build/aggregation/cases/narg-extra.pc",
+            "build/aggregation/baseline/verify_joinsplit.bin"
+          ],
+          "log_sha256": "143067d132b26ee53069125fc5e6b896e0f6c123159e1ecc2924cc0308b7526c"
+        },
+        {
+          "kind": "batch",
+          "name": "public-input",
+          "returncode": 1,
+          "command": [
+            "build/aggregation/baseline/settle",
+            "exec",
+            "build/aggregation/inputs/witness.json",
+            "build/aggregation/rejections-baseline/public-input",
+            "build/aggregation/inputs/vk.pc",
+            "build/aggregation/cases/public-input.pc"
+          ],
+          "log_sha256": "197404adc5b7055c29b308f669073fa5c33a909c8df2fdfeb3f58f4901f9d1aa"
+        },
+        {
+          "kind": "batch",
+          "name": "narg-first",
+          "returncode": 1,
+          "command": [
+            "build/aggregation/baseline/settle",
+            "exec",
+            "build/aggregation/inputs/witness.json",
+            "build/aggregation/rejections-baseline/narg-first",
+            "build/aggregation/inputs/vk.pc",
+            "build/aggregation/cases/narg-first.pc"
+          ],
+          "log_sha256": "b2541433cf839010c4bf227f4742fc6bafe9d16547304770530d150c42913a88"
+        },
+        {
+          "kind": "batch",
+          "name": "hint-middle",
+          "returncode": 1,
+          "command": [
+            "build/aggregation/baseline/settle",
+            "exec",
+            "build/aggregation/inputs/witness.json",
+            "build/aggregation/rejections-baseline/hint-middle",
+            "build/aggregation/inputs/vk.pc",
+            "build/aggregation/cases/hint-middle.pc"
+          ],
+          "log_sha256": "cbca086b728fa63c8dcd66202285d234faedaa6b797633baf14d143886d312df"
+        },
+        {
+          "kind": "batch",
+          "name": "narg-extra",
+          "returncode": 1,
+          "command": [
+            "build/aggregation/baseline/settle",
+            "exec",
+            "build/aggregation/inputs/witness.json",
+            "build/aggregation/rejections-baseline/narg-extra",
+            "build/aggregation/inputs/vk.pc",
+            "build/aggregation/cases/narg-extra.pc"
+          ],
+          "log_sha256": "77a44d0fa75f082384eebec7bd553e8f4977e97e99bf8a7eeb00b5191c9c4e1b"
+        },
+        {
+          "kind": "batch",
+          "name": "wrong-key",
+          "returncode": 1,
+          "command": [
+            "build/aggregation/baseline/settle",
+            "exec",
+            "build/aggregation/inputs/witness.json",
+            "build/aggregation/rejections-baseline/wrong-key",
+            "build/aggregation/rejections-baseline/wrong-vk.pc",
+            "build/aggregation/inputs/proof0.pc"
+          ],
+          "log_sha256": "bb0cf507b652af4936526573048f71536e055cb9ed534b6542915fa6056136ef"
+        }
+      ]
+    },
+    "optimized_guest_rejections": {
+      "execution_only": true,
+      "cases": [
+        {
+          "kind": "verify",
+          "name": "public-input",
+          "returncode": 1,
+          "command": [
+            "privacy-rollup/prover/target/release/exec_joinsplit",
+            "build/aggregation/inputs/vk.pc",
+            "build/aggregation/cases/public-input.pc"
+          ],
+          "log_sha256": "e5804a4f6935a0eabca0cae34ccbc6cc5116ee39c3326a9f5e789792d5baf422"
+        },
+        {
+          "kind": "verify",
+          "name": "narg-first",
+          "returncode": 1,
+          "command": [
+            "privacy-rollup/prover/target/release/exec_joinsplit",
+            "build/aggregation/inputs/vk.pc",
+            "build/aggregation/cases/narg-first.pc"
+          ],
+          "log_sha256": "e5804a4f6935a0eabca0cae34ccbc6cc5116ee39c3326a9f5e789792d5baf422"
+        },
+        {
+          "kind": "verify",
+          "name": "hint-middle",
+          "returncode": 1,
+          "command": [
+            "privacy-rollup/prover/target/release/exec_joinsplit",
+            "build/aggregation/inputs/vk.pc",
+            "build/aggregation/cases/hint-middle.pc"
+          ],
+          "log_sha256": "d3db53436dfae0c873562d17460dad014e5cf7d7a403f961c152cf6dc71b0792"
+        },
+        {
+          "kind": "verify",
+          "name": "narg-extra",
+          "returncode": 1,
+          "command": [
+            "privacy-rollup/prover/target/release/exec_joinsplit",
+            "build/aggregation/inputs/vk.pc",
+            "build/aggregation/cases/narg-extra.pc"
+          ],
+          "log_sha256": "2e7ed0247a11c07028a46be5ee58624c95c9fc1daf3ce7d9fad6a6bff5b02b14"
+        },
+        {
+          "kind": "batch",
+          "name": "public-input",
+          "returncode": 1,
+          "command": [
+            "privacy-rollup/prover/target/release/settle",
+            "exec",
+            "build/aggregation/inputs/witness.json",
+            "build/aggregation/rejections-blinding/public-input",
+            "build/aggregation/inputs/vk.pc",
+            "build/aggregation/cases/public-input.pc"
+          ],
+          "log_sha256": "006d7f34916bd7eb3d7038fa480b90a8961c867149e640d70d0dc010b10106a9"
+        },
+        {
+          "kind": "batch",
+          "name": "narg-first",
+          "returncode": 1,
+          "command": [
+            "privacy-rollup/prover/target/release/settle",
+            "exec",
+            "build/aggregation/inputs/witness.json",
+            "build/aggregation/rejections-blinding/narg-first",
+            "build/aggregation/inputs/vk.pc",
+            "build/aggregation/cases/narg-first.pc"
+          ],
+          "log_sha256": "ce67fa94c6f82666ae0137d7c91b4f69e06c6702b0ffe4a8b9a531aab38b3fb4"
+        },
+        {
+          "kind": "batch",
+          "name": "hint-middle",
+          "returncode": 1,
+          "command": [
+            "privacy-rollup/prover/target/release/settle",
+            "exec",
+            "build/aggregation/inputs/witness.json",
+            "build/aggregation/rejections-blinding/hint-middle",
+            "build/aggregation/inputs/vk.pc",
+            "build/aggregation/cases/hint-middle.pc"
+          ],
+          "log_sha256": "c0a447944b94a14d449f16be65b3e60228204e4d976de9863c911870dd22ca1b"
+        },
+        {
+          "kind": "batch",
+          "name": "narg-extra",
+          "returncode": 1,
+          "command": [
+            "privacy-rollup/prover/target/release/settle",
+            "exec",
+            "build/aggregation/inputs/witness.json",
+            "build/aggregation/rejections-blinding/narg-extra",
+            "build/aggregation/inputs/vk.pc",
+            "build/aggregation/cases/narg-extra.pc"
+          ],
+          "log_sha256": "9dc8a2560779e5fa1f9e9f427d0601d8dc3a702bb36a5db2f70cdcfc3fa2c9bc"
+        },
+        {
+          "kind": "batch",
+          "name": "wrong-key",
+          "returncode": 1,
+          "command": [
+            "privacy-rollup/prover/target/release/settle",
+            "exec",
+            "build/aggregation/inputs/witness.json",
+            "build/aggregation/rejections-blinding/wrong-key",
+            "build/aggregation/rejections-blinding/wrong-vk.pc",
+            "build/aggregation/inputs/proof0.pc"
+          ],
+          "log_sha256": "fd65d6fd1c4681c6891fac6c0b2b3357283bf7f0a15b3f2bec7027af328031f4"
+        }
+      ]
+    },
+    "operator": {
+      "reject_forged_statement": "Error: rejected: Proof",
+      "reject_corrupt_proof": "Error: rejected: Proof",
+      "submit_seconds": 0.1,
+      "reject_resubmission": "Error: rejected: NullifierReserved",
+      "reject_missing_funding": "Error: rejected: Rule(FundingInput)",
+      "witness_equals_reference": true,
+      "guest_exec_seconds": 29.7,
+      "guest_log": [
+        "image id 4eeebe2102c05669c9fc17c68ab9040d7acbc9bc40d955df325ff99fbd860ee6",
+        "executed: 970783417 cycles, 1066 segments, 29.710510153s"
+      ],
+      "guest_journal_equals_native": true,
+      "reject_after_settlement": "Error: rejected: NullifierSpent",
+      "accept_and_rollback": {
+        "before": {
+          "backing_sats": 10000,
+          "batch_number": 0,
+          "commitment_count": 0,
+          "nullifier_next_index": 1,
+          "pending": 1,
+          "rollup_id": "181e83faa3916307d316fd28fd792439464ed60145a313fa3b9b5f88354d2779",
+          "state_root": "1c69a5fc8c51392072295f4cdee7bb19d29e3748e0e8666ff4fe55683369e3d3",
+          "utxo": [
+            "0101010101010101010101010101010101010101010101010101010101010101",
+            0
+          ]
+        },
+        "after": {
+          "backing_sats": 29300,
+          "batch_number": 1,
+          "commitment_count": 2,
+          "nullifier_next_index": 3,
+          "pending": 0,
+          "rollup_id": "181e83faa3916307d316fd28fd792439464ed60145a313fa3b9b5f88354d2779",
+          "state_root": "650087becb61191a108221f75aee16284deb8bf5a6a38b4a6652a47b219acf3b",
+          "utxo": [
+            "0202020202020202020202020202020202020202020202020202020202020202",
+            0
+          ]
+        },
+        "restored": {
+          "backing_sats": 10000,
+          "batch_number": 0,
+          "commitment_count": 0,
+          "nullifier_next_index": 1,
+          "pending": 0,
+          "rollup_id": "181e83faa3916307d316fd28fd792439464ed60145a313fa3b9b5f88354d2779",
+          "state_root": "1c69a5fc8c51392072295f4cdee7bb19d29e3748e0e8666ff4fe55683369e3d3",
+          "utxo": [
+            "0101010101010101010101010101010101010101010101010101010101010101",
+            0
+          ]
+        }
+      }
+    },
+    "lean_passed": true,
+    "lean_output": [
+      "'Aggregation.doubling_equivalent' depends on axioms: [propext]",
+      "'Aggregation.negative_doubling_equivalent' depends on axioms: [propext]",
+      "'Aggregation.accumulation_equivalent' does not depend on any axioms",
+      "'Aggregation.row_cache_equivalent' depends on axioms: [propext]",
+      "'Aggregation.triple_equivalent' depends on axioms: [propext]",
+      "'Aggregation.left_triple_equivalent' depends on axioms: [propext]"
+    ],
+    "rust_formatting_passed": true,
+    "python_compile_passed": true,
+    "patch_reapplication_passed": true,
+    "final_failures": [],
+    "resolved_setup_failures": [
+      "read-only default Cargo home in nested guest build",
+      "proxy blocked recursion archive: recovered checksum-identical ZIP from official r0vm release",
+      "raw user ELF cannot be executed as a v3 combined ProgramBinary",
+      "Previously unused NTT instantiation overflowed 1 << 63 on riscv32; portable maximum uses usize::BITS - 1. BN254 generator unchanged."
+    ],
+    "remaining_not_run": [
+      "full real JoinSplit RISC Zero proving and recursion",
+      "real receipt size/prover memory",
+      "real receipt Script differential and regtest settlement for the new image",
+      "multi-transaction proving",
+      "formal Rust refinement and protocol soundness proof"
+    ],
+    "first_review_workspace_tests_passed": 26,
+    "subgroup_differential_tests_passed": 2,
+    "first_review_guest_rejections": {
+      "execution_only": true,
+      "cases": [
+        {
+          "kind": "verify",
+          "name": "public-input",
+          "returncode": 1,
+          "command": [
+            "privacy-rollup/prover/target/release/exec_joinsplit",
+            "build/aggregation/inputs/vk.pc",
+            "build/aggregation/cases/public-input.pc"
+          ],
+          "log_sha256": "e5804a4f6935a0eabca0cae34ccbc6cc5116ee39c3326a9f5e789792d5baf422"
+        },
+        {
+          "kind": "verify",
+          "name": "narg-first",
+          "returncode": 1,
+          "command": [
+            "privacy-rollup/prover/target/release/exec_joinsplit",
+            "build/aggregation/inputs/vk.pc",
+            "build/aggregation/cases/narg-first.pc"
+          ],
+          "log_sha256": "e5804a4f6935a0eabca0cae34ccbc6cc5116ee39c3326a9f5e789792d5baf422"
+        },
+        {
+          "kind": "verify",
+          "name": "hint-middle",
+          "returncode": 1,
+          "command": [
+            "privacy-rollup/prover/target/release/exec_joinsplit",
+            "build/aggregation/inputs/vk.pc",
+            "build/aggregation/cases/hint-middle.pc"
+          ],
+          "log_sha256": "d3db53436dfae0c873562d17460dad014e5cf7d7a403f961c152cf6dc71b0792"
+        },
+        {
+          "kind": "verify",
+          "name": "narg-extra",
+          "returncode": 1,
+          "command": [
+            "privacy-rollup/prover/target/release/exec_joinsplit",
+            "build/aggregation/inputs/vk.pc",
+            "build/aggregation/cases/narg-extra.pc"
+          ],
+          "log_sha256": "2e7ed0247a11c07028a46be5ee58624c95c9fc1daf3ce7d9fad6a6bff5b02b14"
+        },
+        {
+          "kind": "batch",
+          "name": "public-input",
+          "returncode": 1,
+          "command": [
+            "privacy-rollup/prover/target/release/settle",
+            "exec",
+            "build/aggregation/inputs/witness.json",
+            "build/aggregation/rejections-final/public-input",
+            "build/aggregation/inputs/vk.pc",
+            "build/aggregation/cases/public-input.pc"
+          ],
+          "log_sha256": "44a8b91ea96d71f23d6b0f53c93c489d58039786ba5ef264f86e97cce329d90f"
+        },
+        {
+          "kind": "batch",
+          "name": "narg-first",
+          "returncode": 1,
+          "command": [
+            "privacy-rollup/prover/target/release/settle",
+            "exec",
+            "build/aggregation/inputs/witness.json",
+            "build/aggregation/rejections-final/narg-first",
+            "build/aggregation/inputs/vk.pc",
+            "build/aggregation/cases/narg-first.pc"
+          ],
+          "log_sha256": "9fd0d4a608405084a2663fed26bd4ca59d38f7e1f27001f2d8ba920f570f7604"
+        },
+        {
+          "kind": "batch",
+          "name": "hint-middle",
+          "returncode": 1,
+          "command": [
+            "privacy-rollup/prover/target/release/settle",
+            "exec",
+            "build/aggregation/inputs/witness.json",
+            "build/aggregation/rejections-final/hint-middle",
+            "build/aggregation/inputs/vk.pc",
+            "build/aggregation/cases/hint-middle.pc"
+          ],
+          "log_sha256": "8332f8fe199f81ffeb65db12793dd4bbed5b65b84d34faf8208cf0de4b193a78"
+        },
+        {
+          "kind": "batch",
+          "name": "narg-extra",
+          "returncode": 1,
+          "command": [
+            "privacy-rollup/prover/target/release/settle",
+            "exec",
+            "build/aggregation/inputs/witness.json",
+            "build/aggregation/rejections-final/narg-extra",
+            "build/aggregation/inputs/vk.pc",
+            "build/aggregation/cases/narg-extra.pc"
+          ],
+          "log_sha256": "dd18a1e998c639e23d6439d4ca775ab376e9c3a0729f22d6569e72d02659575a"
+        },
+        {
+          "kind": "batch",
+          "name": "wrong-key",
+          "returncode": 1,
+          "command": [
+            "privacy-rollup/prover/target/release/settle",
+            "exec",
+            "build/aggregation/inputs/witness.json",
+            "build/aggregation/rejections-final/wrong-key",
+            "build/aggregation/rejections-final/wrong-vk.pc",
+            "build/aggregation/inputs/proof0.pc"
+          ],
+          "log_sha256": "64399cd218ab5a506be8d96cbb9727da19896897cfac398b5c1aff84d96a6953"
+        }
+      ]
+    },
+    "first_review_operator": {
+      "reject_forged_statement": "Error: rejected: Proof",
+      "reject_corrupt_proof": "Error: rejected: Proof",
+      "submit_seconds": 0.09,
+      "reject_resubmission": "Error: rejected: NullifierReserved",
+      "reject_missing_funding": "Error: rejected: Rule(FundingInput)",
+      "witness_equals_reference": true,
+      "guest_exec_seconds": 32.3,
+      "guest_log": [
+        "image id 4fe8fe7553c3cd2903b868020865561545244d8f2d853cebf97257595489d9b7",
+        "executed: 1171106233 cycles, 1230 segments, 32.335893345s"
+      ],
+      "guest_journal_equals_native": true,
+      "reject_after_settlement": "Error: rejected: NullifierSpent",
+      "accept_and_rollback": {
+        "before": {
+          "backing_sats": 10000,
+          "batch_number": 0,
+          "commitment_count": 0,
+          "nullifier_next_index": 1,
+          "pending": 1,
+          "rollup_id": "181e83faa3916307d316fd28fd792439464ed60145a313fa3b9b5f88354d2779",
+          "state_root": "1c69a5fc8c51392072295f4cdee7bb19d29e3748e0e8666ff4fe55683369e3d3",
+          "utxo": [
+            "0101010101010101010101010101010101010101010101010101010101010101",
+            0
+          ]
+        },
+        "after": {
+          "backing_sats": 29300,
+          "batch_number": 1,
+          "commitment_count": 2,
+          "nullifier_next_index": 3,
+          "pending": 0,
+          "rollup_id": "181e83faa3916307d316fd28fd792439464ed60145a313fa3b9b5f88354d2779",
+          "state_root": "fe5d662b5be88798f60ef65f7c1a5fd8cedfcb577a2a19af7efc40da96075948",
+          "utxo": [
+            "0202020202020202020202020202020202020202020202020202020202020202",
+            0
+          ]
+        },
+        "restored": {
+          "backing_sats": 10000,
+          "batch_number": 0,
+          "commitment_count": 0,
+          "nullifier_next_index": 1,
+          "pending": 0,
+          "rollup_id": "181e83faa3916307d316fd28fd792439464ed60145a313fa3b9b5f88354d2779",
+          "state_root": "1c69a5fc8c51392072295f4cdee7bb19d29e3748e0e8666ff4fe55683369e3d3",
+          "utxo": [
+            "0101010101010101010101010101010101010101010101010101010101010101",
+            0
+          ]
+        }
+      }
+    },
+    "baseline_guest_accepts_new_client_proof": true,
+    "baseline_cross_accept_log_sha256": "285ced7a5fa9bd9dd904ed9b0953e2098a20720a7ec69b2e5c36cfc4bad3f8c2",
+    "resolved_graph_versions_unchanged": true,
+    "whir_patch_reapplication_passed": true
+  },
+  "guest_programs": {
+    "baseline_verify": {
+      "bytes": 2344672,
+      "sha256": "2409c2b5bf556c2bba0a6004fc6873616854c638830a5b5d5b549721f7fc9f5d"
+    },
+    "baseline_settle": {
+      "bytes": 2423656,
+      "sha256": "eacbaaa71d27a3ed8f29ac532a21ba9d153a4dc6c5349c139dd5b6683da0ef33"
+    },
+    "optimized_verify": {
+      "bytes": 2551840,
+      "sha256": "c50a80424b2b9c423708383f407545b755152d60079fd60129621735dd8ced8b"
+    },
+    "optimized_settle": {
+      "bytes": 2619688,
+      "sha256": "697996ca5b2f4d86c2c63f6f1e4486de8fa18649ea990e31370dd67b56b6797f"
+    },
+    "first_review_verify": {
+      "bytes": 2358344,
+      "sha256": "2aedfd5a96330a52f7a88ff39dbffdb886e6fd577eb85fed6f46121174b2b5df"
+    },
+    "first_review_settle": {
+      "bytes": 2426552,
+      "sha256": "c8fb5a599ba9b9d06d8a412ad40f848a50c02ae0d26cefb1b25d27b859c66c26"
+    }
+  },
+  "baseline_lockfile_sha256": {
+    "privacy-rollup/Cargo.lock": "bb94bcebc91caffa05bc8be36d67b97fe771c2d66deb01eaea2908dd5cfd4cdc",
+    "privacy-rollup/methods/Cargo.lock": "4000bd2cf3f4986acec30b7ea99bc080cea998d441e2673320fbf1026cef6a6b",
+    "privacy-rollup/methods/guest/Cargo.lock": "77b83c696432a950b0b80438635f75c64882c6ef3b405a033a6b575663539e69",
+    "privacy-rollup/prover/Cargo.lock": "70e2fd794a13d3444f2d84508c866a816c6c3f88d6744c46033bd69a567068f3",
+    "privacy-rollup/vendor/ark-ff/Cargo.lock": "083d062c596ac2f7e430f46a6afe848ba53bed9037e83ab0a14b6fc4e29eba2f",
+    "privacy-rollup/vendor/provekit-spongefish/Cargo.lock": "9b99047dfa17bfb1e08582da2379992ecc41890280c943a7a817b90786c9bf38",
+    "recursive-stwo/Cargo.lock": "e0a4242f95028a1714338a894dcb87d6639537799e725ce8d700bf5eb1fe1263",
+    "recursive-stwo/vendor/bws-bitcoin/Cargo.lock": "38992b113aeec8b6438549b881aa7f8a2c14882ccb0720cfc3955a20a402a9cd",
+    "recursive-stwo/vendor/bws-stwo/Cargo.lock": "fb1918b0f2b37d5f22d980c591c3a650f523014ec07de676eae92f24411feb28"
+  },
+  "existing_lockfile_sha256": {
+    "privacy-rollup/Cargo.lock": "305cc21129998c10795e6514bb7073fc903cac63c7c833a8aef3906f0b8e8a54",
+    "privacy-rollup/methods/Cargo.lock": "4000bd2cf3f4986acec30b7ea99bc080cea998d441e2673320fbf1026cef6a6b",
+    "privacy-rollup/methods/guest/Cargo.lock": "d46487e89abdd3d4b394fc355570f14961d7c10a15e176c5a214f5801a5c13ed",
+    "privacy-rollup/prover/Cargo.lock": "70e2fd794a13d3444f2d84508c866a816c6c3f88d6744c46033bd69a567068f3",
+    "privacy-rollup/vendor/ark-ff/Cargo.lock": "083d062c596ac2f7e430f46a6afe848ba53bed9037e83ab0a14b6fc4e29eba2f",
+    "privacy-rollup/vendor/provekit-spongefish/Cargo.lock": "9b99047dfa17bfb1e08582da2379992ecc41890280c943a7a817b90786c9bf38",
+    "recursive-stwo/Cargo.lock": "e0a4242f95028a1714338a894dcb87d6639537799e725ce8d700bf5eb1fe1263",
+    "recursive-stwo/vendor/bws-bitcoin/Cargo.lock": "38992b113aeec8b6438549b881aa7f8a2c14882ccb0720cfc3955a20a402a9cd",
+    "recursive-stwo/vendor/bws-stwo/Cargo.lock": "fb1918b0f2b37d5f22d980c591c3a650f523014ec07de676eae92f24411feb28"
+  },
+  "necessary_lockfile_deviation": {
+    "files": [
+      "privacy-rollup/Cargo.lock",
+      "privacy-rollup/methods/guest/Cargo.lock"
+    ],
+    "changes": "Same-version WHIR registry entries become explicit local source; adapter adds already-resolved ark-ff and WHIR dev dependencies. No resolved package or version change."
+  },
+  "client_proving_diagnostic": {
+    "rayon_threads": 4,
+    "cold_measurement_not_comparable": true,
+    "samples": {
+      "original": {
+        "runs": [
+          {
+            "proof_generation_seconds": 0.548222726,
+            "narg_bytes": 32656,
+            "hints_bytes": 600064,
+            "postcard_bytes": 633222,
+            "peak_host_rss_kib": 123232,
+            "log_sha256": "d784fcab86f207b4b685fbedd84cf3959cfe46cbda94e34e7794e5f54b704a6a",
+            "command": [
+              "env",
+              "RAYON_NUM_THREADS=4",
+              "build/aggregation/joinsplit-batch-baseline",
+              "privacy-rollup/fixtures/joinsplit/joinsplit.pkp",
+              "privacy-rollup/fixtures/joinsplit/joinsplit.pkv",
+              "build/aggregation/client-original-0"
+            ]
+          },
+          {
+            "proof_generation_seconds": 0.585560144,
+            "narg_bytes": 32656,
+            "hints_bytes": 602944,
+            "postcard_bytes": 636102,
+            "peak_host_rss_kib": 138020,
+            "log_sha256": "442f9c82c26317b060ffed64023d135b5131b886104d50b04d0f557540aa7fd2",
+            "command": [
+              "env",
+              "RAYON_NUM_THREADS=4",
+              "build/aggregation/joinsplit-batch-baseline",
+              "privacy-rollup/fixtures/joinsplit/joinsplit.pkp",
+              "privacy-rollup/fixtures/joinsplit/joinsplit.pkv",
+              "build/aggregation/client-original-1"
+            ]
+          }
+        ],
+        "median_proof_generation_seconds": 0.566891435,
+        "max_peak_host_rss_kib": 138020
+      },
+      "blinding": {
+        "runs": [
+          {
+            "proof_generation_seconds": 0.507186327,
+            "narg_bytes": 32656,
+            "hints_bytes": 603200,
+            "postcard_bytes": 636358,
+            "peak_host_rss_kib": 135888,
+            "log_sha256": "319459df9d153a785f0594b7232f2c710341e07f5002da02bb11e3f465e56049",
+            "command": [
+              "env",
+              "RAYON_NUM_THREADS=4",
+              "privacy-rollup/target/release/joinsplit-batch",
+              "privacy-rollup/fixtures/joinsplit/joinsplit.pkp",
+              "privacy-rollup/fixtures/joinsplit/joinsplit.pkv",
+              "build/aggregation/client-blinding-0"
+            ]
+          },
+          {
+            "proof_generation_seconds": 0.48595910600000003,
+            "narg_bytes": 32656,
+            "hints_bytes": 600160,
+            "postcard_bytes": 633318,
+            "peak_host_rss_kib": 137396,
+            "log_sha256": "4a3aeff027a92d0c80d0758da1347adc33f1e6817def8ed4cb0ce9cdcd5144fa",
+            "command": [
+              "env",
+              "RAYON_NUM_THREADS=4",
+              "privacy-rollup/target/release/joinsplit-batch",
+              "privacy-rollup/fixtures/joinsplit/joinsplit.pkp",
+              "privacy-rollup/fixtures/joinsplit/joinsplit.pkv",
+              "build/aggregation/client-blinding-1"
+            ]
+          }
+        ],
+        "median_proof_generation_seconds": 0.4965727165,
+        "max_peak_host_rss_kib": 137396
+      }
+    },
+    "notes": "Small warm sequential diagnostic, randomized independent proofs. This is ProveKit client proving, not RISC Zero proving."
+  },
+  "formal_coverage_note": "Lean proves only narrow algebraic/conditional row-cache identities. No formal Rust refinement, subgroup-transform implementation proof, FFT proof or protocol soundness proof."
+}

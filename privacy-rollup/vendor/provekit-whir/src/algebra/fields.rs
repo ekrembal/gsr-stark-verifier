@@ -1,0 +1,173 @@
+use ark_ff::{
+    Field, Fp128, Fp192, Fp2, Fp256, Fp2Config, Fp3, Fp3Config, Fp64, MontBackend, MontConfig,
+    MontFp, PrimeField,
+};
+use serde::{Deserialize, Serialize};
+use zerocopy::IntoBytes;
+
+use crate::type_info::TypeInfo;
+
+pub trait FieldWithSize {
+    fn field_size_bits() -> f64;
+}
+
+impl<F> FieldWithSize for F
+where
+    F: Field,
+{
+    fn field_size_bits() -> f64 {
+        // Compute modulus as f64
+        const BASE264: f64 = 18_446_744_073_709_551_616_f64;
+        let modulus = F::BasePrimeField::MODULUS;
+        let limbs_le = modulus.as_ref();
+        let mut modulus = 0.0_f64;
+        for limb in limbs_le.iter().rev() {
+            modulus *= BASE264;
+            modulus += *limb as f64;
+        }
+        modulus.log2() * F::extension_degree() as f64
+    }
+}
+
+/// Type information for a finite field.
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub struct FieldInfo {
+    /// Field characteristic (aka prime or modulus) in big-endian without leading zeros.
+    #[serde(with = "crate::ark_serde::bytes")]
+    characteristic: Vec<u8>,
+
+    /// Extension degree of the field.
+    extension_degree: usize,
+}
+
+impl<F: Field> TypeInfo for F {
+    type Info = FieldInfo;
+
+    fn type_info() -> Self::Info {
+        // Get the bytes of the characteristic in little-endian order.
+        #[cfg(not(target_endian = "little"))]
+        compile_error!("This crate requires a little-endian target.");
+        let characteristic = F::characteristic().as_bytes();
+        // Convert to big-endian vec without leading zeros.
+        let characteristic = characteristic
+            .iter()
+            .copied()
+            .rev()
+            .skip_while(|&b| b == 0)
+            .collect();
+        FieldInfo {
+            characteristic,
+            extension_degree: F::extension_degree() as usize,
+        }
+    }
+}
+
+#[derive(MontConfig)]
+#[modulus = "21888242871839275222246405745257275088548364400416034343698204186575808495617"]
+#[generator = "5"]
+pub struct BN254Config;
+pub type Field256 = Fp256<MontBackend<BN254Config, 4>>;
+
+#[derive(MontConfig)]
+#[modulus = "3801539170989320091464968600173246866371124347557388484609"]
+#[generator = "3"]
+pub struct FConfig192;
+pub type Field192 = Fp192<MontBackend<FConfig192, 3>>;
+
+#[derive(MontConfig)]
+#[modulus = "340282366920938463463374557953744961537"]
+#[generator = "3"]
+pub struct FrConfig128;
+pub type Field128 = Fp128<MontBackend<FrConfig128, 2>>;
+
+#[derive(MontConfig)]
+#[modulus = "18446744069414584321"]
+#[generator = "7"]
+pub struct FConfig64;
+pub type Field64 = Fp64<MontBackend<FConfig64, 1>>;
+
+pub type Field64_2 = Fp2<F2Config64>;
+pub struct F2Config64;
+impl Fp2Config for F2Config64 {
+    type Fp = Field64;
+
+    const NONRESIDUE: Self::Fp = MontFp!("7");
+
+    const FROBENIUS_COEFF_FP2_C1: &'static [Self::Fp] = &[
+        // Fq(7)**(((q^0) - 1) / 2)
+        MontFp!("1"),
+        // Fq(7)**(((q^1) - 1) / 2)
+        MontFp!("18446744069414584320"),
+    ];
+}
+
+pub type Field64_3 = Fp3<F3Config64>;
+pub struct F3Config64;
+
+impl Fp3Config for F3Config64 {
+    type Fp = Field64;
+
+    const NONRESIDUE: Self::Fp = MontFp!("2");
+
+    const FROBENIUS_COEFF_FP3_C1: &'static [Self::Fp] = &[
+        MontFp!("1"),
+        // Fq(2)^(((q^1) - 1) / 3)
+        MontFp!("4294967295"),
+        // Fq(2)^(((q^2) - 1) / 3)
+        MontFp!("18446744065119617025"),
+    ];
+
+    const FROBENIUS_COEFF_FP3_C2: &'static [Self::Fp] = &[
+        MontFp!("1"),
+        // Fq(2)^(((2q^1) - 2) / 3)
+        MontFp!("18446744065119617025"),
+        // Fq(2)^(((2q^2) - 2) / 3)
+        MontFp!("4294967295"),
+    ];
+
+    // (q^3 - 1) = 2^32 * T where T = 1461501636310055817916238417282618014431694553085
+    const TWO_ADICITY: u32 = 32;
+
+    // 11^T
+    const QUADRATIC_NONRESIDUE_TO_T: Fp3<Self> =
+        Fp3::new(MontFp!("5944137876247729999"), MontFp!("0"), MontFp!("0"));
+
+    // T - 1 / 2
+    #[allow(clippy::unreadable_literal)]
+    const TRACE_MINUS_ONE_DIV_TWO: &'static [u64] =
+        &[0x80000002fffffffe, 0x80000002fffffffc, 0x7ffffffe];
+}
+
+#[cfg(test)]
+mod tests {
+    use static_assertions::const_assert_eq;
+
+    use super::*;
+    use crate::{
+        algebra::fields::{Field256, Field64_3},
+        type_info::Type,
+    };
+
+    const_assert_eq!(size_of::<Type<Field256>>(), 0);
+
+    #[test]
+    #[allow(clippy::unreadable_literal)]
+    fn test_type_info_field64_3() {
+        let type_info = Field64_3::type_info();
+        assert_eq!(
+            type_info.characteristic,
+            18446744069414584321_u64.to_be_bytes().as_slice()
+        );
+        assert_eq!(type_info.extension_degree, 3);
+    }
+
+    #[test]
+    fn test_json_goldilocks_3() {
+        let field_config = Type::<Field64_3>::new();
+        let json = serde_json::to_string(&field_config).unwrap();
+        assert_eq!(
+            json,
+            "{\"characteristic\":\"ffffffff00000001\",\"extension_degree\":3}"
+        );
+    }
+}

@@ -1,0 +1,251 @@
+{
+  "scope": "Complete 400-iteration synthetic field kernels, not a real JoinSplit receipt",
+  "common_segment_limit_po2": 18,
+  "real_local_proofs": true,
+  "experiments": {
+    "base": {
+      "capture": {
+        "complete": true,
+        "count": 1,
+        "first": 0,
+        "image_id": "7450be65c5c225bd58f2fc4dd6cc87fcd6f6fefbe120afb95c207070a0710449",
+        "paging_cycles": 17152,
+        "reserved_cycles": 119958,
+        "segments": 1,
+        "selected": [
+          {
+            "bytes": 53404,
+            "index": 0,
+            "po2": 18
+          }
+        ],
+        "total_cycles": 262144,
+        "user_cycles": 125034
+      },
+      "operations": {
+        "prove": {
+          "proof_result": {
+            "operation": "prove",
+            "real_local_proof": true,
+            "result": {
+              "index": 0,
+              "integrity_verified": true,
+              "po2": 18,
+              "seal_bytes": 255656
+            },
+            "seconds": 104.694805104
+          },
+          "resources": {
+            "command": [
+              "privacy-rollup/prover/target/release/proof_chain_bench",
+              "prove",
+              "build/feasibility/kernel-base400-po218",
+              "0"
+            ],
+            "exit_code": 0,
+            "stopped_by": null,
+            "seconds": 104.82156760699945,
+            "sampled_peak_group_rss_kib": 2395880,
+            "minimum_free_disk_bytes": 3493240832,
+            "sampling_seconds": 0.25,
+            "limits": {
+              "seconds": 900,
+              "rss_mib": 12288,
+              "free_mib": 1024
+            }
+          }
+        },
+        "lift": {
+          "proof_result": {
+            "operation": "lift",
+            "real_local_proof": true,
+            "result": {
+              "index": 0,
+              "integrity_verified": true,
+              "seal_bytes": 222668
+            },
+            "seconds": 42.764361773
+          },
+          "resources": {
+            "command": [
+              "privacy-rollup/prover/target/release/proof_chain_bench",
+              "lift",
+              "build/feasibility/kernel-base400-po218",
+              "0"
+            ],
+            "exit_code": 0,
+            "stopped_by": null,
+            "seconds": 42.90872468499947,
+            "sampled_peak_group_rss_kib": 1449500,
+            "minimum_free_disk_bytes": 3492921344,
+            "sampling_seconds": 0.25,
+            "limits": {
+              "seconds": 900,
+              "rss_mib": 12288,
+              "free_mib": 1024
+            }
+          }
+        },
+        "padded": {
+          "proof_result": {
+            "operation": "padded",
+            "real_local_proof": true,
+            "result": {
+              "complete_guest_verified": true,
+              "corrupt_seal_rejected": true,
+              "hashfn": "sha-256-padded",
+              "integrity_verified": true,
+              "seal_bytes": 222668
+            },
+            "seconds": 20.354765411
+          },
+          "resources": {
+            "command": [
+              "privacy-rollup/prover/target/release/proof_chain_bench",
+              "padded",
+              "build/feasibility/kernel-base400-po218",
+              "lift-0"
+            ],
+            "exit_code": 0,
+            "stopped_by": null,
+            "seconds": 20.36920555799952,
+            "sampled_peak_group_rss_kib": 1425472,
+            "minimum_free_disk_bytes": 3492638720,
+            "sampling_seconds": 0.25,
+            "limits": {
+              "seconds": 900,
+              "rss_mib": 12288,
+              "free_mib": 1024
+            }
+          }
+        }
+      },
+      "total_supervisor_seconds": 168.09949784999844,
+      "peak_rss_kib": 2395880
+    },
+    "fused": {
+      "capture": {
+        "complete": true,
+        "count": 1,
+        "first": 0,
+        "image_id": "75cabbc54173d8a85ebc5416adb51809fa44ac99a62b63b836e9c021f87fa048",
+        "paging_cycles": 17822,
+        "reserved_cycles": 27409,
+        "segments": 1,
+        "selected": [
+          {
+            "bytes": 54515,
+            "index": 0,
+            "po2": 17
+          }
+        ],
+        "total_cycles": 131072,
+        "user_cycles": 85841
+      },
+      "operations": {
+        "prove": {
+          "proof_result": {
+            "operation": "prove",
+            "real_local_proof": true,
+            "result": {
+              "index": 0,
+              "integrity_verified": true,
+              "po2": 17,
+              "seal_bytes": 243944
+            },
+            "seconds": 50.808048767
+          },
+          "resources": {
+            "command": [
+              "privacy-rollup/prover/target/release/proof_chain_bench",
+              "prove",
+              "build/feasibility/kernel-fused400-po218",
+              "0"
+            ],
+            "exit_code": 0,
+            "stopped_by": null,
+            "seconds": 50.936628907998966,
+            "sampled_peak_group_rss_kib": 1208524,
+            "minimum_free_disk_bytes": 3494125568,
+            "sampling_seconds": 0.25,
+            "limits": {
+              "seconds": 900,
+              "rss_mib": 12288,
+              "free_mib": 1024
+            }
+          }
+        },
+        "lift": {
+          "proof_result": {
+            "operation": "lift",
+            "real_local_proof": true,
+            "result": {
+              "index": 0,
+              "integrity_verified": true,
+              "seal_bytes": 222668
+            },
+            "seconds": 43.884388073
+          },
+          "resources": {
+            "command": [
+              "privacy-rollup/prover/target/release/proof_chain_bench",
+              "lift",
+              "build/feasibility/kernel-fused400-po218",
+              "0"
+            ],
+            "exit_code": 0,
+            "stopped_by": null,
+            "seconds": 43.92765655299809,
+            "sampled_peak_group_rss_kib": 1446112,
+            "minimum_free_disk_bytes": 3493810176,
+            "sampling_seconds": 0.25,
+            "limits": {
+              "seconds": 900,
+              "rss_mib": 12288,
+              "free_mib": 1024
+            }
+          }
+        },
+        "padded": {
+          "proof_result": {
+            "operation": "padded",
+            "real_local_proof": true,
+            "result": {
+              "complete_guest_verified": true,
+              "corrupt_seal_rejected": true,
+              "hashfn": "sha-256-padded",
+              "integrity_verified": true,
+              "seal_bytes": 222668
+            },
+            "seconds": 21.650008656
+          },
+          "resources": {
+            "command": [
+              "privacy-rollup/prover/target/release/proof_chain_bench",
+              "padded",
+              "build/feasibility/kernel-fused400-po218",
+              "lift-0"
+            ],
+            "exit_code": 0,
+            "stopped_by": null,
+            "seconds": 21.87091008400239,
+            "sampled_peak_group_rss_kib": 1425060,
+            "minimum_free_disk_bytes": 3493527552,
+            "sampling_seconds": 0.25,
+            "limits": {
+              "seconds": 900,
+              "rss_mib": 12288,
+              "free_mib": 1024
+            }
+          }
+        }
+      },
+      "total_supervisor_seconds": 116.73519554499944,
+      "peak_rss_kib": 1446112
+    }
+  },
+  "negative_checks": {
+    "wrong_quotient": "Execution accepts a zero result, but actual local proof generation rejects bad carry; unchanged verifier instructions/constants",
+    "noncanonical_output": "Guest rejects r=p with the mandatory canonical bound"
+  }
+}

@@ -1,5 +1,11 @@
 # Unpublished aggregation optimization review
 
+This document records checkpoint `45a1bc6`. The subsequent unpublished
+[lazy blinding and fused-kernel investigation](lazy-blinding-and-fused-kernels.md)
+reduces settlement execution to approximately 191.12M cycles / 208 segments
+and includes complete small real kernel receipts. Those results still do not
+establish full JoinSplit aggregation feasibility.
+
 The original PR10 baseline is commit
 `86649820f8c68733617c84c4efeaae48e07e9268`. All current work remains on the local
 branch `local/fused-bigint2-feasibility`, descended from that baseline. The

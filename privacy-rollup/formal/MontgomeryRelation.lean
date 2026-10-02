@@ -28,6 +28,11 @@ theorem coefficient_no_wrap :
 
 theorem honest_carry_fits : 16322 < 2^21 := by decide
 
+theorem dot32_coefficient_no_wrap :
+    68666910 + 257 * (127 * 16384 + 255 * 256 + 255) < 2013265921 := by decide
+
+theorem dot32_honest_carry_fits : 269282 < 2^21 := by decide
+
 theorem radix_coprime :
     Nat.gcd (2^256)
       21888242871839275222246405745257275088548364400416034343698204186575808495617 = 1 := by decide
@@ -35,6 +40,8 @@ theorem radix_coprime :
 #print axioms montgomery_relation
 #print axioms coefficient_no_wrap
 #print axioms honest_carry_fits
+#print axioms dot32_coefficient_no_wrap
+#print axioms dot32_honest_carry_fits
 #print axioms radix_coprime
 
 end Aggregation

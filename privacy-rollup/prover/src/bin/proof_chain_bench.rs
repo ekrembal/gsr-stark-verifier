@@ -101,8 +101,10 @@ fn main() -> Result<()> {
             serde_json::json!({"seal_bytes":joined.seal.len()*4,"integrity_verified":true})
         }
         "padded" => {
-            ensure!(a[3] == "joined", "padded dir joined");
-            let joined: SuccinctReceipt<ReceiptClaim> = postcard::from_bytes(&fs::read(out.join("joined.pc"))?)?;
+            let stem = &a[3];
+            ensure!(stem == "joined" || stem.strip_prefix("lift-").and_then(|s| s.parse::<u32>().ok()).is_some(),
+                "padded dir joined|lift-N");
+            let joined: SuccinctReceipt<ReceiptClaim> = postcard::from_bytes(&fs::read(out.join(format!("{stem}.pc")))?)?;
             joined.verify_integrity_with_context(&ctx)?;
             let (padded, params): (_, SuccinctReceiptVerifierParameters) =
                 risc0_zkvm::recursion::identity_sha256_padded(&joined)?;

@@ -2,6 +2,7 @@ pub mod embedding;
 pub mod fields;
 mod geometric_subgroup;
 pub mod linear_form;
+pub mod projected_power_sum;
 mod multilinear;
 mod multilinear_point;
 pub mod ntt;

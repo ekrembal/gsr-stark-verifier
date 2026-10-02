@@ -7,6 +7,10 @@ version = "0.1.0"
 edition = "2021"
 license = "MIT"
 
+[features]
+fused-bn254 = ["ark-ff/experimental-bn254-montgomery"]
+fused-dot32 = ["fused-bn254", "ark-ff/experimental-bn254-dot32"]
+
 [[bin]]
 name = "verify_joinsplit"
 path = "src/bin/verify_joinsplit.rs"

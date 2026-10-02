@@ -331,6 +331,7 @@ fn hash_rows<T: Encodable + Send + Sync>(
     }
 }
 
+#[cfg_attr(feature = "tracing", tracing::instrument(skip_all))]
 fn hash_rows_serial<T: Encodable + Send + Sync>(
     engine: &dyn hash::HashEngine,
     matrix: &[T],

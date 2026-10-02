@@ -1,10 +1,14 @@
 use ark_ff::FftField;
+#[cfg(not(target_os = "zkvm"))]
+use super::utils::{build_beq_tables, build_weight_covectors};
+#[cfg(not(target_os = "zkvm"))]
+use crate::algebra::linear_form::Covector;
 #[cfg(feature = "tracing")]
 use tracing::instrument;
 
 use super::{
     utils::{
-        build_beq_tables, build_weight_covectors, compute_eq_weights, gamma_to_f_hat_indices,
+        compute_eq_weights, gamma_to_f_hat_indices,
         LambdaAccumulator, ProtocolDims,
     },
     Config,
@@ -14,7 +18,7 @@ use crate::{
         dot,
         embedding::Identity,
         geometric_sequence,
-        linear_form::{Covector, Evaluate, LinearForm, MultilinearExtension, UnivariateEvaluation},
+        linear_form::{Evaluate, LinearForm, MultilinearExtension, UnivariateEvaluation},
         tensor_product, MultilinearPoint,
     },
     hash::Hash,
@@ -544,11 +548,56 @@ impl<F: FftField> Config<F> {
         let blinded_final_claim = blinded.blinded_final_claim;
         let tau: F = verifier_state.verifier_message();
 
-        let beq_tables =
-            build_beq_tables(blinded.lambda.z_points(), &blinded.eq_weights, tau, dims);
-
-        let weight_covectors =
-            build_weight_covectors(&beq_tables, blinded.rho, &blinded.alpha_coeffs, dims);
+        #[cfg(not(target_os = "zkvm"))]
+        let weight_covectors = {
+            let beq_tables =
+                build_beq_tables(blinded.lambda.z_points(), &blinded.eq_weights, tau, dims);
+            build_weight_covectors(&beq_tables, blinded.rho, &blinded.alpha_coeffs, dims)
+        };
+        #[cfg(target_os = "zkvm")]
+        let blinding_forms = {
+            use crate::algebra::projected_power_sum::{InterleavedProjection, ProjectedPowerSum};
+            use std::sync::Arc;
+            let powers = geometric_sequence(tau, blinded.lambda.len() + 1);
+            let projections: Vec<_> = (0..dims.num_g_polys())
+                .map(|i| {
+                    let start = if i == 0 {
+                        0
+                    } else {
+                        (i - 1) * dims.ell + dims.rem
+                    };
+                    Arc::new(ProjectedPowerSum::new(
+                        dims.mu,
+                        dims.ell,
+                        start,
+                        &blinded.eq_weights,
+                        &powers[1..],
+                        blinded.lambda.z_points(),
+                    ))
+                })
+                .collect();
+            let mut forms: Vec<Box<dyn LinearForm<F>>> = Vec::with_capacity(dims.num_blinding_vecs);
+            forms.push(Box::new(InterleavedProjection::new(
+                projections[0].clone(),
+                F::ONE,
+                -blinded.rho,
+            )));
+            for &alpha in &blinded.alpha_coeffs[1..dims.num_vectors] {
+                forms.push(Box::new(InterleavedProjection::new(
+                    projections[0].clone(),
+                    F::ZERO,
+                    -blinded.rho * alpha,
+                )));
+            }
+            for projection in projections.into_iter().skip(1) {
+                forms.push(Box::new(InterleavedProjection::new(
+                    projection,
+                    F::ONE,
+                    F::ZERO,
+                )));
+            }
+            forms
+        };
 
         // Read eval_matrix from transcript
         let eval_matrix: Vec<F> =
@@ -567,6 +616,7 @@ impl<F: FftField> Config<F> {
         }
 
         // Package weight covectors as LinearForm trait objects
+        #[cfg(not(target_os = "zkvm"))]
         let blinding_forms: Vec<Box<dyn LinearForm<F>>> = weight_covectors
             .into_iter()
             .map(|cv| Box::new(Covector::new(cv)) as Box<dyn LinearForm<F>>)

@@ -185,6 +185,7 @@ impl Config {
         }
     }
 
+    #[cfg_attr(feature = "tracing", tracing::instrument(skip_all))]
     pub fn verify<H>(
         &self,
         verifier_state: &mut VerifierState<H>,

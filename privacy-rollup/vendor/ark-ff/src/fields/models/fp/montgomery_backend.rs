@@ -699,6 +699,10 @@ impl<T: MontConfig<N>, const N: usize> FpConfig<N> for MontBackend<T, N> {
     }
 
     fn sum_of_products<const M: usize>(a: &[Fp<Self, N>; M], b: &[Fp<Self, N>; M]) -> Fp<Self, N> {
+        #[cfg(all(target_os = "zkvm", feature = "experimental-bn254-dot32"))]
+        if N == 4 && M == 32 && zkvm_accel::is_bn254::<T, N>() {
+            return zkvm_accel::mont_dot32::<T, N, M>(a, b);
+        }
         #[cfg(target_os = "zkvm")]
         if N == 4 {
             return a.iter().zip(b).map(|(a, b)| *a * b).sum();
@@ -915,6 +919,11 @@ mod test {
     }
 }
 
+#[cfg(all(target_os = "zkvm", feature = "experimental-bn254-montgomery"))]
+#[allow(unsafe_code)]
+#[path = "bn254_montgomery.rs"]
+mod bn254_montgomery;
+
 /// Four-limb Montgomery multiplication through the RISC Zero bigint accelerator.
 ///
 /// `mont(a, b) = a * b * R^-1 mod p` is computed as two checked `modmul_256` calls, the second by
@@ -987,12 +996,35 @@ mod zkvm_accel {
         const R_INV: Words = words(&r_inverse(&T::MODULUS.0, T::INV));
     }
 
+    #[cfg(feature = "experimental-bn254-dot32")]
+    pub(super) fn is_bn254<T: MontConfig<N>, const N: usize>() -> bool {
+        Consts::<T, N>::MODULUS == super::bn254_montgomery::MODULUS
+    }
+
+    #[cfg(feature = "experimental-bn254-dot32")]
+    pub(super) fn mont_dot32<T: MontConfig<N>, const N: usize, const M: usize>(
+        a: &[super::Fp<super::MontBackend<T, N>, N>; M],
+        b: &[super::Fp<super::MontBackend<T, N>, N>; M],
+    ) -> super::Fp<super::MontBackend<T, N>, N> {
+        // Copy the public limbs; do not assume a Rust Fp representation/layout.
+        let lhs = core::array::from_fn(|i| words(&(a[i].0).0));
+        let rhs = core::array::from_fn(|i| words(&(b[i].0).0));
+        let result = super::bn254_montgomery::dot32(&lhs, &rhs);
+        let limbs = core::array::from_fn(|i| result[2*i] as u64 | ((result[2*i+1] as u64)<<32));
+        super::Fp::new_unchecked(crate::BigInt(limbs))
+    }
+
     /// Callers guarantee `N == 4`, so `[u64; N]` and `[u32; 8]` share size and the
     /// little-endian riscv32 layout.
     #[inline(always)]
     pub(super) fn mont_mul<T: MontConfig<N>, const N: usize>(a: &mut [u64; N], b: &[u64; N]) {
         let a = unsafe { &mut *(a as *mut [u64; N] as *mut Words) };
         let b = unsafe { &*(b as *const [u64; N] as *const Words) };
+        #[cfg(feature = "experimental-bn254-montgomery")]
+        if Consts::<T, N>::MODULUS == super::bn254_montgomery::MODULUS {
+            super::bn254_montgomery::multiply(a, b);
+            return;
+        }
         let mut t = [0u32; 8];
         risc0_bigint2::field::modmul_256(a, b, &Consts::<T, N>::MODULUS, &mut t);
         risc0_bigint2::field::modmul_256(&t, &Consts::<T, N>::R_INV, &Consts::<T, N>::MODULUS, a);

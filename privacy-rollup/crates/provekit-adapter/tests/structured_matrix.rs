@@ -43,14 +43,22 @@ fn reverse_evaluator_matches_every_matrix_column() {
             })
             .collect();
         assert_eq!(structured_matrix::evaluate_with_eq(&eq, r1cs), reference(&eq, r1cs), "seed={seed}");
-        assert_eq!(structured_matrix::evaluate_fixed_with_eq(&eq), reference(&eq, r1cs), "compiled residual seed={seed}");
+        assert_eq!(
+            structured_matrix::evaluate_fixed_with_eq(&eq),
+            reference(&eq, r1cs),
+            "compiled residual seed={seed}"
+        );
     }
     // Unit vectors cross full/partial-round and block/unstructured boundaries.
     for row in [0, 306, 307, 309, 318, 354, 355, 522, 523, 570, 571, 574, 575, 38362, 38818] {
         let mut eq = vec![FieldElement::ZERO; r1cs.num_constraints()];
         eq[row] = -FieldElement::ONE;
         assert_eq!(structured_matrix::evaluate_with_eq(&eq, r1cs), reference(&eq, r1cs), "unit row={row}");
-        assert_eq!(structured_matrix::evaluate_fixed_with_eq(&eq), reference(&eq, r1cs), "compiled residual unit row={row}");
+        assert_eq!(
+            structured_matrix::evaluate_fixed_with_eq(&eq),
+            reference(&eq, r1cs),
+            "compiled residual unit row={row}"
+        );
     }
 }
 
@@ -63,7 +71,10 @@ fn reverse_evaluator_matches_sumcheck_point_layout() {
             structured_matrix::evaluate(&alpha, &verifier.r1cs),
             calculate_external_row_by_scatter(&alpha, &verifier.r1cs)
         );
-        assert_eq!(structured_matrix::evaluate_fixed(&alpha), calculate_external_row_by_scatter(&alpha, &verifier.r1cs));
+        assert_eq!(
+            structured_matrix::evaluate_fixed(&alpha),
+            calculate_external_row_by_scatter(&alpha, &verifier.r1cs)
+        );
     }
 }
 
@@ -71,7 +82,8 @@ fn reverse_evaluator_matches_sumcheck_point_layout() {
 fn embedded_configuration_matches_every_pinned_parameter() {
     let verifier = fixture();
     // Same dependency path as this crate's Cargo.toml, resolved from its manifest.
-    let path = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../../../provekit/provekit/verifier/src/joinsplit_whir.pc");
+    let path =
+        Path::new(env!("CARGO_MANIFEST_DIR")).join("../../../../provekit/provekit/verifier/src/joinsplit_whir.pc");
     let encoded = std::fs::read(path).unwrap();
     let embedded: provekit_common::WhirR1CSScheme = postcard::from_bytes(&encoded).unwrap();
     let expected = verifier.whir_for_witness.as_ref().unwrap();
@@ -93,4 +105,96 @@ fn fixed_entry_point_binds_every_key_byte() {
     changed.push(0);
     assert!(FixedJoinSplitVerifier::from_postcard(&changed).is_err());
     assert!(FixedJoinSplitVerifier::from_postcard(&encoded[..encoded.len() - 1]).is_err());
+}
+
+#[test]
+fn bilinear_evaluator_preserves_independent_witness_columns() {
+    let verifier = fixture();
+    for seed in 0..8u64 {
+        let mut x = FieldElement::from(seed + 2);
+        let eq: Vec<_> = (0..38819)
+            .map(|i| {
+                x = x.square() + FieldElement::from(i + 7);
+                if seed == 0 {
+                    FieldElement::ZERO
+                } else if seed == 1 {
+                    FieldElement::ONE
+                } else {
+                    x
+                }
+            })
+            .collect();
+        let vectors = reference(&eq, &verifier.r1cs);
+        // These are arbitrary independent columns, deliberately not a valid
+        // Poseidon witness. Also exercise split, global and boundary layouts.
+        for (offset, len) in [(0, 51805), (0, 5530), (5530, 46275), (5529, 2), (0, 1), (51804, 1)] {
+            let columns: Vec<_> = (0..len)
+                .map(|i| {
+                    x = x.square() + FieldElement::from(i as u64 + 13);
+                    if seed == 0 {
+                        FieldElement::ONE
+                    } else if seed == 1 {
+                        -FieldElement::ONE
+                    } else {
+                        x
+                    }
+                })
+                .collect();
+            let expected = core::array::from_fn(|m| {
+                vectors[m][offset..offset + len].iter().zip(&columns).map(|(a, b)| *a * b).sum()
+            });
+            assert_eq!(
+                structured_matrix::evaluate_bilinear(&eq, &columns, offset),
+                expected,
+                "seed={seed}, offset={offset}, len={len}"
+            );
+        }
+    }
+}
+
+#[test]
+fn lazy_covectors_match_prefix_folds_and_cache_each_commitment_point() {
+    use provekit_common::{
+        prefix_covector::build_prefix_covectors, utils::sumcheck::calculate_evaluations_over_boolean_hypercube_for_eq,
+    };
+    use std::sync::Arc;
+    use whir::algebra::linear_form::LinearForm;
+    let alpha: Vec<_> = (0..16).map(|i| FieldElement::from(i + 19)).collect();
+    let rows = Arc::new(calculate_evaluations_over_boolean_hypercube_for_eq(&alpha, 38819));
+    let vectors = reference(&rows, &fixture().r1cs);
+    let groups = [(0, 5530), (5530, 46275), (0, 51805)].map(|(offset, len)| {
+        let expected =
+            build_prefix_covectors(17, core::array::from_fn::<_, 3, _>(|m| vectors[m][offset..offset + len].to_vec()));
+        let actual = structured_matrix::FixedMatrixCovector::new_group(rows.clone(), offset, len, 1 << 17);
+        (actual, expected)
+    });
+    for seed in [0, 1, 2, 7, 19, 2, 0] {
+        for (g, (actual, expected)) in groups.iter().enumerate() {
+            let point: Vec<_> = (0..17)
+                .map(|i| match seed {
+                    0 => FieldElement::ZERO,
+                    1 => FieldElement::ONE,
+                    _ => FieldElement::from(seed + i + g as u64 * 100),
+                })
+                .collect();
+            // Deliberately permuted/repeated matrix access and changed points.
+            for m in [2, 0, 1, 0, 2] {
+                assert_eq!(actual[m].size(), expected[m].size());
+                assert_eq!(
+                    actual[m].mle_evaluate(&point),
+                    expected[m].mle_evaluate(&point),
+                    "seed={seed}, group={g}, matrix={m}"
+                );
+            }
+        }
+    }
+    for (actual, expected) in &groups {
+        for m in 0..3 {
+            let mut a = vec![FieldElement::from(3); 1 << 17];
+            let mut b = a.clone();
+            actual[m].accumulate(&mut a, -FieldElement::ONE);
+            expected[m].accumulate(&mut b, -FieldElement::ONE);
+            assert_eq!(a, b);
+        }
+    }
 }

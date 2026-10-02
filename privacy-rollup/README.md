@@ -25,7 +25,7 @@ ProveKit join-split proofs (Noir, WHIR over BN254, hash-only)
 | ProveKit join-split circuit | Implemented; proofs generated and verified natively and inside the guest |
 | `apply_batch` guest | Implemented; journal equals the native transition byte for byte |
 | Empty / anchor-only batches | **Proven** (succinct receipt) and settled consecutively on activated regtest |
-| Batches containing join-splits | **Executed, not proven**: 1.22B cycles per transaction, ~100 h estimated on the 8-core CPU used |
+| Batches containing join-splits | **No complete receipt yet**: latest unpublished experiment executes the frozen batch in 423.24M cycles / 475 segments; bounded real segment proofs are documented below |
 | Covenant (`OP_TX` binding, successor leaf, `1 CSV`) | Implemented, metered, mined on regtest; altered spends rejected |
 | Relay | Consensus-valid; **nonstandard** under the pinned node's policy (annex) |
 
@@ -33,7 +33,11 @@ ProveKit join-split proofs (Noir, WHIR over BN254, hash-only)
 
 The table below records the original PR measurements. The aggregation optimization
 measurements, phase profile, validation results and remaining limits are in
-[reports/aggregation-optimizations.md](reports/aggregation-optimizations.md).
+[reports/aggregation-optimizations.md](reports/aggregation-optimizations.md). The latest
+unpublished [lazy-covector experiment](reports/lazy-covector-optimization.md) follows
+[fixed-key specialization](reports/fixed-config-optimization.md).
+[Normal-size real segment proving](reports/normal-segment-proving.md) measures actual
+CPU/memory cost; execution improvements do not establish full aggregation feasibility.
 
 | Metric | Value |
 |---|---:|
@@ -75,7 +79,10 @@ Dependencies are path dependencies on two sibling checkouts of the repository di
 
 * RISC Zero v3.0.6 (`1cc70cf05033a79ebc90f07c679cb4bd1cd301b9`) with [`../risc0-succinct/risc0-v3.0.6.patch`](../risc0-succinct/risc0-v3.0.6.patch);
 * ProveKit `4ee40639fb8849aeeba37761fdda07f28367e81d` with [`patches/provekit-4ee40639.patch`](patches/provekit-4ee40639.patch),
-  then [`patches/provekit-aggregation.patch`](patches/provekit-aggregation.patch).
+  then [`patches/provekit-aggregation.patch`](patches/provekit-aggregation.patch),
+  then the cumulative [`patches/provekit-structured.patch`](patches/provekit-structured.patch)
+  with `git apply --unidiff-zero`. The last patch includes the hash-bound compiled
+  configuration and exact matrix specialization; it is required by the current guest.
 * WHIR remains version 0.2.0; the vendored published source has the local
   [`patches/whir-blinding.patch`](patches/whir-blinding.patch) algorithmic optimization. Its original
   archive checksum and necessary same-version lockfile source deviation are documented in the review report.

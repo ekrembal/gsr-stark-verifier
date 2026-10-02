@@ -6,19 +6,19 @@ index 346b7c43..d1ad548a 100644
 +pub mod structured_matrix;
 diff --git a/provekit/common/src/utils/structured_matrix.rs b/provekit/common/src/utils/structured_matrix.rs
 new file mode 100644
-index 00000000..f49e2998
+index 00000000..c6d44fb5
 --- /dev/null
 +++ b/provekit/common/src/utils/structured_matrix.rs
-@@ -0,0 +1,155 @@
+@@ -0,0 +1,367 @@
 +//! Exact linear evaluator for the pinned privacy-rollup JoinSplit matrices.
 +//!
 +//! This is a matrix operation, not a proof verifier. The caller must bind the
 +//! supplied R1CS to VK SHA-256 bc1384089b1dc1654e61561089523ae521d2cf9b664589ec1e965108b4e2a183.
 +//! The safe verifier entry point checks the complete encoded VK before using it.
 +//! S-box outputs remain independent witness columns; only linear forms change.
++use super::sumcheck::{calculate_evaluations_over_boolean_hypercube_for_eq, scatter_selected_rows};
 +use crate::{FieldElement, R1CS};
 +use ark_ff::AdditiveGroup;
-+use super::sumcheck::{calculate_evaluations_over_boolean_hypercube_for_eq, scatter_selected_rows};
 +
 +struct Block {
 +    row: usize,
@@ -40,12 +40,21 @@ index 00000000..f49e2998
 +    let v2 = v + v;
 +    let v4 = v2 + v2;
 +    let v6 = v4 + v2;
-+    [u4+a+v, u6+a+v+(c+c), u+v4+c, u+(a+a)+v6+c]
++    [
++        u4 + a + v,
++        u6 + a + v + (c + c),
++        u + v4 + c,
++        u + (a + a) + v6 + c,
++    ]
 +}
 +
 +fn form_weight(eq: &[FieldElement], row: usize, sbox: usize, matrix: usize) -> FieldElement {
-+    let first = eq[row+3*sbox];
-+    if matrix == 0 { first } else { first + eq[row+3*sbox+2] }
++    let first = eq[row + 3 * sbox];
++    if matrix == 0 {
++        first
++    } else {
++        first + eq[row + 3 * sbox + 2]
++    }
 +}
 +
 +/// Return the same three column vectors as the generic row-major scatter.
@@ -64,7 +73,9 @@ index 00000000..f49e2998
 +    assert!(eq.len() >= r1cs.num_constraints());
 +    let mut next_block = 0;
 +    let out = scatter_selected_rows(eq, r1cs, |row| {
-+        while next_block < BLOCKS.len() && row >= BLOCKS[next_block].row + 268 { next_block += 1; }
++        while next_block < BLOCKS.len() && row >= BLOCKS[next_block].row + 268 {
++            next_block += 1;
++        }
 +        next_block == BLOCKS.len() || row < BLOCKS[next_block].row
 +    });
 +    reverse_blocks(eq, out)
@@ -85,7 +96,7 @@ index 00000000..f49e2998
 +        let weight = eq[row as usize];
 +        for matrix in 0..3 {
 +            for &(column, coefficient) in matrices[matrix] {
-+                out[matrix][column as usize] += coefficient*weight;
++                out[matrix][column as usize] += coefficient * weight;
 +            }
 +        }
 +    }
@@ -99,9 +110,9 @@ index 00000000..f49e2998
 +    for block in &BLOCKS {
 +        let row = block.row;
 +        for j in 0..88 {
-+            let e0 = eq[row+3*j];
-+            let e1 = eq[row+3*j+1];
-+            let e2 = eq[row+3*j+2];
++            let e0 = eq[row + 3 * j];
++            let e1 = eq[row + 3 * j + 1];
++            let e2 = eq[row + 3 * j + 2];
 +            let y2 = block.y2[j] as usize;
 +            let y4 = block.y4[j] as usize;
 +            let y5 = block.y5[j] as usize;
@@ -113,28 +124,34 @@ index 00000000..f49e2998
 +            out[2][y5] += e2;
 +        }
 +        for lane in 0..4 {
-+            out[1][0] += eq[row+264+lane];
-+            out[2][block.outputs[lane] as usize] += eq[row+264+lane];
++            out[1][0] += eq[row + 264 + lane];
++            out[2][block.outputs[lane] as usize] += eq[row + 264 + lane];
 +        }
 +        for matrix in 0..2 {
 +            let mut adjoint: [FieldElement; 4] = core::array::from_fn(|lane| {
-+                if matrix == 0 { eq[row+264+lane] } else { FieldElement::ZERO }
++                if matrix == 0 {
++                    eq[row + 264 + lane]
++                } else {
++                    FieldElement::ZERO
++                }
 +            });
 +            // Last four full rounds, in reverse.
 +            for group in (0..4).rev() {
-+                let start = 72+4*group;
++                let start = 72 + 4 * group;
 +                let products = external_transpose(adjoint);
 +                for lane in 0..4 {
-+                    out[matrix][block.y5[start+lane] as usize] += products[lane];
-+                    adjoint[lane] = form_weight(eq, row, start+lane, matrix);
-+                    rc_weights[matrix][start+lane] += adjoint[lane];
++                    out[matrix][block.y5[start + lane] as usize] += products[lane];
++                    adjoint[lane] = form_weight(eq, row, start + lane, matrix);
++                    rc_weights[matrix][start + lane] += adjoint[lane];
 +                }
 +            }
 +            // Internal mix is diag(d)+11^T, hence symmetric. Lane zero was
 +            // replaced by an independent S-box output, so it ends at that column.
 +            for j in (16..72).rev() {
 +                let sum = adjoint.iter().copied().sum::<FieldElement>();
-+                for lane in 0..4 { adjoint[lane] = DIAGONAL[lane]*adjoint[lane] + sum; }
++                for lane in 0..4 {
++                    adjoint[lane] = DIAGONAL[lane] * adjoint[lane] + sum;
++                }
 +                out[matrix][block.y5[j] as usize] += adjoint[0];
 +                adjoint[0] = form_weight(eq, row, j, matrix);
 +                rc_weights[matrix][j] += adjoint[0];
@@ -142,17 +159,17 @@ index 00000000..f49e2998
 +            // First four full rounds. The first four literal linear forms
 +            // include the initial external mix and the first round constants.
 +            for group in (0..4).rev() {
-+                let start = 4*group;
++                let start = 4 * group;
 +                let products = external_transpose(adjoint);
 +                for lane in 0..4 {
-+                    out[matrix][block.y5[start+lane] as usize] += products[lane];
-+                    adjoint[lane] = form_weight(eq, row, start+lane, matrix);
++                    out[matrix][block.y5[start + lane] as usize] += products[lane];
++                    adjoint[lane] = form_weight(eq, row, start + lane, matrix);
 +                    if group == 0 {
 +                        for &(column, coefficient) in block.initial[lane] {
-+                            out[matrix][column as usize] += coefficient*adjoint[lane];
++                            out[matrix][column as usize] += coefficient * adjoint[lane];
 +                        }
 +                    } else {
-+                        rc_weights[matrix][start+lane] += adjoint[lane];
++                        rc_weights[matrix][start + lane] += adjoint[lane];
 +                    }
 +                }
 +            }
@@ -160,10 +177,205 @@ index 00000000..f49e2998
 +    }
 +    for matrix in 0..2 {
 +        for j in 4..88 {
-+            out[matrix][0] += ROUND_CONSTANTS[j]*rc_weights[matrix][j];
++            out[matrix][0] += ROUND_CONSTANTS[j] * rc_weights[matrix][j];
 +        }
 +    }
 +    out
++}
++
++/// Forward external linear map; this never evaluates a nonlinear S-box.
++fn external_forward([a, b, c, d]: [FieldElement; 4]) -> [FieldElement; 4] {
++    let u = a + b;
++    let v = c + d;
++    let u2 = u + u;
++    let u4 = u2 + u2;
++    let v2 = v + v;
++    let v4 = v2 + v2;
++    let p = u4 + (b + b) + v;
++    let q = u + v4 + (d + d);
++    [p + a + b + (d + d), p, q + (b + b) + c + d, q]
++}
++
++// Values outside the selected commitment are exactly zero. Avoiding products
++// by those zeros is public-data specialization, not a witness assumption.
++#[inline]
++fn nonzero_product(a: FieldElement, b: FieldElement) -> FieldElement {
++    if b == FieldElement::ZERO {
++        FieldElement::ZERO
++    } else {
++        a * b
++    }
++}
++
++/// Evaluate all three matrix bilinear forms directly. `columns[i]` is the
++/// arbitrary value assigned to independent witness column `offset+i`.
++/// S-box output columns are read independently, including for invalid witnesses.
++#[tracing::instrument(skip_all)]
++pub fn evaluate_bilinear(
++    eq: &[FieldElement],
++    columns: &[FieldElement],
++    offset: usize,
++) -> [FieldElement; 3] {
++    assert!(eq.len() >= 38819);
++    assert!(offset <= 51805 && columns.len() <= 51805 - offset);
++    let column = |c: u16| {
++        let c = c as usize;
++        if c >= offset && c - offset < columns.len() {
++            columns[c - offset]
++        } else {
++            FieldElement::ZERO
++        }
++    };
++    let constant = column(0);
++    let constants = ROUND_CONSTANTS.map(|rc| nonzero_product(rc, constant));
++    let mut out = [FieldElement::ZERO; 3];
++    for &(row, matrices) in RESIDUAL_ROWS {
++        for matrix in 0..3 {
++            let value: FieldElement = matrices[matrix]
++                .iter()
++                .map(|&(c, coefficient)| nonzero_product(coefficient, column(c)))
++                .sum();
++            out[matrix] += nonzero_product(eq[row as usize], value);
++        }
++    }
++    for block in &BLOCKS {
++        let mut state: [FieldElement; 4] = core::array::from_fn(|lane| {
++            block.initial[lane]
++                .iter()
++                .map(|&(c, coefficient)| nonzero_product(coefficient, column(c)))
++                .sum()
++        });
++        let mut sbox = |j: usize, form: FieldElement| {
++            let e = &eq[block.row + 3 * j..block.row + 3 * j + 3];
++            let y2 = column(block.y2[j]);
++            let y4 = column(block.y4[j]);
++            let y5 = column(block.y5[j]);
++            let common = nonzero_product(e[0], form) + nonzero_product(e[1], y2);
++            out[0] += common + nonzero_product(e[2], y4);
++            out[1] += common + nonzero_product(e[2], form);
++            out[2] +=
++                nonzero_product(e[0], y2) + nonzero_product(e[1], y4) + nonzero_product(e[2], y5);
++            y5
++        };
++        for group in 0..4 {
++            for lane in 0..4 {
++                let j = 4 * group + lane;
++                if group > 0 {
++                    state[lane] += constants[j];
++                }
++                state[lane] = sbox(j, state[lane]);
++            }
++            state = external_forward(state);
++        }
++        for j in 16..72 {
++            state[0] += constants[j];
++            state[0] = sbox(j, state[0]);
++            let sum: FieldElement = state.iter().copied().sum();
++            for lane in 0..4 {
++                state[lane] = nonzero_product(DIAGONAL[lane], state[lane]) + sum;
++            }
++        }
++        for group in 0..4 {
++            for lane in 0..4 {
++                let j = 72 + 4 * group + lane;
++                state[lane] += constants[j];
++                state[lane] = sbox(j, state[lane]);
++            }
++            state = external_forward(state);
++        }
++        for lane in 0..4 {
++            let e = eq[block.row + 264 + lane];
++            out[0] += nonzero_product(e, state[lane]);
++            out[1] += nonzero_product(e, constant);
++            out[2] += nonzero_product(e, column(block.outputs[lane]));
++        }
++    }
++    out
++}
++
++use std::sync::{Arc, Mutex};
++use whir::algebra::linear_form::LinearForm;
++
++struct FixedCovectorShared {
++    rows: Arc<Vec<FieldElement>>,
++    offset: usize,
++    len: usize,
++    domain_size: usize,
++    // A and B and C share the same point within one commitment. Each commitment
++    // owns a separate cache; a changed point always recomputes the exact value.
++    cache: Mutex<Option<(Vec<FieldElement>, [FieldElement; 3])>>,
++}
++
++/// Lazy matrix weight for the exact pinned JoinSplit VK only.
++/// The hash-bound verifier constructs this after the same sumcheck transcript.
++pub struct FixedMatrixCovector {
++    shared: Arc<FixedCovectorShared>,
++    matrix: usize,
++}
++
++impl FixedMatrixCovector {
++    pub fn new_group(
++        rows: Arc<Vec<FieldElement>>,
++        offset: usize,
++        len: usize,
++        domain_size: usize,
++    ) -> [Self; 3] {
++        assert_eq!(rows.len(), 38819);
++        assert!(domain_size.is_power_of_two() && len > 0 && len <= domain_size);
++        assert!(offset <= 51805 && len <= 51805 - offset);
++        let shared = Arc::new(FixedCovectorShared {
++            rows,
++            offset,
++            len,
++            domain_size,
++            cache: Mutex::new(None),
++        });
++        core::array::from_fn(|matrix| Self {
++            shared: shared.clone(),
++            matrix,
++        })
++    }
++}
++
++impl LinearForm<FieldElement> for FixedMatrixCovector {
++    fn size(&self) -> usize {
++        self.shared.domain_size
++    }
++
++    #[tracing::instrument(skip_all, name = "fixed_matrix_mle")]
++    fn mle_evaluate(&self, point: &[FieldElement]) -> FieldElement {
++        assert_eq!(
++            point.len(),
++            self.shared.domain_size.trailing_zeros() as usize
++        );
++        let mut cache = self
++            .shared
++            .cache
++            .lock()
++            .expect("fixed matrix cache poisoned");
++        if let Some((old_point, values)) = cache.as_ref() {
++            if old_point == point {
++                return values[self.matrix];
++            }
++        }
++        // Index zero is the start of this commitment, not global witness zero.
++        // In particular the second commitment uses column index c-5530.
++        let columns = calculate_evaluations_over_boolean_hypercube_for_eq(point, self.shared.len);
++        let values = evaluate_bilinear(&self.shared.rows, &columns, self.shared.offset);
++        *cache = Some((point.to_vec(), values));
++        values[self.matrix]
++    }
++
++    fn accumulate(&self, accumulator: &mut [FieldElement], scalar: FieldElement) {
++        assert_eq!(accumulator.len(), self.shared.domain_size);
++        // Required by the trait, although the verifier does not call it.
++        let vectors = evaluate_fixed_with_eq(&self.shared.rows);
++        let weights =
++            &vectors[self.matrix][self.shared.offset..self.shared.offset + self.shared.len];
++        for (dest, value) in accumulator.iter_mut().zip(weights) {
++            *dest += scalar * value;
++        }
++    }
 +}
 diff --git a/provekit/common/src/utils/structured_matrix_data.rs b/provekit/common/src/utils/structured_matrix_data.rs
 new file mode 100644
@@ -2579,16 +2791,31 @@ index 3ddd85f2..c62f04e8 100644
 +}
 +
 diff --git a/provekit/verifier/src/whir_r1cs.rs b/provekit/verifier/src/whir_r1cs.rs
-index 7ee01583..59548fa5 100644
+index 7ee01583..5c2e2ecb 100644
 --- a/provekit/verifier/src/whir_r1cs.rs
 +++ b/provekit/verifier/src/whir_r1cs.rs
-@@ -33,0 +34,7 @@ pub trait WhirR1CSVerifier {
+@@ -9,3 +9 @@ use {
+-        utils::sumcheck::{
+-            calculate_eq, eval_cubic_poly,
+-        },
++        utils::sumcheck::{calculate_eq, eval_cubic_poly},
+@@ -22,2 +20,2 @@ pub struct DataFromSumcheckVerifier {
+-    r:             Vec<FieldElement>,
+-    alpha:         Vec<FieldElement>,
++    r: Vec<FieldElement>,
++    alpha: Vec<FieldElement>,
+@@ -25 +23 @@ pub struct DataFromSumcheckVerifier {
+-    f_at_alpha:    FieldElement,
++    f_at_alpha: FieldElement,
+@@ -33,0 +32,9 @@ pub trait WhirR1CSVerifier {
 +    ) -> Result<()> {
 +        self.verify_with_matrix(proof, public_inputs, Some(r1cs))
 +    }
 +
 +    fn verify_with_matrix(
-+        &self, proof: &WhirR1CSProof, public_inputs: &PublicInputs,
++        &self,
++        proof: &WhirR1CSProof,
++        public_inputs: &PublicInputs,
 +        r1cs: Option<&R1CS>,
 @@ -39 +46 @@ impl WhirR1CSVerifier for WhirR1CSScheme {
 -    fn verify(
@@ -2610,7 +2837,7 @@ index 7ee01583..59548fa5 100644
 +        } else {
 +            (None, run_sumcheck_verifier(&mut arthur, self.m_0))
 +        };
-@@ -96,10 +108,16 @@ impl WhirR1CSVerifier for WhirR1CSScheme {
+@@ -96,10 +108,30 @@ impl WhirR1CSVerifier for WhirR1CSScheme {
 -        #[cfg(not(target_os = "zkvm"))]
 -        let alphas = {
 -            let (at, bt, ct) = transposed;
@@ -2622,24 +2849,162 @@ index 7ee01583..59548fa5 100644
 -                r1cs,
 -            )
 +        let alphas = if let Some(r1cs) = r1cs {
-+            #[cfg(not(target_os = "zkvm"))]
-+            {
-+                let (at, bt, ct) = transposed.expect("generic verifier prepared transpose");
-+                provekit_common::utils::sumcheck::multiply_transposed_by_eq_alpha(
-+                    &at, &bt, &ct, &data_from_sumcheck_verifier.alpha, r1cs,
-+                )
-+            }
-+            #[cfg(target_os = "zkvm")]
-+            {
-+                provekit_common::utils::sumcheck::calculate_external_row_by_scatter(
-+                    &data_from_sumcheck_verifier.alpha, r1cs,
-+                )
-+            }
++            Some({
++                #[cfg(not(target_os = "zkvm"))]
++                {
++                    let (at, bt, ct) = transposed.expect("generic verifier prepared transpose");
++                    provekit_common::utils::sumcheck::multiply_transposed_by_eq_alpha(
++                        &at,
++                        &bt,
++                        &ct,
++                        &data_from_sumcheck_verifier.alpha,
++                        r1cs,
++                    )
++                }
++                #[cfg(target_os = "zkvm")]
++                {
++                    provekit_common::utils::sumcheck::calculate_external_row_by_scatter(
++                        &data_from_sumcheck_verifier.alpha,
++                        r1cs,
++                    )
++                }
++            })
 +        } else {
-+            provekit_common::utils::structured_matrix::evaluate_fixed(&data_from_sumcheck_verifier.alpha)
-@@ -107,5 +124,0 @@ impl WhirR1CSVerifier for WhirR1CSScheme {
++            None
++        };
++        let fixed_rows = if alphas.is_none() {
++            Some(std::sync::Arc::new(provekit_common::utils::sumcheck::calculate_evaluations_over_boolean_hypercube_for_eq(
++                &data_from_sumcheck_verifier.alpha, 38819,
++            )))
++        } else {
++            None
+@@ -107,5 +138,0 @@ impl WhirR1CSVerifier for WhirR1CSScheme {
 -        #[cfg(target_os = "zkvm")]
 -        let alphas = provekit_common::utils::sumcheck::calculate_external_row_by_scatter(
 -            &data_from_sumcheck_verifier.alpha,
 -            r1cs,
 -        );
+@@ -119,13 +146,33 @@ impl WhirR1CSVerifier for WhirR1CSScheme {
+-            let (alphas_1, alphas_2): (Vec<_>, Vec<_>) = alphas
+-                .into_iter()
+-                .map(|mut v| {
+-                    let v2 = v.split_off(self.w1_size);
+-                    (v, v2)
+-                })
+-                .unzip();
+-            let alphas_1: [Vec<FieldElement>; 3] = alphas_1
+-                .try_into()
+-                .map_err(|_| anyhow::anyhow!("Expected 3 alpha vectors for commitment 1"))?;
+-            let alphas_2: [Vec<FieldElement>; 3] = alphas_2
+-                .try_into()
+-                .map_err(|_| anyhow::anyhow!("Expected 3 alpha vectors for commitment 2"))?;
++            let (mut weights_1, weights_2): (
++                Vec<Box<dyn LinearForm<FieldElement>>>,
++                Vec<Box<dyn LinearForm<FieldElement>>>,
++            ) = if let Some(alphas) = alphas {
++                let (alphas_1, alphas_2): (Vec<_>, Vec<_>) = alphas
++                    .into_iter()
++                    .map(|mut v| {
++                        let v2 = v.split_off(self.w1_size);
++                        (v, v2)
++                    })
++                    .unzip();
++                let alphas_1: [Vec<FieldElement>; 3] = alphas_1
++                    .try_into()
++                    .map_err(|_| anyhow::anyhow!("Expected 3 alpha vectors for commitment 1"))?;
++                let alphas_2: [Vec<FieldElement>; 3] = alphas_2
++                    .try_into()
++                    .map_err(|_| anyhow::anyhow!("Expected 3 alpha vectors for commitment 2"))?;
++                (
++                    boxed_prefix_weights(self.m, alphas_1),
++                    boxed_prefix_weights(self.m, alphas_2),
++                )
++            } else {
++                let rows = fixed_rows.as_ref().expect("fixed matrix rows");
++                (
++                    fixed_weights(rows.clone(), 0, self.w1_size, domain_size),
++                    fixed_weights(
++                        rows.clone(),
++                        self.w1_size,
++                        51805 - self.w1_size,
++                        domain_size,
++                    ),
++                )
++            };
+@@ -156,3 +202,0 @@ impl WhirR1CSVerifier for WhirR1CSScheme {
+-            let mut weights_1 = build_prefix_covectors(self.m, alphas_1);
+-            let weights_2 = build_prefix_covectors(self.m, alphas_2);
+-
+@@ -164 +208,4 @@ impl WhirR1CSVerifier for WhirR1CSScheme {
+-                weights_1.insert(0, make_public_weight(x, public_inputs.len(), self.m));
++                weights_1.insert(
++                    0,
++                    Box::new(make_public_weight(x, public_inputs.len(), self.m)),
++                );
+@@ -186,4 +233,2 @@ impl WhirR1CSVerifier for WhirR1CSScheme {
+-            let mut weight_refs_1: Vec<&dyn LinearForm<FieldElement>> = weights_1
+-                .iter()
+-                .map(|w| w as &dyn LinearForm<FieldElement>)
+-                .collect();
++            let mut weight_refs_1: Vec<&dyn LinearForm<FieldElement>> =
++                weights_1.iter().map(|w| w.as_ref()).collect();
+@@ -196,4 +241,2 @@ impl WhirR1CSVerifier for WhirR1CSScheme {
+-            let mut weight_refs_2: Vec<&dyn LinearForm<FieldElement>> = weights_2
+-                .iter()
+-                .map(|w| w as &dyn LinearForm<FieldElement>)
+-                .collect();
++            let mut weight_refs_2: Vec<&dyn LinearForm<FieldElement>> =
++                weights_2.iter().map(|w| w.as_ref()).collect();
+@@ -225 +268,10 @@ impl WhirR1CSVerifier for WhirR1CSScheme {
+-            let mut weights = build_prefix_covectors(self.m, alphas);
++            let mut weights = if let Some(alphas) = alphas {
++                boxed_prefix_weights(self.m, alphas)
++            } else {
++                fixed_weights(
++                    fixed_rows.as_ref().expect("fixed matrix rows").clone(),
++                    0,
++                    51805,
++                    domain_size,
++                )
++            };
+@@ -232 +284,4 @@ impl WhirR1CSVerifier for WhirR1CSScheme {
+-                weights.insert(0, make_public_weight(x, public_inputs.len(), self.m));
++                weights.insert(
++                    0,
++                    Box::new(make_public_weight(x, public_inputs.len(), self.m)),
++                );
+@@ -239,4 +294,2 @@ impl WhirR1CSVerifier for WhirR1CSScheme {
+-            let mut weight_refs: Vec<&dyn LinearForm<FieldElement>> = weights
+-                .iter()
+-                .map(|w| w as &dyn LinearForm<FieldElement>)
+-                .collect();
++            let mut weight_refs: Vec<&dyn LinearForm<FieldElement>> =
++                weights.iter().map(|w| w.as_ref()).collect();
+@@ -267,0 +321,27 @@ impl WhirR1CSVerifier for WhirR1CSScheme {
++fn boxed_prefix_weights(
++    m: usize,
++    alphas: [Vec<FieldElement>; 3],
++) -> Vec<Box<dyn LinearForm<FieldElement>>> {
++    build_prefix_covectors(m, alphas)
++        .into_iter()
++        .map(|w| Box::new(w) as Box<dyn LinearForm<FieldElement>>)
++        .collect()
++}
++
++fn fixed_weights(
++    rows: std::sync::Arc<Vec<FieldElement>>,
++    offset: usize,
++    len: usize,
++    domain_size: usize,
++) -> Vec<Box<dyn LinearForm<FieldElement>>> {
++    provekit_common::utils::structured_matrix::FixedMatrixCovector::new_group(
++        rows,
++        offset,
++        len,
++        domain_size,
++    )
++    .into_iter()
++    .map(|w| Box::new(w) as Box<dyn LinearForm<FieldElement>>)
++    .collect()
++}
++

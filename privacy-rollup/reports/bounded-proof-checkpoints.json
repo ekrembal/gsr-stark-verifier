@@ -164,5 +164,103 @@
         "sha256": "7a5dfd3e2076f40639b73adab60e65b18d2e63dd85e5374b024d03cb676ab6f7"
       }
     ]
+  },
+  {
+    "directory": "build/feasibility/fixed-config20",
+    "capture": {
+      "complete": false,
+      "count": 2,
+      "first": 100,
+      "image_id": "a8b1ee8d7c5416ddbeb211701ad7add76ef1f23fa0fa870a1d32d72c258d4d96",
+      "paging_cycles": 78053212,
+      "reserved_cycles": 15108806,
+      "segments": 512,
+      "selected": [
+        {
+          "bytes": 260592,
+          "index": 100,
+          "po2": 20
+        },
+        {
+          "bytes": 268755,
+          "index": 101,
+          "po2": 20
+        }
+      ],
+      "total_cycles": 536870912,
+      "user_cycles": 443708894
+    },
+    "files": [
+      {
+        "name": "capture.json",
+        "bytes": 435,
+        "sha256": "d23a55babb28c5df887fbd4e1f8ea828a321eadabd46b8edcb3927fa773845d3"
+      },
+      {
+        "name": "expected-journal.bin",
+        "bytes": 196,
+        "sha256": "4e366d165e21f04fcb31f5cd46b0abfecd9d6503f8d542c3f45399256890b43f"
+      },
+      {
+        "name": "journal.bin",
+        "bytes": 196,
+        "sha256": "4e366d165e21f04fcb31f5cd46b0abfecd9d6503f8d542c3f45399256890b43f"
+      },
+      {
+        "name": "receipt-100.pc",
+        "bytes": 341113,
+        "sha256": "864647501e635849fd2a795d5c3484147cfb71a987037fed32ddfa90a4ff1d07"
+      },
+      {
+        "name": "segment-100.pc",
+        "bytes": 260592,
+        "sha256": "3c605137876bc9208de84f6a2e456dfe08b9644e979d6118d97951f252b8c78f"
+      },
+      {
+        "name": "segment-101.pc",
+        "bytes": 268755,
+        "sha256": "505e2cfc791b97e6e0352066b878c05871a8fd3046eb207820a439e8fe2bab8a"
+      },
+      {
+        "name": "witness.pc",
+        "bytes": 8361,
+        "sha256": "6b1cb47e037471e58117b081ee09ea0d56b13382cda028d708cc496b5baac107"
+      }
+    ],
+    "stages": [
+      {
+        "result": {
+          "operation": "prove",
+          "real_local_proof": true,
+          "result": {
+            "index": 100,
+            "integrity_verified": true,
+            "po2": 20,
+            "seal_bytes": 281128
+          },
+          "seconds": 418.278374378
+        },
+        "resources": {
+          "command": [
+            "build/aggregation/fixed-config-baseline/proof_chain_bench",
+            "prove",
+            "build/feasibility/fixed-config20",
+            "100"
+          ],
+          "exit_code": 0,
+          "stopped_by": null,
+          "seconds": 418.49209179800164,
+          "sampled_peak_group_rss_kib": 9590184,
+          "minimum_free_disk_bytes": 3967795200,
+          "sampling_seconds": 0.25,
+          "limits": {
+            "seconds": 900,
+            "rss_mib": 12288,
+            "free_mib": 1024
+          }
+        }
+      }
+    ],
+    "complete_guest_verified": false
   }
 ]

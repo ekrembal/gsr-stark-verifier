@@ -23,3 +23,25 @@ theorem transpose_lane3 (a b c d : Int) :
 #print axioms transpose_lane3
 
 end Aggregation
+
+/- Addition-only forward map used for lazy covector evaluation. As above,
+   these identities do not prove the traversal or the Rust implementation. -/
+namespace Aggregation
+
+theorem forward_lane0 (a b c d : Int) :
+    (4*(a+b)+(b+b)+(c+d))+a+b+(d+d) = 5*a+7*b+c+3*d := by omega
+
+theorem forward_lane1 (a b c d : Int) :
+    4*(a+b)+(b+b)+(c+d) = 4*a+6*b+c+d := by omega
+
+theorem forward_lane2 (a b c d : Int) :
+    ((a+b)+4*(c+d)+(d+d))+(b+b)+c+d = a+3*b+5*c+7*d := by omega
+
+theorem forward_lane3 (a b c d : Int) :
+    (a+b)+4*(c+d)+(d+d) = a+b+4*c+6*d := by omega
+
+#print axioms forward_lane0
+#print axioms forward_lane1
+#print axioms forward_lane2
+#print axioms forward_lane3
+end Aggregation

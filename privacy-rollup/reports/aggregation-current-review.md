@@ -1,10 +1,17 @@
-# Current unpublished aggregation checkpoint
+# Current draft-PR aggregation checkpoint
 
 The optimized optional guest executes the frozen real JoinSplit settlement in
 191,119,146–171 cycles over 208 segments, versus the instrumented PR10 baseline
 of 1,216,081,348–365 cycles over 1,278 segments. That is about 84.3% fewer cycles.
 The 196-byte journal, 635,142-byte client proof and supplied 3,213,548-byte VK
-remain unchanged. There is **no complete real JoinSplit receipt**.
+remain unchanged. There is **no complete real JoinSplit receipt**. After explicit
+approval, the resource-bounded full 208-segment run is now in progress; the
+measured selected-segment improvement below remains distinct from its
+extrapolated completion time. See [the run and recovery report](full-proof-run.md).
+The [timestamped publication snapshot](pr11-191m-publication.json) records 7 / 208
+verified segments, 7 joined, 28.4 minutes elapsed, about
+10.35 hours estimated remaining and 9.13 GiB peak process-group RSS.
+These counts describe that snapshot, not a live or completed result.
 
 Standard CPU compilation has been restored (144.12 seconds). Its final complete
 small receipt passed independent image/journal and corrupted-seal checks. The
@@ -36,10 +43,12 @@ this is execution memory, not prover memory.
 Start from PR10 commit `86649820f8c68733617c84c4efeaae48e07e9268`. The workspace
 initially started on a different main/work commit; the PR branch was fetched
 and verified to match that baseline before changes. The current local branch
-is `local/fused-bigint2-feasibility`. An earlier checkpoint `0d49071` was
-separately approved and published as PR11; all subsequent work described here
-remains unpublished. Nothing from this continuation was pushed, merged,
-deployed or sent to external agents.
+is `local/fused-bigint2-feasibility`; publication uses an isolated lightweight
+worktree. The user explicitly authorized updating draft PR11 with this validated
+source, patch, test and documentation checkpoint. Proof/checkpoint artifacts stay
+outside Git. No merge, deployment or external-agent work is included. Earlier
+reports describe their measurement-time publication status; this report is the
+current index.
 
 Row-major scatter already existed in PR10. Subsequent guest changes reuse
 coefficients/configuration, apply exact sparse transforms and structured matrix
@@ -120,12 +129,31 @@ constraint evaluation, 24.66 in expansion/NTT, 17.18 in row hashing, 10.56 in
 evaluation at arbitrary points and 10.43 in zk shifting. Compatible CPU
 optimization routes have not been exhausted.
 
-Complete real application proving, recursive aggregation with full input and
-196-byte journal binding, final proof/profile compatibility, actual Script
-verification, transaction weight/data availability and regtest settlement for
-this new relation remain unperformed. Earlier BWS regtest results do not cover
-the new JoinSplit relation. Small receipts do not establish aggregation
-feasibility. No roughly 100-hour full proof was launched.
+A frozen real execution is now being proved with incremental independent
+receipt verification, lifting and prefix joins. Its initial serial projection is
+about 10.65 hours; this remains an estimate until the complete run finishes. The
+run uses four CPUs, 16 GiB RAM, a 12 GiB sampled RSS guard, 1.5 GiB disk reserve
+and an 18-hour absolute deadline. Current counts and ETA are in the separately
+recorded publication snapshot and the private live status. The initial normal
+leaves remain near 140 seconds with about 9.13 GiB peak RSS. Publishing this
+checkpoint does not interrupt or rebuild the active frozen prover.
+
+Full native/image/journal/empty-assumption verification, padded identity and
+final Script checks for that complete real receipt remain pending. A complete
+two-segment diagnostic passed resume/recovery, independent receipt binding and
+rejection checks, and the pinned Script meter (388,398 WU). This is preparation
+evidence, not a full JoinSplit result.
+
+The frozen settlement uses placeholder rollup/funding scripts. Generated
+covenants for both the earlier and optimized image differ from those scripts;
+replacing them changes the bound journal. A spendable JoinSplit settlement needs
+correct genesis/funding/client bindings and a new application proof. The current
+covenant hardcodes its guest image and only permits state-root replacement;
+`RollupDescriptor` also binds the image. No existing-funds migration is
+implemented. See [the exact commitment comparison](full-proof-covenant-binding.md).
+Earlier BWS or anchor-only regtest results do not cover that new JoinSplit flow.
+Transaction policy, data availability, client proving costs and protocol/audit
+limitations remain part of the feasibility assessment.
 
 Proof-format and WHIR-parameter tradeoffs are evaluated in the earlier reports;
 no encoding, query count, grinding or security parameter was weakened. GPU and

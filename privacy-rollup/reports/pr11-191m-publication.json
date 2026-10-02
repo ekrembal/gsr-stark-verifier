@@ -1,0 +1,62 @@
+{
+  "snapshot_utc": "2026-10-02T10:39:27.292110+00:00",
+  "scope": "Publication snapshot; the full proof remains in progress and its ETA is extrapolated",
+  "pr10_base": "86649820f8c68733617c84c4efeaae48e07e9268",
+  "previous_pr11_head": "0d490712107537efcfaeeec93dc5e4bb223418ab",
+  "validated_source_checkpoint": "4be5c7e",
+  "guest": {
+    "baseline_cycles": [
+      1216081348,
+      1216081365
+    ],
+    "baseline_segments": 1278,
+    "optimized_cycles": [
+      191119146,
+      191119171
+    ],
+    "optimized_segments": 208,
+    "cycle_reduction_percent": 84.2840142796105,
+    "execution_seconds": [
+      6.053,
+      6.059
+    ],
+    "maximum_execution_rss_kib": 78640,
+    "image_id": "fc7c90972cfd366c450cf202c7131fea5d04f81b76f93d6925ce15e33cdd14be",
+    "journal_bytes": 196,
+    "serialized_client_proof_bytes": 635142,
+    "serialized_verifier_key_bytes": 3213548
+  },
+  "selected_same_segment": {
+    "standard_seconds": 411.342925982,
+    "native_hash_seconds": 264.454877527,
+    "native_polynomial_seconds": 140.442662976,
+    "proving_time_reduction_percent": 65.85752322330063,
+    "peak_rss_kib": 9601988,
+    "seal_bytes": 281128,
+    "independently_verified_and_lifted": true,
+    "not_complete_application_receipt": true
+  },
+  "full_proof": {
+    "state": "running",
+    "updated_at": 1790937564.342374,
+    "elapsed_seconds": 1701.339166879654,
+    "completed_verified_segments": 7,
+    "lifted_segments": 7,
+    "joined_prefix_segments": 7,
+    "total_segments": 208,
+    "current_stage": "leaf-0007",
+    "sampled_peak_group_rss_kib": 9568592,
+    "free_disk_bytes": 3863474176,
+    "remaining_eta_seconds": 37254.624428160736,
+    "full_receipt_verified": false,
+    "config_sha256": "8739743f38b1cfded5e6ef74d2a7f4f2e0a354778507666a0f26a965f8dd1b6c"
+  },
+  "full_proof_limitations": [
+    "No full receipt at publication snapshot",
+    "ETA is an extrapolation",
+    "Final complete receipt binding, padded identity and Script checks pending",
+    "Frozen settlement scripts are placeholders; actual covenant settlement requires another bound proof",
+    "No protocol soundness or end-to-end formal proof; padded hash remains unaudited"
+  ],
+  "publication_scope": "Reproducible source, supplemental patches, tests, specifications and documentation only; large proof/checkpoint artifacts remain private and outside Git"
+}

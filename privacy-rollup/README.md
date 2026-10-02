@@ -25,17 +25,17 @@ ProveKit join-split proofs (Noir, WHIR over BN254, hash-only)
 | ProveKit join-split circuit | Implemented; proofs generated and verified natively and inside the guest |
 | `apply_batch` guest | Implemented; journal equals the native transition byte for byte |
 | Empty / anchor-only batches | **Proven** (succinct receipt) and settled consecutively on activated regtest |
-| Batches containing join-splits | **No complete receipt yet**: latest unpublished experiment executes the frozen batch in 423.49M cycles / 475 segments; bounded real segment proofs are documented below |
+| Batches containing join-splits | **Full proving in progress; no complete receipt yet**: optional optimized guest executes the frozen batch in 191.12M cycles / 208 segments. Same-segment CPU proving improves from 411.34 s to 140.44 s; see the current review. |
 | Covenant (`OP_TX` binding, successor leaf, `1 CSV`) | Implemented, metered, mined on regtest; altered spends rejected |
 | Relay | Consensus-valid; **nonstandard** under the pinned node's policy (annex) |
 
 ## Measurements
 
-The [current unpublished review](reports/aggregation-current-review.md) summarizes the latest
+The [current draft-PR review](reports/aggregation-current-review.md) summarizes the latest
 results and remaining proving obstacles. The table below records the original PR measurements. The aggregation optimization
 measurements, phase profile, validation results and remaining limits are in
 [reports/aggregation-optimizations.md](reports/aggregation-optimizations.md). The earlier
-unpublished [lazy-covector experiment](reports/lazy-covector-optimization.md) follows
+[lazy-covector experiment](reports/lazy-covector-optimization.md) follows
 [fixed-key specialization](reports/fixed-config-optimization.md).
 [Normal-size real segment proving](reports/normal-segment-proving.md) measures actual
 CPU/memory cost; execution improvements do not establish full aggregation feasibility.

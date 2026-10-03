@@ -1,0 +1,1691 @@
+diff --git a/Cargo.lock b/Cargo.lock
+index 25b2545..a24a5b5 100644
+--- a/Cargo.lock
++++ b/Cargo.lock
+@@ -7004,6 +7004,7 @@ dependencies = [
+ name = "risc0-circuit-recursion-sys"
+ version = "4.0.3"
+ dependencies = [
++ "cc",
+  "glob",
+  "risc0-build-kernel",
+  "risc0-core",
+diff --git a/risc0/circuit/recursion-sys/Cargo.toml b/risc0/circuit/recursion-sys/Cargo.toml
+index 625514d..6f8781e 100644
+--- a/risc0/circuit/recursion-sys/Cargo.toml
++++ b/risc0/circuit/recursion-sys/Cargo.toml
+@@ -14,6 +14,7 @@ risc0-sys = { workspace = true }
+ sppark = { workspace = true, optional = true }
+ 
+ [build-dependencies]
++cc = { version = "1.2.2", features = ["parallel"] }
+ glob = "0.3"
+ risc0-build-kernel = { workspace = true }
+ 
+diff --git a/risc0/circuit/recursion-sys/build.rs b/risc0/circuit/recursion-sys/build.rs
+index 642ad2b..172f3e5 100644
+--- a/risc0/circuit/recursion-sys/build.rs
++++ b/risc0/circuit/recursion-sys/build.rs
+@@ -29,10 +29,65 @@ fn main() {
+ 
+ fn build_cpu_kernels() {
+     rerun_if_changed("kernels/cxx");
++    rerun_if_changed("kernels/cxx_batch");
++    println!("cargo:rerun-if-env-changed=GSR_BUILD_CPU_BATCH");
++    let batch = match env::var("GSR_BUILD_CPU_BATCH").as_deref() {
++        Err(env::VarError::NotPresent) | Ok("0") => false,
++        Ok("1") => true,
++        _ => panic!("GSR_BUILD_CPU_BATCH must be unset, 0, or 1"),
++    };
++    let files: Vec<_> = glob_paths("kernels/cxx/*.cpp")
++        .into_iter()
++        .filter(|p| !batch || p.file_name().unwrap() != "gsr_batch_stub.cpp")
++        .collect();
+     KernelBuild::new(KernelType::Cpp)
+-        .files(glob_paths("kernels/cxx/*.cpp"))
++        .files(files)
+         .include(env::var("DEP_RISC0_SYS_CXX_ROOT").unwrap())
+         .compile("risc0_recursion_cpu");
++    if batch {
++        build_batch_cpu_kernels();
++    }
++}
++
++fn build_batch_cpu_kernels() {
++    // Explicitly opt in to a machine-specific experiment. Never cross-compile
++    // native flags or change the default portable scalar build.
++    assert_eq!(env::var("TARGET").unwrap(), env::var("HOST").unwrap());
++    assert_eq!(env::var("CARGO_CFG_TARGET_ARCH").unwrap(), "x86_64");
++    println!("cargo:rerun-if-env-changed=GSR_CPU_BATCH_LANES");
++    let lanes = match env::var("GSR_CPU_BATCH_LANES").as_deref() {
++        Err(env::VarError::NotPresent) | Ok("8") => "8",
++        Ok("16") => "16",
++        _ => panic!("GSR_CPU_BATCH_LANES must be unset, 8, or 16"),
++    };
++    let out = PathBuf::from(env::var_os("OUT_DIR").unwrap()).join("cpu_poly_batch");
++    let headers = env::var("DEP_RISC0_SYS_CXX_ROOT").unwrap();
++    let status = std::process::Command::new("python3")
++        .args(["kernels/cxx_batch/generate.py", "kernels/cxx", &headers])
++        .arg(&out)
++        .status()
++        .expect("run the pinned polynomial generator");
++    assert!(status.success(), "polynomial generation failed");
++    let mut build = cc::Build::new();
++    build
++        .define("GSR_POLY_LANES", lanes)
++        .cpp(true)
++        .debug(false)
++        .opt_level(2)
++        .std("c++17")
++        .flag("-march=native")
++        .flag("-fno-tree-slp-vectorize")
++        .flag("-fno-tree-loop-vectorize")
++        .include(headers)
++        .include("kernels/cxx_batch")
++        .include(&out)
++        .file("kernels/cxx_batch/ffi.cpp")
++        .file(out.join("packed_poly_fp.cpp"));
++    assert!(
++        build.get_compiler().is_like_gnu(),
++        "native evaluator requires GCC"
++    );
++    build.compile("risc0_recursion_cpu_batch");
+ }
+ 
+ fn build_cuda_kernels() {
+diff --git a/risc0/circuit/recursion-sys/kernels/cxx/gsr_batch_stub.cpp b/risc0/circuit/recursion-sys/kernels/cxx/gsr_batch_stub.cpp
+new file mode 100644
+index 0000000..caafc65
+--- /dev/null
++++ b/risc0/circuit/recursion-sys/kernels/cxx/gsr_batch_stub.cpp
+@@ -0,0 +1,9 @@
++// The portable default build never compiles the optional native evaluator.
++#include "fp.h"
++#include "fpext.h"
++#include <cstring>
++extern "C" size_t risc0_circuit_recursion_cpu_poly_fp_batch_lanes() { return 0; }
++extern "C" const char* risc0_circuit_recursion_cpu_poly_fp_batch(
++    size_t, size_t, const risc0::FpExt*, const risc0::Fp* const*, risc0::FpExt*) {
++  return strdup("rebuild with GSR_BUILD_CPU_BATCH=1 to enable the native evaluator");
++}
+diff --git a/risc0/circuit/recursion-sys/kernels/cxx_batch/ffi.cpp b/risc0/circuit/recursion-sys/kernels/cxx_batch/ffi.cpp
+new file mode 100644
+index 0000000..3817f2e
+--- /dev/null
++++ b/risc0/circuit/recursion-sys/kernels/cxx_batch/ffi.cpp
+@@ -0,0 +1,31 @@
++// Optional host prover evaluator; the scalar circuit and verifier are unchanged.
++#include "packed_fpext.h"
++#include <cstring>
++#include <exception>
++#include <type_traits>
++
++extern "C" size_t risc0_circuit_recursion_cpu_poly_fp_batch_lanes() { return gsr_recursion_batch::LANES; }
++
++extern "C" const char* risc0_circuit_recursion_cpu_poly_fp_batch(
++    size_t cycle, size_t steps, const risc0::FpExt* mixes,
++    const risc0::Fp* const* args, risc0::FpExt* result) {
++  static_assert(sizeof(risc0::Fp) == sizeof(uint32_t));
++  static_assert(std::is_trivially_copyable_v<risc0::Fp>);
++  static_assert(std::is_standard_layout_v<risc0::Fp>);
++  static_assert(sizeof(risc0::FpExt) == 4 * sizeof(risc0::Fp));
++  try {
++    auto packed = gsr_recursion_batch::poly_fp(cycle, steps, {mixes}, args);
++    for (size_t lane = 0; lane < gsr_recursion_batch::LANES; ++lane) {
++      for (size_t component = 0; component < 4; ++component) {
++        // Copy the exact Montgomery word without re-encoding it.
++        uint32_t word = packed.elems[component].raw(lane);
++        std::memcpy(&result[lane].elems[component], &word, sizeof word);
++      }
++    }
++  } catch (const std::exception& error) {
++    return strdup(error.what());
++  } catch (...) {
++    return strdup("batched polynomial evaluation failed");
++  }
++  return nullptr;
++}
+diff --git a/risc0/circuit/recursion-sys/kernels/cxx_batch/generate.py b/risc0/circuit/recursion-sys/kernels/cxx_batch/generate.py
+new file mode 100644
+index 0000000..b9ae2ad
+--- /dev/null
++++ b/risc0/circuit/recursion-sys/kernels/cxx_batch/generate.py
+@@ -0,0 +1,70 @@
++#!/usr/bin/env python3
++"""Generate a prover-only multi-cycle evaluator of the pinned recursion constraints.
++
++No AIR, constraint coefficient, field representation, or verifier is changed.
++Each raw matrix read retains its original masked index expression separately
++for each lane. Generated output belongs in OUT_DIR, not in the source tree.
++Python assertions must be enabled.
++"""
++if not __debug__:
++ raise SystemExit('run the generator without Python optimization')
++from pathlib import Path
++import argparse, hashlib, json, re
++parser=argparse.ArgumentParser(description=__doc__)
++parser.add_argument('src',type=Path)
++parser.add_argument('sys_headers',type=Path)
++parser.add_argument('out',type=Path)
++options=parser.parse_args()
++src,sys_headers,out=options.src,options.sys_headers,options.out
++out.mkdir(parents=True,exist_ok=True)
++
++# Fail closed on a different circuit/field source. Changing these hashes
++# requires re-review and differential validation.
++EXPECTED={'poly_fp.cpp':'e93eaae8f0bd935bc6d227f30df3966106d78619ae810c7739be9b909679ea01','fp.h':'1f1cb927854060d06ed6bb53d52978de9cd89c711338ead0de9b805cb18633ad','fpext.h':'194bf07cb14abcead498da69c62ff8464f05139fd75e8271d11c703be6471213'}
++for name,expected in EXPECTED.items():
++ p=(sys_headers if name.endswith('.h') else src)/name
++ if hashlib.sha256(p.read_bytes()).hexdigest()!=expected:
++  raise SystemExit('unsupported scalar source digest: '+str(p))
++text=(src/'poly_fp.cpp').read_text()
++decl='FpExt poly_fp(size_t cycle, size_t steps, FpExt* poly_mix, Fp** args)'
++assert text.count(decl)==2
++# The single function body is straight-line code: no loops, branches, scratch
++# arrays or calls, so lane-wise evaluation is the scalar code per lane.
++body=text.split(decl+' {\n',1)[1]
++assert not re.search(r'\b(for|while|if|switch|goto)\b|\bFp \w+\[|\bFpExt \w+\[',body)
++counts={'masked':0,'uniform':0}
++masked=r'(\d+) \* steps \+ \(\(cycle - kInvRate \* (\d+)\) & mask\)'
++def load(m):
++ ptr,index=m.groups()
++ if re.fullmatch(masked,index):
++  counts['masked']+=1
++  index=index.replace('(cycle - ','((cycle + lane) - ')
++  return f'Fp::load({ptr}, [&](size_t lane) {{ return {index}; }})'
++ assert re.fullmatch(r'\d+',index),index
++ counts['uniform']+=1
++ return f'Fp::broadcast({ptr}[{index}])'
++text=re.sub(r'(args\[[0-4]\])\[([^\[\]\n]+)\]',load,text)
++assert 'args[' not in re.sub(r'Fp::(load|broadcast)\(args\[[0-4]\]','',text)
++text=text.replace(decl,'FpExt poly_fp(size_t cycle, size_t steps, UniformMix poly_mix, const ScalarFp* const* args)')
++text=text.replace('#include "fp.h"\n#include "fpext.h"','#include "packed_fpext.h"')
++text=text.replace('namespace risc0::circuit::recursion','namespace gsr_recursion_batch')
++text=text.replace('constexpr Fp ','const Fp ').replace('constexpr FpExt ','const FpExt ')
++text=text.replace('constexpr size_t kInvRate','static constexpr size_t kInvRate')
++(out/'packed_poly_fp.cpp').write_text(text)
++ext=(sys_headers/'fpext.h').read_text()
++ext=ext.replace('#include "fp.h"','#include "packed_fp.h"\n#include "fpext.h"')
++ext=ext.replace('namespace risc0 {','namespace gsr_recursion_batch {').replace('constexpr ','')
++ext+='''\nnamespace gsr_recursion_batch {
++struct UniformMix {
++  const risc0::FpExt* ptr;
++  FpExt operator[](size_t i) const {
++    return FpExt(Fp::broadcast(ptr[i].elems[0]), Fp::broadcast(ptr[i].elems[1]),
++                 Fp::broadcast(ptr[i].elems[2]), Fp::broadcast(ptr[i].elems[3]));
++  }
++};
++FpExt poly_fp(size_t, size_t, UniformMix, const ScalarFp* const*);
++}\n'''
++(out/'packed_fpext.h').write_text(ext)
++(out/'generation.json').write_text(json.dumps({'source_sha256':hashlib.sha256((src/'poly_fp.cpp').read_bytes()).hexdigest(),'transformed_loads':counts},indent=2)+'\n')
++assert counts=={'masked':669,'uniform':52},counts
++print('input loads',counts)
+diff --git a/risc0/circuit/recursion-sys/kernels/cxx_batch/packed_fp.h b/risc0/circuit/recursion-sys/kernels/cxx_batch/packed_fp.h
+new file mode 100644
+index 0000000..b5df5c9
+--- /dev/null
++++ b/risc0/circuit/recursion-sys/kernels/cxx_batch/packed_fp.h
+@@ -0,0 +1,49 @@
++// Experimental prover-only multi-lane arithmetic. No circuit or verifier change.
++#pragma once
++#include "fp.h"
++#include <cstddef>
++#include <cstdint>
++#ifndef GSR_POLY_LANES
++#define GSR_POLY_LANES 8
++#endif
++static_assert(GSR_POLY_LANES == 8 || GSR_POLY_LANES == 16, "GSR_POLY_LANES must be 8 or 16");
++namespace gsr_recursion_batch {
++constexpr size_t LANES = GSR_POLY_LANES;
++using ScalarFp = risc0::Fp;
++using U32 = uint32_t __attribute__((vector_size(4 * GSR_POLY_LANES)));
++using U64 = uint64_t __attribute__((vector_size(8 * GSR_POLY_LANES)));
++class Fp {
++  U32 v;
++  explicit Fp(U32 raw):v(raw){}
++  static U32 splat(uint32_t x) { return U32{} + x; }
++public:
++  static constexpr uint32_t P=ScalarFp::P;
++  Fp():v{}{}
++  Fp(uint32_t x):v(splat(ScalarFp(x).asRaw())){}
++  static Fp broadcast(ScalarFp x) { return Fp(splat(x.asRaw())); }
++  template<class Index> static Fp load(const ScalarFp* ptr, Index index) {
++    U32 raw;
++    for (size_t lane = 0; lane < LANES; ++lane) raw[lane] = ptr[index(lane)].asRaw();
++    return Fp(raw);
++  }
++  static Fp invalid() {return Fp(splat(ScalarFp::INVALID));}
++  uint32_t raw(size_t lane) const {return v[lane];}
++  Fp operator+(Fp rhs) const {U32 s=v+rhs.v; return Fp(s>=P?s-P:s);}
++  Fp operator-(Fp rhs) const {U32 s=v-rhs.v; return Fp(s>P?s+P:s);}
++  Fp operator-() const {return Fp()-*this;}
++  Fp operator*(Fp rhs) const {
++    U64 product=__builtin_convertvector(v,U64)*__builtin_convertvector(rhs.v,U64);
++    U32 red=uint32_t(0x88000001)*(-__builtin_convertvector(product,U32));
++    U64 total=product+__builtin_convertvector(red,U64)*uint64_t(P);
++    U32 reduced=__builtin_convertvector(total>>32,U32);
++    return Fp(reduced>=P?reduced-P:reduced);
++  }
++  Fp operator+=(Fp x){*this=*this+x;return *this;}
++  Fp operator-=(Fp x){*this=*this-x;return *this;}
++  Fp operator*=(Fp x){*this=*this*x;return *this;}
++  bool operator==(Fp x) const {for(size_t i=0;i<LANES;++i)if(v[i]!=x.v[i])return false;return true;}
++  bool operator!=(Fp x) const {return !(*this==x);}
++};
++inline Fp pow(Fp x,size_t n){Fp r(1);while(n){if(n%2)r*=x;n/=2;x*=x;}return r;}
++inline Fp inv(Fp x){return pow(x,Fp::P-2);}
++}
+diff --git a/risc0/circuit/recursion-sys/src/lib.rs b/risc0/circuit/recursion-sys/src/lib.rs
+index 3111c5e..b90d9d7 100644
+--- a/risc0/circuit/recursion-sys/src/lib.rs
++++ b/risc0/circuit/recursion-sys/src/lib.rs
+@@ -69,6 +69,20 @@ extern "C" {
+         total_cycles: u32,
+     ) -> *const std::os::raw::c_char;
+ 
++    /// Lanes per call of the optional native evaluator (0 when not compiled).
++    pub fn risc0_circuit_recursion_cpu_poly_fp_batch_lanes() -> usize;
++
++    /// Evaluates the scalar `poly_fp` at cycles `cycle..cycle+lanes` with the
++    /// original masked input indexing; `result` must hold `lanes` elements.
++    /// `args` is ctrl, global, data, mix, accum.
++    pub fn risc0_circuit_recursion_cpu_poly_fp_batch(
++        cycle: usize,
++        steps: usize,
++        poly_mix: *const BabyBearExtElem,
++        args: *const *const BabyBearElem,
++        result: *mut BabyBearExtElem,
++    ) -> *const std::os::raw::c_char;
++
+     pub fn risc0_circuit_recursion_cpu_eval_check(
+         buffers: *const RawAccumBuffers,
+         poly_mix: *const BabyBearExtElem,
+diff --git a/risc0/circuit/recursion/src/prove/hal/cpu.rs b/risc0/circuit/recursion/src/prove/hal/cpu.rs
+index c46954b..4f5b07d 100644
+--- a/risc0/circuit/recursion/src/prove/hal/cpu.rs
++++ b/risc0/circuit/recursion/src/prove/hal/cpu.rs
+@@ -15,8 +15,10 @@
+ use std::rc::Rc;
+ 
+ use anyhow::{bail, Result};
++use rayon::prelude::*;
+ use risc0_circuit_recursion_sys::{
+     risc0_circuit_recursion_cpu_accum, risc0_circuit_recursion_cpu_eval_check,
++    risc0_circuit_recursion_cpu_poly_fp_batch, risc0_circuit_recursion_cpu_poly_fp_batch_lanes,
+     risc0_circuit_recursion_cpu_witgen, RawAccumBuffers, RawExecBuffers, RawPreflightTrace,
+     StepMode,
+ };
+@@ -31,7 +33,7 @@ use risc0_zkp::{
+     },
+     field::{
+         baby_bear::{BabyBear, BabyBearElem, BabyBearExtElem},
+-        map_pow, RootsOfUnity as _,
++        map_pow, Elem as _, RootsOfUnity as _,
+     },
+     hal::{cpu::CpuBuffer, AccumPreflight, CircuitHal},
+     INV_RATE,
+@@ -49,6 +51,40 @@ type CpuHal = risc0_zkp::hal::cpu::CpuHal<BabyBear>;
+ #[derive(Default)]
+ pub(crate) struct CpuCircuitHal;
+ 
++// (3 * g^cycle)^(2^po2) has period INV_RATE because g has order
++// 2^po2 * INV_RATE. Evaluate the original expression at each residue.
++fn periodic_quotients(po2: usize) -> [BabyBearElem; INV_RATE] {
++    let root = BabyBearElem::ROU_FWD[po2 + log2_ceil(INV_RATE)];
++    core::array::from_fn(|residue| {
++        let x = root.pow(residue);
++        let y = (BabyBearElem::new(3) * x).pow(1 << po2);
++        (y - BabyBearElem::new(1)).inv()
++    })
++}
++
++/// Lanes of the optional native evaluator selected by `GSR_BATCH_EVAL_CPU=1`.
++fn batch_lanes() -> Option<usize> {
++    (std::env::var("GSR_BATCH_EVAL_CPU").as_deref() == Ok("1")).then(|| {
++        let lanes = unsafe { risc0_circuit_recursion_cpu_poly_fp_batch_lanes() };
++        assert!(
++            lanes == 8 || lanes == 16,
++            "GSR_BATCH_EVAL_CPU requires a GSR_BUILD_CPU_BATCH=1 host build"
++        );
++        lanes
++    })
++}
++
++fn batch_eval_pool() -> &'static rayon::ThreadPool {
++    static POOL: std::sync::OnceLock<rayon::ThreadPool> = std::sync::OnceLock::new();
++    POOL.get_or_init(|| {
++        rayon::ThreadPoolBuilder::new()
++            .num_threads(rayon::current_num_threads())
++            .stack_size(16 * 1024 * 1024)
++            .build()
++            .expect("create CPU polynomial evaluation pool")
++    })
++}
++
+ impl CircuitWitnessGenerator<CpuHal> for CpuCircuitHal {
+     fn generate_witness(
+         &self,
+@@ -105,13 +141,42 @@ impl CircuitAccumulator<CpuHal> for CpuCircuitHal {
+ impl CircuitHal<CpuHal> for CpuCircuitHal {
+     fn eval_check(
+         &self,
+-        check: &CpuBuffer<BabyBearElem>,
++        check_buffer: &CpuBuffer<BabyBearElem>,
+         groups: &[&CpuBuffer<BabyBearElem>],
+         globals: &[&CpuBuffer<BabyBearElem>],
+         poly_mix: BabyBearExtElem,
+         po2: usize,
+         steps: usize,
+     ) {
++        eval_check_cpu(batch_lanes(), check_buffer, groups, globals, poly_mix, po2, steps)
++    }
++
++    #[allow(unused)]
++    fn accumulate(
++        &self,
++        _preflight: &AccumPreflight,
++        ctrl: &CpuBuffer<BabyBearElem>,
++        io: &CpuBuffer<BabyBearElem>,
++        data: &CpuBuffer<BabyBearElem>,
++        mix: &CpuBuffer<BabyBearElem>,
++        accum: &CpuBuffer<BabyBearElem>,
++        steps: usize,
++    ) {
++        unimplemented!()
++    }
++}
++
++/// Evaluates the check polynomial with the packed native evaluator when
++/// `lanes` is set and divides the domain, and with the scalar kernel otherwise.
++fn eval_check_cpu(
++    lanes: Option<usize>,
++    check_buffer: &CpuBuffer<BabyBearElem>,
++    groups: &[&CpuBuffer<BabyBearElem>],
++    globals: &[&CpuBuffer<BabyBearElem>],
++    poly_mix: BabyBearExtElem,
++    po2: usize,
++    steps: usize,
++) {
+         const EXP_PO2: usize = log2_ceil(INV_RATE);
+         let domain = steps * INV_RATE;
+ 
+@@ -120,13 +185,64 @@ impl CircuitHal<CpuHal> for CpuCircuitHal {
+         let accum = groups[REGISTER_GROUP_ACCUM].as_slice();
+         let mix = globals[GLOBAL_MIX].as_slice();
+         let global = globals[GLOBAL_OUT].as_slice();
+-        let check = check.as_slice();
++        let check = check_buffer.as_slice();
+ 
+         let poly_mix_pows = map_pow(poly_mix, crate::info::POLY_MIX_POWERS);
+         let poly_mix_pows = poly_mix_pows.as_slice();
+ 
+         let rou = BabyBearElem::ROU_FWD[po2 + EXP_PO2];
+ 
++        let profile_start =
++            (std::env::var("GSR_PROFILE_CPU").as_deref() == Ok("1")).then(std::time::Instant::now);
++        if let Some(lanes) = lanes.filter(|lanes| domain % lanes == 0) {
++            let quotients = periodic_quotients(po2);
++            let args: [*const BabyBearElem; 5] =
++                [ctrl.as_ptr(), global.as_ptr(), data.as_ptr(), mix.as_ptr(), accum.as_ptr()];
++            let args = args.map(|p| p as usize);
++            drop(check);
++            let mut check = check_buffer.as_slice_mut();
++            assert_eq!(check.len(), 4 * domain);
++            let (c0, rest) = check.split_at_mut(domain);
++            let (c1, rest) = rest.split_at_mut(domain);
++            let (c2, c3) = rest.split_at_mut(domain);
++            batch_eval_pool().install(|| {
++                c0.par_chunks_mut(lanes)
++                    .zip(c1.par_chunks_mut(lanes))
++                    .zip(c2.par_chunks_mut(lanes))
++                    .zip(c3.par_chunks_mut(lanes))
++                    .enumerate()
++                    .for_each(|(block, (((c0, c1), c2), c3))| {
++                        let cycle = block * lanes;
++                        let pointers = args.map(|p| p as *const BabyBearElem);
++                        let mut values = [BabyBearExtElem::ZERO; 16];
++                        // SAFETY: the five input buffers and mix powers stay
++                        // borrowed through the call, which writes `lanes` <= 16
++                        // extension elements.
++                        ffi_wrap(|| unsafe {
++                            risc0_circuit_recursion_cpu_poly_fp_batch(
++                                cycle,
++                                domain,
++                                poly_mix_pows.as_ptr(),
++                                pointers.as_ptr(),
++                                values.as_mut_ptr(),
++                            )
++                        })
++                        .expect("CPU constraint evaluation failed");
++                        let mut outputs = [c0, c1, c2, c3];
++                        for lane in 0..lanes {
++                            let ret = values[lane] * quotients[(cycle + lane) % INV_RATE];
++                            for (i, output) in outputs.iter_mut().enumerate() {
++                                output[lane] = ret.elems()[i];
++                            }
++                        }
++                    })
++            });
++            if let Some(start) = profile_start {
++                eprintln!("gsr_cpu_op recursion_eval_check {}", start.elapsed().as_nanos());
++            }
++            return;
++        }
++
+         let buffers = RawAccumBuffers {
+             ctrl: ctrl.as_ptr(),
+             global: global.as_ptr(),
+@@ -146,21 +262,9 @@ impl CircuitHal<CpuHal> for CpuCircuitHal {
+             )
+         })
+         .unwrap();
+-    }
+-
+-    #[allow(unused)]
+-    fn accumulate(
+-        &self,
+-        _preflight: &AccumPreflight,
+-        ctrl: &CpuBuffer<BabyBearElem>,
+-        io: &CpuBuffer<BabyBearElem>,
+-        data: &CpuBuffer<BabyBearElem>,
+-        mix: &CpuBuffer<BabyBearElem>,
+-        accum: &CpuBuffer<BabyBearElem>,
+-        steps: usize,
+-    ) {
+-        unimplemented!()
+-    }
++        if let Some(start) = profile_start {
++            eprintln!("gsr_cpu_op recursion_eval_check {}", start.elapsed().as_nanos());
++        }
+ }
+ 
+ #[allow(dead_code)]
+@@ -177,3 +281,70 @@ pub(crate) fn recursion_prover(hashfn: &str) -> Result<Box<dyn RecursionProver>>
+     let circuit_hal = Rc::new(CpuCircuitHal);
+     Ok(Box::new(RecursionProverImpl::new(hal, circuit_hal)))
+ }
++
++#[cfg(all(test, feature = "test"))]
++mod batch_tests {
++    use risc0_zkp::{core::hash::poseidon2::Poseidon2HashSuite, hal::CircuitHal};
++
++    use super::*;
++
++    struct Forced(Option<usize>);
++
++    impl CircuitHal<CpuHal> for Forced {
++        fn eval_check(
++            &self,
++            check: &CpuBuffer<BabyBearElem>,
++            groups: &[&CpuBuffer<BabyBearElem>],
++            globals: &[&CpuBuffer<BabyBearElem>],
++            poly_mix: BabyBearExtElem,
++            po2: usize,
++            steps: usize,
++        ) {
++            eval_check_cpu(self.0, check, groups, globals, poly_mix, po2, steps)
++        }
++
++        fn accumulate(
++            &self,
++            _preflight: &AccumPreflight,
++            _ctrl: &CpuBuffer<BabyBearElem>,
++            _io: &CpuBuffer<BabyBearElem>,
++            _data: &CpuBuffer<BabyBearElem>,
++            _mix: &CpuBuffer<BabyBearElem>,
++            _accum: &CpuBuffer<BabyBearElem>,
++            _steps: usize,
++        ) {
++            unimplemented!()
++        }
++    }
++
++    #[test]
++    fn periodic_divisors_match_reference() {
++        for po2 in [4, 10, 15, 18, 20, 22] {
++            let weights = periodic_quotients(po2);
++            let root = BabyBearElem::ROU_FWD[po2 + log2_ceil(INV_RATE)];
++            let domain = (1usize << po2) * INV_RATE;
++            for cycle in (0..64).chain([domain - 1]) {
++                let expected = ((BabyBearElem::new(3) * root.pow(cycle)).pow(1 << po2)
++                    - BabyBearElem::new(1))
++                .inv();
++                assert_eq!(weights[cycle % INV_RATE], expected);
++            }
++        }
++    }
++
++    #[test]
++    fn packed_eval_check_matches_scalar() {
++        let lanes = unsafe { risc0_circuit_recursion_cpu_poly_fp_batch_lanes() };
++        if lanes == 0 {
++            eprintln!("portable build: packed recursion evaluator not compiled");
++            return;
++        }
++        let hal = CpuHal::new(Poseidon2HashSuite::new_suite());
++        for po2 in [4, 6] {
++            let params = crate::testutil::EvalCheckParams::new(po2);
++            let scalar = crate::testutil::eval_check_impl(&params, &hal, &Forced(None));
++            let packed = crate::testutil::eval_check_impl(&params, &hal, &Forced(Some(lanes)));
++            assert_eq!(scalar, packed, "po2 {po2} with {lanes} lanes");
++        }
++    }
++}
+diff --git a/risc0/circuit/rv32im-sys/build.rs b/risc0/circuit/rv32im-sys/build.rs
+index 9361416..b158ba6 100644
+--- a/risc0/circuit/rv32im-sys/build.rs
++++ b/risc0/circuit/rv32im-sys/build.rs
+@@ -65,8 +65,15 @@ fn build_batch_cpu_kernels() {
+         .status()
+         .expect("run the pinned polynomial generator");
+     assert!(status.success(), "polynomial generation failed");
++    println!("cargo:rerun-if-env-changed=GSR_CPU_BATCH_LANES");
++    let lanes = match env::var("GSR_CPU_BATCH_LANES").as_deref() {
++        Err(env::VarError::NotPresent) | Ok("8") => "8",
++        Ok("16") => "16",
++        _ => panic!("GSR_CPU_BATCH_LANES must be unset, 8, or 16"),
++    };
+     let mut build = cc::Build::new();
+     build
++        .define("GSR_POLY_LANES", lanes)
+         .cpp(true)
+         .debug(false)
+         .opt_level(2)
+diff --git a/risc0/circuit/rv32im-sys/kernels/cxx/gsr_batch_stub.cpp b/risc0/circuit/rv32im-sys/kernels/cxx/gsr_batch_stub.cpp
+index 4a4e7f2..9c13e12 100644
+--- a/risc0/circuit/rv32im-sys/kernels/cxx/gsr_batch_stub.cpp
++++ b/risc0/circuit/rv32im-sys/kernels/cxx/gsr_batch_stub.cpp
+@@ -3,6 +3,7 @@
+ #include "fpext.h"
+ #include <cstring>
+ extern "C" bool risc0_circuit_rv32im_cpu_poly_fp_batch_available() { return false; }
++extern "C" size_t risc0_circuit_rv32im_cpu_poly_fp_batch_lanes() { return 0; }
+ extern "C" const char* risc0_circuit_rv32im_cpu_poly_fp_batch(
+     size_t, size_t, const risc0::FpExt*, const risc0::Fp* const*, risc0::FpExt*) {
+   return strdup("rebuild with GSR_BUILD_CPU_BATCH=1 to enable the native evaluator");
+diff --git a/risc0/circuit/rv32im-sys/kernels/cxx_batch/ffi.cpp b/risc0/circuit/rv32im-sys/kernels/cxx_batch/ffi.cpp
+index 75fee9f..e1d1e48 100644
+--- a/risc0/circuit/rv32im-sys/kernels/cxx_batch/ffi.cpp
++++ b/risc0/circuit/rv32im-sys/kernels/cxx_batch/ffi.cpp
+@@ -6,6 +6,8 @@
+ 
+ extern "C" bool risc0_circuit_rv32im_cpu_poly_fp_batch_available() { return true; }
+ 
++extern "C" size_t risc0_circuit_rv32im_cpu_poly_fp_batch_lanes() { return gsr_poly_batch::LANES; }
++
+ extern "C" const char* risc0_circuit_rv32im_cpu_poly_fp_batch(
+     size_t cycle, size_t steps, const risc0::FpExt* mixes,
+     const risc0::Fp* const* args, risc0::FpExt* result) {
+@@ -15,7 +17,7 @@ extern "C" const char* risc0_circuit_rv32im_cpu_poly_fp_batch(
+   static_assert(sizeof(risc0::FpExt) == 4 * sizeof(risc0::Fp));
+   try {
+     auto packed = gsr_poly_batch::poly_fp(cycle, steps, {mixes}, args);
+-    for (size_t lane = 0; lane < 8; ++lane) {
++    for (size_t lane = 0; lane < gsr_poly_batch::LANES; ++lane) {
+       for (size_t component = 0; component < 4; ++component) {
+         // Copy the exact Montgomery word; invoking Fp(uint32_t) would encode
+         // it again. memcpy is valid for this trivially copyable scalar type.
+diff --git a/risc0/circuit/rv32im-sys/kernels/cxx_batch/packed_fp.h b/risc0/circuit/rv32im-sys/kernels/cxx_batch/packed_fp.h
+index 344b7ff..5a6bba4 100644
+--- a/risc0/circuit/rv32im-sys/kernels/cxx_batch/packed_fp.h
++++ b/risc0/circuit/rv32im-sys/kernels/cxx_batch/packed_fp.h
+@@ -1,23 +1,30 @@
+-// Experimental prover-only eight-lane arithmetic. No circuit or verifier change.
++// Experimental prover-only multi-lane arithmetic. No circuit or verifier change.
+ #pragma once
+ #include "fp.h"
+ #include <cstddef>
+ #include <cstdint>
++#ifndef GSR_POLY_LANES
++#define GSR_POLY_LANES 8
++#endif
++static_assert(GSR_POLY_LANES == 8 || GSR_POLY_LANES == 16, "GSR_POLY_LANES must be 8 or 16");
+ namespace gsr_poly_batch {
++constexpr size_t LANES = GSR_POLY_LANES;
+ using ScalarFp = risc0::Fp;
+-using U32 = uint32_t __attribute__((vector_size(32)));
+-using U64 = uint64_t __attribute__((vector_size(64)));
++using U32 = uint32_t __attribute__((vector_size(4 * GSR_POLY_LANES)));
++using U64 = uint64_t __attribute__((vector_size(8 * GSR_POLY_LANES)));
+ class Fp {
+   U32 v;
+   explicit Fp(U32 raw):v(raw){}
+-  static U32 splat(uint32_t x) { return U32{x,x,x,x,x,x,x,x}; }
++  static U32 splat(uint32_t x) { return U32{} + x; }
+ public:
+   static constexpr uint32_t P=ScalarFp::P;
+   Fp():v{}{}
+   Fp(uint32_t x):v(splat(ScalarFp(x).asRaw())){}
+   static Fp broadcast(ScalarFp x) { return Fp(splat(x.asRaw())); }
+   template<class Index> static Fp load(const ScalarFp* ptr, Index index) {
+-    return Fp(U32{ptr[index(0)].asRaw(),ptr[index(1)].asRaw(),ptr[index(2)].asRaw(),ptr[index(3)].asRaw(),ptr[index(4)].asRaw(),ptr[index(5)].asRaw(),ptr[index(6)].asRaw(),ptr[index(7)].asRaw()});
++    U32 raw;
++    for (size_t lane = 0; lane < LANES; ++lane) raw[lane] = ptr[index(lane)].asRaw();
++    return Fp(raw);
+   }
+   static Fp invalid() {return Fp(splat(ScalarFp::INVALID));}
+   uint32_t raw(size_t lane) const {return v[lane];}
+@@ -34,7 +41,7 @@ public:
+   Fp operator+=(Fp x){*this=*this+x;return *this;}
+   Fp operator-=(Fp x){*this=*this-x;return *this;}
+   Fp operator*=(Fp x){*this=*this*x;return *this;}
+-  bool operator==(Fp x) const {for(size_t i=0;i<8;++i)if(v[i]!=x.v[i])return false;return true;}
++  bool operator==(Fp x) const {for(size_t i=0;i<LANES;++i)if(v[i]!=x.v[i])return false;return true;}
+   bool operator!=(Fp x) const {return !(*this==x);}
+ };
+ inline Fp pow(Fp x,size_t n){Fp r(1);while(n){if(n%2)r*=x;n/=2;x*=x;}return r;}
+diff --git a/risc0/circuit/rv32im-sys/src/lib.rs b/risc0/circuit/rv32im-sys/src/lib.rs
+index e588a21..a5b0f84 100644
+--- a/risc0/circuit/rv32im-sys/src/lib.rs
++++ b/risc0/circuit/rv32im-sys/src/lib.rs
+@@ -94,11 +94,14 @@ extern "C" {
+         cycles: u32,
+     ) -> *const std::os::raw::c_char;
+ 
+-    /// Whether the optional native eight-cycle evaluator was compiled.
++    /// Whether the optional native multi-cycle evaluator was compiled.
+     pub fn risc0_circuit_rv32im_cpu_poly_fp_batch_available() -> bool;
+ 
+-    /// Same inputs as the scalar evaluator; result must hold eight extension
+-    /// elements, for cycles cycle..cycle+8 with original masked input indexing.
++    /// Lanes per call of the optional native evaluator (0 when not compiled).
++    pub fn risc0_circuit_rv32im_cpu_poly_fp_batch_lanes() -> usize;
++
++    /// Same inputs as the scalar evaluator; result must hold `lanes` extension
++    /// elements, for cycles cycle..cycle+lanes with original masked input indexing.
+     pub fn risc0_circuit_rv32im_cpu_poly_fp_batch(
+         cycle: usize,
+         steps: usize,
+diff --git a/risc0/circuit/rv32im/src/prove/hal/cpu.rs b/risc0/circuit/rv32im/src/prove/hal/cpu.rs
+index bd47808..aeda1d9 100644
+--- a/risc0/circuit/rv32im/src/prove/hal/cpu.rs
++++ b/risc0/circuit/rv32im/src/prove/hal/cpu.rs
+@@ -19,6 +19,7 @@ use rayon::prelude::*;
+ use risc0_circuit_rv32im_sys::{
+     risc0_circuit_rv32im_cpu_accum, risc0_circuit_rv32im_cpu_poly_fp,
+     risc0_circuit_rv32im_cpu_poly_fp_batch, risc0_circuit_rv32im_cpu_poly_fp_batch_available,
++    risc0_circuit_rv32im_cpu_poly_fp_batch_lanes,
+     risc0_circuit_rv32im_cpu_witgen, RawAccumBuffers, RawBuffer, RawExecBuffers, RawPreflightTrace,
+ };
+ use risc0_core::scope;
+@@ -60,7 +61,7 @@ fn periodic_quotients(po2: usize) -> [Val; INV_RATE] {
+ pub struct CpuCircuitHal;
+ 
+ // The pinned generated evaluator is a chain of 21 functions with substantial
+-// temporary storage. Eight packed lanes exceed the default worker stack.
++// temporary storage. Eight or sixteen packed lanes exceed the default worker stack.
+ // Isolate the opt-in evaluator in a pool with explicit stack space instead of
+ // requiring a process-wide RUST_MIN_STACK override. The pool retains the
+ // caller's Rayon worker count; the scalar path continues in its original pool.
+@@ -69,7 +70,7 @@ fn batch_eval_pool() -> &'static rayon::ThreadPool {
+     POOL.get_or_init(|| {
+         rayon::ThreadPoolBuilder::new()
+             .num_threads(rayon::current_num_threads())
+-            .stack_size(8 * 1024 * 1024)
++            .stack_size(16 * 1024 * 1024)
+             .build()
+             .expect("create CPU polynomial evaluation pool")
+     })
+@@ -197,8 +198,14 @@ impl CircuitHal<CpuHal> for CpuCircuitHal {
+                 "GSR_BATCH_EVAL_CPU requires a GSR_BUILD_CPU_BATCH=1 host build"
+             );
+         }
+-        let width = if batch_requested && domain % 8 == 0 {
+-            8
++        let lanes = if batch_requested {
++            unsafe { risc0_circuit_rv32im_cpu_poly_fp_batch_lanes() }
++        } else {
++            1
++        };
++        assert!(lanes == 1 || lanes == 8 || lanes == 16);
++        let width = if lanes > 1 && domain % lanes == 0 {
++            lanes
+         } else {
+             1
+         };
+@@ -226,12 +233,12 @@ impl CircuitHal<CpuHal> for CpuCircuitHal {
+                 .for_each(|(block, (((c0, c1), c2), c3))| {
+                     let cycle = block * width;
+                     let pointers: [*const Val; 4] = core::array::from_fn(|i| args[i].as_ptr());
+-                    let mut values = [ExtVal::ZERO; 8];
++                    let mut values = [ExtVal::ZERO; 16];
+                     // SAFETY: The four pinned circuit inputs and mix-power array
+                     // remain borrowed through the call. The batch ABI writes only
+-                    // eight extension elements; the scalar ABI writes one.
++                    // `width` <= 16 extension elements; the scalar ABI writes one.
+                     ffi_wrap(|| unsafe {
+-                        if width == 8 {
++                        if width > 1 {
+                             risc0_circuit_rv32im_cpu_poly_fp_batch(
+                                 cycle,
+                                 domain,
+@@ -267,7 +274,7 @@ impl CircuitHal<CpuHal> for CpuCircuitHal {
+                     }
+                 })
+         };
+-        if width == 8 {
++        if width > 1 {
+             batch_eval_pool().install(evaluate);
+         } else {
+             evaluate();
+@@ -320,4 +327,70 @@ mod periodic_tests {
+             }
+         }
+     }
++
++    #[test]
++    fn packed_poly_fp_matches_scalar() {
++        std::thread::Builder::new()
++            .stack_size(64 * 1024 * 1024)
++            .spawn(packed_poly_fp_matches_scalar_impl)
++            .unwrap()
++            .join()
++            .unwrap();
++    }
++
++    fn packed_poly_fp_matches_scalar_impl() {
++        use risc0_zkp::field::ExtElem;
++
++        use crate::zirgen::circuit::{REGCOUNT_ACCUM, REGCOUNT_DATA, REGCOUNT_GLOBAL, REGCOUNT_MIX};
++
++        let lanes = unsafe { risc0_circuit_rv32im_cpu_poly_fp_batch_lanes() };
++        if lanes == 0 {
++            eprintln!("portable build: packed rv32im evaluator not compiled");
++            return;
++        }
++        let mut seed = 0x9e37_79b9_7f4a_7c15u64;
++        let mut next = || {
++            seed ^= seed << 13;
++            seed ^= seed >> 7;
++            seed ^= seed << 17;
++            Val::new((seed % 0x7800_0001) as u32)
++        };
++        let poly_mix = ExtVal::from_subelems([next(), next(), next(), next()]);
++        let poly_mix_pows = map_pow(poly_mix, POLY_MIX_POWERS);
++        for domain in [lanes, 64, 256] {
++            let mut column = |count: usize| (0..count).map(|_| next()).collect::<Vec<_>>();
++            let accum = column(REGCOUNT_ACCUM * domain);
++            let data = column(REGCOUNT_DATA * domain);
++            let out = column(REGCOUNT_GLOBAL);
++            let mix = column(REGCOUNT_MIX);
++            let pointers: [*const Val; 4] = [accum.as_ptr(), data.as_ptr(), out.as_ptr(), mix.as_ptr()];
++            for cycle in (0..domain).step_by(lanes) {
++                let mut packed = [ExtVal::ZERO; 16];
++                ffi_wrap(|| unsafe {
++                    risc0_circuit_rv32im_cpu_poly_fp_batch(
++                        cycle,
++                        domain,
++                        poly_mix_pows.as_ptr(),
++                        pointers.as_ptr(),
++                        packed.as_mut_ptr(),
++                    )
++                })
++                .unwrap();
++                for lane in 0..lanes {
++                    let mut scalar = ExtVal::ZERO;
++                    ffi_wrap(|| unsafe {
++                        risc0_circuit_rv32im_cpu_poly_fp(
++                            cycle + lane,
++                            domain,
++                            poly_mix_pows.as_ptr(),
++                            pointers.as_ptr(),
++                            &mut scalar,
++                        )
++                    })
++                    .unwrap();
++                    assert_eq!(packed[lane], scalar, "domain {domain} cycle {} lanes {lanes}", cycle + lane);
++                }
++            }
++        }
++    }
+ }
+diff --git a/risc0/zkp/src/core/hash/mod.rs b/risc0/zkp/src/core/hash/mod.rs
+index d7f79d7..772aad4 100644
+--- a/risc0/zkp/src/core/hash/mod.rs
++++ b/risc0/zkp/src/core/hash/mod.rs
+@@ -27,6 +27,14 @@ use risc0_core::field::{baby_bear::BabyBear, Field};
+ 
+ use super::digest::Digest;
+ 
++/// Serializes tests that read the process-wide field-operation counters with
++/// tests that perform many uncounted field operations.
++#[cfg(test)]
++pub(crate) static GSR_OPS_TEST_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
++
++/// Largest number of rows or pairs accepted by one batched hash call.
++pub const HASH_BATCH_LANES: usize = 16;
++
+ /// Instrumentation for GSR cost research: counts hash work in the verifier.
+ pub mod gsr_counters {
+     use core::sync::atomic::{AtomicU64, Ordering};
+@@ -68,23 +76,23 @@ pub trait HashFn<F: Field>: Send + Sync {
+     /// unpadded so this is only safe to used when the size is known.
+     fn hash_ext_elem_slice(&self, slice: &[F::ExtElem]) -> Box<Digest>;
+ 
+-    /// Hash up to eight strided rows. The default preserves the scalar path.
++    /// Hash up to [HASH_BATCH_LANES] strided rows. The default preserves the scalar path.
+     #[cfg(feature = "prove")]
+     fn hash_rows_batch(&self, output: &mut [Digest], matrix: &[F::Elem], rows: usize, start: usize) {
+         assert!(rows > 0 && matrix.len() % rows == 0);
+         assert!(start <= rows && output.len() <= rows - start);
+-        assert!(output.len() <= 8);
++        assert!(output.len() <= HASH_BATCH_LANES);
+         for (lane, digest) in output.iter_mut().enumerate() {
+             let column: alloc::vec::Vec<_> = matrix.chunks_exact(rows).map(|col| col[start + lane]).collect();
+             *digest = *self.hash_elem_slice(&column);
+         }
+     }
+ 
+-    /// Hash up to eight adjacent digest pairs, with the scalar validation rules.
++    /// Hash up to [HASH_BATCH_LANES] adjacent digest pairs, with the scalar validation rules.
+     #[cfg(feature = "prove")]
+     fn hash_pairs_batch(&self, output: &mut [Digest], input: &[Digest]) {
+         assert_eq!(input.len(), 2 * output.len());
+-        assert!(output.len() <= 8);
++        assert!(output.len() <= HASH_BATCH_LANES);
+         for (digest, pair) in output.iter_mut().zip(input.chunks_exact(2)) {
+             *digest = *self.hash_pair(&pair[0], &pair[1]);
+         }
+diff --git a/risc0/zkp/src/core/hash/poseidon2/batched.rs b/risc0/zkp/src/core/hash/poseidon2/batched.rs
+index 80ec646..88cca67 100644
+--- a/risc0/zkp/src/core/hash/poseidon2/batched.rs
++++ b/risc0/zkp/src/core/hash/poseidon2/batched.rs
+@@ -6,7 +6,7 @@
+ // under the License is distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR
+ // CONDITIONS OF ANY KIND, either express or implied. See the License for details.
+ 
+-//! Optional host-only eight-lane evaluation of the unchanged Poseidon2 hash.
++//! Optional host-only 8- or 16-lane evaluation of the unchanged Poseidon2 hash.
+ //! Arithmetic accepts canonical Montgomery words only. Unreduced row inputs and
+ //! enabled scalar operation instrumentation use the original implementation.
+ //! No unsafe code, architecture intrinsics, new hash suite, or new parameters.
+@@ -14,19 +14,20 @@ use super::*;
+ use core::ops::{Add, Mul};
+ use risc0_core::field::{baby_bear::P, gsr_ops};
+ 
+-const LANES: usize = 8;
++/// Largest batch accepted by [hash_rows] and [hash_pairs].
++pub const LANES: usize = 16;
+ 
+ #[derive(Clone, Copy)]
+-struct Packed([u32; LANES]);
++struct Packed<const N: usize>([u32; N]);
+ 
+-impl Packed {
+-    const ZERO: Self = Self([0; LANES]);
++impl<const N: usize> Packed<N> {
++    const ZERO: Self = Self([0; N]);
+     fn splat(value: BabyBearElem) -> Self {
+-        Self([value.as_u32_montgomery(); LANES])
++        Self([value.as_u32_montgomery(); N])
+     }
+ }
+ 
+-impl Add for Packed {
++impl<const N: usize> Add for Packed<N> {
+     type Output = Self;
+     #[inline(always)]
+     fn add(self, rhs: Self) -> Self {
+@@ -42,7 +43,7 @@ impl Add for Packed {
+     }
+ }
+ 
+-impl Mul for Packed {
++impl<const N: usize> Mul for Packed<N> {
+     type Output = Self;
+     #[inline(always)]
+     fn mul(self, rhs: Self) -> Self {
+@@ -61,14 +62,14 @@ impl Mul for Packed {
+     }
+ }
+ 
+-fn sbox(x: Packed) -> Packed {
++fn sbox<const N: usize>(x: Packed<N>) -> Packed<N> {
+     let x2 = x * x;
+     let x4 = x2 * x2;
+     let x6 = x4 * x2;
+     x6 * x
+ }
+ 
+-fn external(cells: &mut [Packed; CELLS]) {
++fn external<const N: usize>(cells: &mut [Packed<N>; CELLS]) {
+     let mut sums = [Packed::ZERO; 4];
+     for chunk in cells.chunks_exact_mut(4) {
+         let t0 = chunk[0] + chunk[1];
+@@ -88,14 +89,14 @@ fn external(cells: &mut [Packed; CELLS]) {
+     }
+ }
+ 
+-fn internal(cells: &mut [Packed; CELLS]) {
++fn internal<const N: usize>(cells: &mut [Packed<N>; CELLS]) {
+     let sum = cells.iter().fold(Packed::ZERO, |sum, x| sum + *x);
+     for i in 0..CELLS {
+         cells[i] = sum + Packed::splat(M_INT_DIAG_HZN[i]) * cells[i];
+     }
+ }
+ 
+-fn mix(cells: &mut [Packed; CELLS], lanes: usize) {
++fn mix<const N: usize>(cells: &mut [Packed<N>; CELLS], lanes: usize) {
+     super::super::gsr_counters::bump(&super::super::gsr_counters::P2_PERMUTE, lanes as u64);
+     external(cells);
+     for round in 0..(2 * ROUNDS_HALF_FULL + ROUNDS_PARTIAL) {
+@@ -111,7 +112,7 @@ fn mix(cells: &mut [Packed; CELLS], lanes: usize) {
+     }
+ }
+ 
+-fn finish(output: &mut [Digest], cells: &[Packed; CELLS]) {
++fn finish<const N: usize>(output: &mut [Digest], cells: &[Packed<N>; CELLS]) {
+     for (lane, digest) in output.iter_mut().enumerate() {
+         *digest = Digest::from(core::array::from_fn::<_, DIGEST_WORDS, _>(|i| {
+             cells[i].0[lane]
+@@ -140,7 +141,21 @@ pub(super) fn hash_rows(output: &mut [Digest], matrix: &[BabyBearElem], rows: us
+     if output.is_empty() {
+         return;
+     }
+-    let mut cells = [Packed::ZERO; CELLS];
++    if output.len() <= 8 {
++        packed_rows::<8>(output, matrix, rows, start, columns)
++    } else {
++        packed_rows::<LANES>(output, matrix, rows, start, columns)
++    }
++}
++
++fn packed_rows<const N: usize>(
++    output: &mut [Digest],
++    matrix: &[BabyBearElem],
++    rows: usize,
++    start: usize,
++    columns: usize,
++) {
++    let mut cells = [Packed::<N>::ZERO; CELLS];
+     for block in 0..columns.div_ceil(CELLS_RATE).max(1) {
+         for i in 0..CELLS_RATE {
+             cells[i] = Packed::ZERO;
+@@ -174,7 +189,15 @@ pub(super) fn hash_pairs(output: &mut [Digest], input: &[Digest]) {
+     if output.is_empty() {
+         return;
+     }
+-    let mut cells = [Packed::ZERO; CELLS];
++    if output.len() <= 8 {
++        packed_pairs::<8>(output, input)
++    } else {
++        packed_pairs::<LANES>(output, input)
++    }
++}
++
++fn packed_pairs<const N: usize>(output: &mut [Digest], input: &[Digest]) {
++    let mut cells = [Packed::<N>::ZERO; CELLS];
+     for (lane, pair) in input.chunks_exact(2).enumerate() {
+         for (i, word) in pair[0]
+             .as_words()
+@@ -195,6 +218,9 @@ mod tests {
+ 
+     #[test]
+     fn batched_counter_fallback_matches_scalar() {
++        let _lock = crate::core::hash::GSR_OPS_TEST_LOCK
++            .lock()
++            .unwrap_or_else(|e| e.into_inner());
+         struct Disable;
+         impl Drop for Disable {
+             fn drop(&mut self) {
+@@ -236,46 +262,58 @@ mod tests {
+ 
+     #[test]
+     fn batched_field_matches_scalar() {
++        let _lock = crate::core::hash::GSR_OPS_TEST_LOCK
++            .lock()
++            .unwrap_or_else(|e| e.into_inner());
+         let mut state = 0x123456789abcdef0u64;
++        let mut next = || {
++            state ^= state << 13;
++            state ^= state >> 7;
++            state ^= state << 17;
++            (state % u64::from(P)) as u32
++        };
+         let boundary = [0, 1, 2, P / 2, P - 2, P - 1, 0, P - 1];
+         for round in 0..1024 {
+-            let a = if round == 0 {
+-                boundary
+-            } else {
+-                core::array::from_fn(|_| {
+-                    state ^= state << 13;
+-                    state ^= state >> 7;
+-                    state ^= state << 17;
+-                    (state % u64::from(P)) as u32
+-                })
+-            };
+-            let b = core::array::from_fn(|i| {
++            let a: [u32; LANES] = core::array::from_fn(|i| {
++                if round == 0 {
++                    boundary[i % 8]
++                } else {
++                    next()
++                }
++            });
++            let b: [u32; LANES] = core::array::from_fn(|i| {
+                 if round == 0 {
+-                    boundary[7 - i]
++                    boundary[7 - i % 8]
+                 } else if round % 2 == 0 {
+-                    boundary[i]
++                    boundary[i % 8]
+                 } else {
+-                    state ^= state << 13;
+-                    state ^= state >> 7;
+-                    state ^= state << 17;
+-                    (state % u64::from(P)) as u32
++                    next()
+                 }
+             });
+             let sum = Packed(a) + Packed(b);
+             let product = Packed(a) * Packed(b);
++            let narrow_a: [u32; 8] = core::array::from_fn(|i| a[i]);
++            let narrow_b: [u32; 8] = core::array::from_fn(|i| b[i]);
++            let narrow = Packed(narrow_a) * Packed(narrow_b);
+             for i in 0..LANES {
+                 let aa = BabyBearElem::new_raw(a[i]);
+                 let bb = BabyBearElem::new_raw(b[i]);
+                 assert_eq!(sum.0[i], (aa + bb).as_u32_montgomery());
+                 assert_eq!(product.0[i], (aa * bb).as_u32_montgomery());
++                if i < 8 {
++                    assert_eq!(narrow.0[i], product.0[i]);
++                }
+             }
+         }
+     }
+ 
+     #[test]
+     fn batched_rows_match_scalar_boundaries() {
++        let _lock = crate::core::hash::GSR_OPS_TEST_LOCK
++            .lock()
++            .unwrap_or_else(|e| e.into_inner());
+         let scalar = Poseidon2HashFn;
+-        for rows in [1, 3, 8, 9, 17] {
++        for rows in [1, 3, 8, 9, 16, 17, 33] {
+             for columns in [0, 1, 7, 15, 16, 17, 31, 32, 33, 128] {
+                 let matrix: Vec<_> = (0..rows * columns)
+                     .map(|i| {
+@@ -316,6 +354,9 @@ mod tests {
+ 
+     #[test]
+     fn batched_pairs_match_scalar_and_reject_unreduced() {
++        let _lock = crate::core::hash::GSR_OPS_TEST_LOCK
++            .lock()
++            .unwrap_or_else(|e| e.into_inner());
+         let scalar = Poseidon2HashFn;
+         for count in 0..=LANES {
+             let input: Vec<_> = (0..2 * count)
+diff --git a/risc0/zkp/src/core/hash/poseidon2/mod.rs b/risc0/zkp/src/core/hash/poseidon2/mod.rs
+index c686cd4..a0cd4eb 100644
+--- a/risc0/zkp/src/core/hash/poseidon2/mod.rs
++++ b/risc0/zkp/src/core/hash/poseidon2/mod.rs
+@@ -329,6 +329,9 @@ mod tests {
+ 
+     #[test]
+     fn compare_naive() {
++        let _lock = crate::core::hash::GSR_OPS_TEST_LOCK
++            .lock()
++            .unwrap_or_else(|e| e.into_inner());
+         // Make a fixed input
+         let mut test_in_1 = [BabyBearElem::ONE; CELLS];
+         // Copy it
+@@ -350,6 +353,9 @@ mod tests {
+ 
+     #[test]
+     fn poseidon2_test_vectors() {
++        let _lock = crate::core::hash::GSR_OPS_TEST_LOCK
++            .lock()
++            .unwrap_or_else(|e| e.into_inner());
+         let buf: &mut [BabyBearElem; CELLS] = &mut baby_bear_array![
+             0x00000000, 0x00000001, 0x00000002, 0x00000003, 0x00000004, 0x00000005, 0x00000006,
+             0x00000007, 0x00000008, 0x00000009, 0x0000000A, 0x0000000B, 0x0000000C, 0x0000000D,
+@@ -374,6 +380,9 @@ mod tests {
+     // Test against golden values from an independent interpreter version of Poseidon2
+     #[test]
+     fn hash_elem_slice_compare_golden() {
++        let _lock = crate::core::hash::GSR_OPS_TEST_LOCK
++            .lock()
++            .unwrap_or_else(|e| e.into_inner());
+         let buf: [BabyBearElem; 32] = baby_bear_array![
+             943718400, 1887436800, 2013125296, 1761607679, 692060158, 1761607634, 566231037,
+             1509949437, 440401916, 1384120316, 314572795, 1258291195, 188743674, 1132462074,
+@@ -400,6 +409,9 @@ mod tests {
+ 
+     #[test]
+     fn hash_elem_slice_compare_golden_unaligned() {
++        let _lock = crate::core::hash::GSR_OPS_TEST_LOCK
++            .lock()
++            .unwrap_or_else(|e| e.into_inner());
+         let buf: [BabyBearElem; 17] = baby_bear_array![
+             943718400, 1887436800, 2013125296, 1761607679, 692060158, 1635778558, 566231037,
+             1509949437, 440401916, 1384120316, 314572795, 1258291195, 188743674, 1132462074,
+diff --git a/risc0/zkp/src/core/hash/poseidon_254/mod.rs b/risc0/zkp/src/core/hash/poseidon_254/mod.rs
+index 9832410..a164f9c 100644
+--- a/risc0/zkp/src/core/hash/poseidon_254/mod.rs
++++ b/risc0/zkp/src/core/hash/poseidon_254/mod.rs
+@@ -249,6 +249,9 @@ mod tests {
+ 
+     #[test]
+     fn p254_test_vectors() {
++        let _lock = crate::core::hash::GSR_OPS_TEST_LOCK
++            .lock()
++            .unwrap_or_else(|e| e.into_inner());
+         let mut input = Vec::<BabyBearElem>::new();
+         let mut output = Vec::<BabyBearElem>::new();
+         for i in 1..6 {
+diff --git a/risc0/zkp/src/hal/cpu.rs b/risc0/zkp/src/hal/cpu.rs
+index d1ff16d..3cf0ec4 100644
+--- a/risc0/zkp/src/hal/cpu.rs
++++ b/risc0/zkp/src/hal/cpu.rs
+@@ -15,6 +15,7 @@
+ //! CPU implementation of the HAL.
+ 
+ use std::{
++    any::TypeId,
+     fmt::Debug,
+     ops::Range,
+     sync::{Arc, OnceLock},
+@@ -52,9 +53,9 @@ use parking_lot::{
+     MappedRwLockReadGuard, MappedRwLockWriteGuard, RwLock, RwLockReadGuard, RwLockWriteGuard,
+ };
+ use rayon::prelude::*;
+-use risc0_core::field::{Elem, ExtElem, Field};
++use risc0_core::field::{baby_bear::BabyBearElem, Elem, ExtElem, Field};
+ 
+-use super::{tracker, Buffer, Hal};
++use super::{cpu_ntt, tracker, Buffer, Hal};
+ use crate::{
+     core::{
+         digest::Digest,
+@@ -65,6 +66,36 @@ use crate::{
+     FRI_FOLD,
+ };
+ 
++/// Rows per batched hash call: `GSR_HASH_LANES` (8 or 16), default 16.
++fn hash_batch_lanes() -> usize {
++    static LANES: OnceLock<usize> = OnceLock::new();
++    *LANES.get_or_init(|| match std::env::var("GSR_HASH_LANES").as_deref() {
++        Err(_) | Ok("16") => crate::core::hash::HASH_BATCH_LANES,
++        Ok("8") => 8,
++        Ok(other) => panic!("GSR_HASH_LANES must be 8 or 16, not {other}"),
++    })
++}
++
++/// `GSR_FAST_NTT=1` selects the tabulated BabyBear NTT and zk_shift kernels.
++fn fast_ntt_enabled() -> bool {
++    static ENABLED: OnceLock<bool> = OnceLock::new();
++    *ENABLED.get_or_init(|| std::env::var("GSR_FAST_NTT").as_deref() == Ok("1"))
++}
++
++/// Views `F::Elem` as BabyBear when the fast kernels apply to it: the field is
++/// BabyBear, operation counting is off, and every word is canonical.
++fn fast_baby_bear<E: Elem>(io: &mut [E]) -> Option<&mut [BabyBearElem]> {
++    if !fast_ntt_enabled()
++        || TypeId::of::<E>() != TypeId::of::<BabyBearElem>()
++        || risc0_core::field::gsr_ops::is_enabled()
++    {
++        return None;
++    }
++    // SAFETY: E is BabyBearElem, checked by TypeId above.
++    let io = unsafe { &mut *(io as *mut [E] as *mut [BabyBearElem]) };
++    io.iter().all(Elem::is_reduced).then_some(io)
++}
++
+ fn batch_hash_enabled() -> bool {
+     static ENABLED: OnceLock<bool> = OnceLock::new();
+     *ENABLED.get_or_init(|| std::env::var("GSR_BATCH_CPU").as_deref() == Ok("1"))
+@@ -378,8 +409,9 @@ impl<F: Field> Hal for CpuHal<F> {
+             output
+                 .as_slice_mut()
+                 .par_chunks_exact_mut(row_size)
+-                .for_each(|row| {
+-                    evaluate_ntt::<Self::Elem, Self::Elem>(row, expand_bits);
++                .for_each(|row| match fast_baby_bear(row) {
++                    Some(row) => cpu_ntt::evaluate(row, expand_bits),
++                    None => evaluate_ntt::<Self::Elem, Self::Elem>(row, expand_bits),
+                 });
+         }
+     }
+@@ -390,8 +422,9 @@ impl<F: Field> Hal for CpuHal<F> {
+         assert_eq!(row_size * count, io.size());
+         io.as_slice_mut()
+             .par_chunks_exact_mut(row_size)
+-            .for_each(|row| {
+-                interpolate_ntt::<Self::Elem, Self::Elem>(row);
++            .for_each(|row| match fast_baby_bear(row) {
++                Some(row) => cpu_ntt::interpolate(row),
++                None => interpolate_ntt::<Self::Elem, Self::Elem>(row),
+             });
+     }
+ 
+@@ -446,6 +479,28 @@ impl<F: Field> Hal for CpuHal<F> {
+         let count = io.size();
+         assert_eq!(io.size(), poly_count * (1 << bits));
+         let mut io = io.as_slice_mut();
++        if fast_ntt_enabled() && bits > 0 && fast_baby_bear(&mut io[..0]).is_some() {
++            let table = cpu_ntt::shift_table(bits);
++            let fast = io
++                .par_chunks_exact_mut(1 << bits)
++                .map(|row| match fast_baby_bear(row) {
++                    Some(row) => {
++                        cpu_ntt::shift_row(row, &table);
++                        true
++                    }
++                    None => false,
++                })
++                .collect::<Vec<_>>();
++            for (row, fast) in io.chunks_exact_mut(1 << bits).zip(fast) {
++                if !fast {
++                    for (pos, x) in row.iter_mut().enumerate() {
++                        let rev = bit_rev_32(pos as u32) >> (32 - bits);
++                        *x *= Self::Elem::from_u64(3).pow(rev as usize);
++                    }
++                }
++            }
++            return;
++        }
+         (&mut io[..], 0..count)
+             .into_par_iter()
+             .for_each(|(io, idx)| {
+@@ -616,8 +671,9 @@ impl<F: Field> Hal for CpuHal<F> {
+         let matrix = &*matrix.as_slice();
+         let hashfn = self.suite.hashfn.as_ref();
+         if batch_hash_enabled() {
+-            output.par_chunks_mut(8).enumerate().for_each(|(group, output)| {
+-                hashfn.hash_rows_batch(output, matrix, row_size, group * 8);
++            let lanes = hash_batch_lanes();
++            output.par_chunks_mut(lanes).enumerate().for_each(|(group, output)| {
++                hashfn.hash_rows_batch(output, matrix, row_size, group * lanes);
+             });
+             return;
+         }
+@@ -638,7 +694,8 @@ impl<F: Field> Hal for CpuHal<F> {
+             let output = &mut before[output_size..input_size];
+             let input = &after[..input_size];
+             let hashfn = self.suite.hashfn.as_ref();
+-            output.par_chunks_mut(8).zip(input.par_chunks(16)).for_each(|(output, input)| {
++            let lanes = hash_batch_lanes();
++            output.par_chunks_mut(lanes).zip(input.par_chunks(2 * lanes)).for_each(|(output, input)| {
+                 hashfn.hash_pairs_batch(output, input);
+             });
+             return;
+@@ -738,6 +795,9 @@ mod tests {
+ 
+     #[test]
+     fn cpu_hash_rows_and_fold_match_scalar() {
++        let _lock = crate::core::hash::GSR_OPS_TEST_LOCK
++            .lock()
++            .unwrap_or_else(|e| e.into_inner());
+         use crate::core::hash::poseidon2::Poseidon2HashSuite;
+         for suite in [Sha256HashSuite::new_suite(), Poseidon2HashSuite::new_suite()] {
+             let hal: CpuHal<BabyBear> = CpuHal::new(suite);
+@@ -770,6 +830,9 @@ mod tests {
+     #[test]
+     #[should_panic]
+     fn check_req() {
++        let _lock = crate::core::hash::GSR_OPS_TEST_LOCK
++            .lock()
++            .unwrap_or_else(|e| e.into_inner());
+         let hal: CpuHal<BabyBear> = CpuHal::new(Sha256HashSuite::new_suite());
+         let a = hal.alloc_elem("a", 10);
+         let b = hal.alloc_elem("b", 20);
+@@ -778,6 +841,9 @@ mod tests {
+ 
+     #[test]
+     fn fp() {
++        let _lock = crate::core::hash::GSR_OPS_TEST_LOCK
++            .lock()
++            .unwrap_or_else(|e| e.into_inner());
+         let hal: CpuHal<BabyBear> = CpuHal::new(Sha256HashSuite::new_suite());
+         const COUNT: usize = 1024 * 1024;
+         test_binary(
+@@ -834,6 +900,9 @@ mod tests {
+ 
+     #[test]
+     fn hash_rows() {
++        let _lock = crate::core::hash::GSR_OPS_TEST_LOCK
++            .lock()
++            .unwrap_or_else(|e| e.into_inner());
+         do_hash_rows(
+             1,
+             16,
+@@ -843,6 +912,9 @@ mod tests {
+ 
+     #[test]
+     fn prefix_products() {
++        let _lock = crate::core::hash::GSR_OPS_TEST_LOCK
++            .lock()
++            .unwrap_or_else(|e| e.into_inner());
+         let hal: CpuHal<BabyBear> = CpuHal::new(Sha256HashSuite::new_suite());
+         let io = vec![BabyBearExtElem::from_u32(2); 4];
+         let io = hal.copy_from_extelem("io", &io);
+diff --git a/risc0/zkp/src/hal/cpu_ntt.rs b/risc0/zkp/src/hal/cpu_ntt.rs
+new file mode 100644
+index 0000000..8fa5207
+--- /dev/null
++++ b/risc0/zkp/src/hal/cpu_ntt.rs
+@@ -0,0 +1,311 @@
++// Copyright 2026 RISC Zero, Inc.
++// Licensed under the Apache License, Version 2.0 (the "License");
++// you may not use this file except in compliance with the License.
++// You may obtain a copy at http://www.apache.org/licenses/LICENSE-2.0
++// Unless required by applicable law or agreed to in writing, software distributed
++// under the License is distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR
++// CONDITIONS OF ANY KIND, either express or implied. See the License for details.
++
++//! Optional host-only BabyBear NTT and zk_shift kernels.
++//!
++//! These perform the same butterflies as [crate::core::ntt] in the same
++//! per-element order, with the same word-level add, sub and Montgomery
++//! multiplication formulas as `baby_bear`, so results are bit-identical for
++//! canonical inputs (every word below P). Callers keep the generic path for
++//! any other input, which retains its `INVALID` checks. Twiddles are read from cached tables instead of being
++//! accumulated serially, which removes the loop-carried multiply and lets the
++//! compiler vectorize the inner loops.
++use std::sync::OnceLock;
++
++use risc0_core::field::{
++    baby_bear::{BabyBearElem, P},
++    Elem, RootsOfUnity,
++};
++
++use crate::core::ntt::bit_rev_32;
++
++const M: u32 = 0x88000001;
++/// Subtrees at most this many levels deep are transformed level by level.
++const ITERATIVE_LEVELS: usize = 11;
++const MAX_LEVEL: usize = 27;
++
++#[inline(always)]
++fn add(lhs: u32, rhs: u32) -> u32 {
++    let x = lhs.wrapping_add(rhs);
++    if x >= P {
++        x - P
++    } else {
++        x
++    }
++}
++
++#[inline(always)]
++fn sub(lhs: u32, rhs: u32) -> u32 {
++    let x = lhs.wrapping_sub(rhs);
++    if x > P {
++        x.wrapping_add(P)
++    } else {
++        x
++    }
++}
++
++#[inline(always)]
++fn mul(lhs: u32, rhs: u32) -> u32 {
++    let mut o64 = u64::from(lhs).wrapping_mul(u64::from(rhs));
++    let low = 0u32.wrapping_sub(o64 as u32);
++    let red = M.wrapping_mul(low);
++    o64 = o64.wrapping_add(u64::from(red).wrapping_mul(u64::from(P)));
++    let ret = (o64 >> 32) as u32;
++    if ret >= P {
++        ret - P
++    } else {
++        ret
++    }
++}
++
++/// `step^i` for `i < 2^(level-1)`, in Montgomery form.
++fn powers(step: BabyBearElem, level: usize) -> Vec<u32> {
++    let half = 1usize << (level - 1);
++    let mut out = Vec::with_capacity(half);
++    let mut cur = BabyBearElem::ONE;
++    for _ in 0..half {
++        out.push(cur.as_u32_montgomery());
++        cur *= step;
++    }
++    out
++}
++
++fn twiddles(forward: bool, level: usize) -> &'static [u32] {
++    static FWD: [OnceLock<Vec<u32>>; MAX_LEVEL + 1] = [const { OnceLock::new() }; MAX_LEVEL + 1];
++    static REV: [OnceLock<Vec<u32>>; MAX_LEVEL + 1] = [const { OnceLock::new() }; MAX_LEVEL + 1];
++    assert!((1..=MAX_LEVEL).contains(&level));
++    if forward {
++        FWD[level].get_or_init(|| powers(BabyBearElem::ROU_FWD[level], level))
++    } else {
++        REV[level].get_or_init(|| powers(BabyBearElem::ROU_REV[level], level))
++    }
++}
++
++#[inline(always)]
++fn fwd_combine(io: &mut [u32], tw: &[u32]) {
++    let (lo, hi) = io.split_at_mut(tw.len());
++    for ((a, b), w) in lo.iter_mut().zip(hi.iter_mut()).zip(tw) {
++        let x = *a;
++        let y = mul(*b, *w);
++        *a = add(x, y);
++        *b = sub(x, y);
++    }
++}
++
++#[inline(always)]
++fn rev_combine(io: &mut [u32], tw: &[u32]) {
++    let (lo, hi) = io.split_at_mut(tw.len());
++    for ((a, b), w) in lo.iter_mut().zip(hi.iter_mut()).zip(tw) {
++        let x = *a;
++        let y = *b;
++        *a = add(x, y);
++        *b = mul(sub(x, y), *w);
++    }
++}
++
++// Every butterfly at level m touches one block of 2^m elements, and blocks of
++// one level are independent, so any order that finishes level m-1 within a
++// block before level m on that block computes the recursive result.
++fn fwd(io: &mut [u32], level: usize, expand_bits: usize) {
++    if level == expand_bits || level == 0 {
++        return;
++    }
++    if level <= ITERATIVE_LEVELS {
++        for m in (expand_bits + 1)..=level {
++            let tw = twiddles(true, m);
++            for block in io.chunks_exact_mut(1 << m) {
++                fwd_combine(block, tw);
++            }
++        }
++        return;
++    }
++    let half = 1 << (level - 1);
++    let (lo, hi) = io.split_at_mut(half);
++    fwd(lo, level - 1, expand_bits);
++    fwd(hi, level - 1, expand_bits);
++    fwd_combine(io, twiddles(true, level));
++}
++
++fn rev(io: &mut [u32], level: usize) {
++    if level == 0 {
++        return;
++    }
++    if level <= ITERATIVE_LEVELS {
++        for m in (1..=level).rev() {
++            let tw = twiddles(false, m);
++            for block in io.chunks_exact_mut(1 << m) {
++                rev_combine(block, tw);
++            }
++        }
++        return;
++    }
++    rev_combine(io, twiddles(false, level));
++    let half = 1 << (level - 1);
++    let (lo, hi) = io.split_at_mut(half);
++    rev(lo, level - 1);
++    rev(hi, level - 1);
++}
++
++fn words(io: &mut [BabyBearElem]) -> &mut [u32] {
++    // SAFETY: BabyBearElem is a repr(transparent) u32 Montgomery word, and
++    // the kernels only store canonical words back into it.
++    unsafe { &mut *(io as *mut [BabyBearElem] as *mut [u32]) }
++}
++
++fn level_of(len: usize) -> usize {
++    assert!(len.is_power_of_two());
++    let level = len.trailing_zeros() as usize;
++    assert!(level <= MAX_LEVEL, "NTT size exceeds the tabulated roots");
++    level
++}
++
++/// Same result as `evaluate_ntt::<BabyBearElem, BabyBearElem>`.
++pub(crate) fn evaluate(io: &mut [BabyBearElem], expand_bits: usize) {
++    let level = level_of(io.len());
++    assert!(expand_bits <= level);
++    fwd(words(io), level, expand_bits);
++}
++
++/// Same result as `interpolate_ntt::<BabyBearElem, BabyBearElem>`.
++pub(crate) fn interpolate(io: &mut [BabyBearElem]) {
++    let level = level_of(io.len());
++    let io = words(io);
++    rev(io, level);
++    let norm = BabyBearElem::from_u64(io.len() as u64).inv().as_u32_montgomery();
++    for x in io.iter_mut() {
++        *x = mul(*x, norm);
++    }
++}
++
++/// `3^bitrev(pos)` for every `pos < 2^bits`, in Montgomery form.
++pub(crate) fn shift_table(bits: usize) -> Vec<u32> {
++    assert!((1..=MAX_LEVEL).contains(&bits));
++    let size = 1usize << bits;
++    let three = BabyBearElem::from_u64(3);
++    let mut pow3 = Vec::with_capacity(size);
++    let mut cur = BabyBearElem::ONE;
++    for _ in 0..size {
++        pow3.push(cur.as_u32_montgomery());
++        cur *= three;
++    }
++    (0..size)
++        .map(|pos| pow3[(bit_rev_32(pos as u32) >> (32 - bits)) as usize])
++        .collect()
++}
++
++/// Same result as the scalar `zk_shift` on one polynomial of `table.len()`.
++pub(crate) fn shift_row(row: &mut [BabyBearElem], table: &[u32]) {
++    assert_eq!(row.len(), table.len());
++    for (x, w) in words(row).iter_mut().zip(table) {
++        *x = mul(*x, *w);
++    }
++}
++
++#[cfg(test)]
++mod tests {
++    use rand::{Rng, SeedableRng};
++
++    use super::*;
++    use crate::core::ntt::{evaluate_ntt, interpolate_ntt};
++
++    fn sample(rng: &mut rand::rngs::StdRng, len: usize) -> Vec<BabyBearElem> {
++        let edge = [0, 1, 2, P - 2, P - 1];
++        (0..len)
++            .map(|i| {
++                let word = if i % 7 == 0 {
++                    edge[(i / 7) % edge.len()]
++                } else {
++                    rng.random_range(0..P)
++                };
++                BabyBearElem::new_raw(word)
++            })
++            .collect()
++    }
++
++    fn montgomery(v: &[BabyBearElem]) -> Vec<u32> {
++        v.iter().map(BabyBearElem::as_u32_montgomery).collect()
++    }
++
++    #[test]
++    fn word_ops_match_field() {
++        let _lock = crate::core::hash::GSR_OPS_TEST_LOCK
++            .lock()
++            .unwrap_or_else(|e| e.into_inner());
++        let mut rng = rand::rngs::StdRng::seed_from_u64(1);
++        let edge = [0, 1, 2, P / 2, P - 2, P - 1];
++        for i in 0..200_000usize {
++            let a = if i < 36 { edge[i % 6] } else { rng.random_range(0..P) };
++            let b = if i < 36 { edge[i / 6] } else { rng.random_range(0..P) };
++            let (x, y) = (BabyBearElem::new_raw(a), BabyBearElem::new_raw(b));
++            assert_eq!(add(a, b), (x + y).as_u32_montgomery());
++            assert_eq!(sub(a, b), (x - y).as_u32_montgomery());
++            assert_eq!(mul(a, b), (x * y).as_u32_montgomery());
++        }
++    }
++
++    #[test]
++    fn ntt_matches_generic() {
++        let _lock = crate::core::hash::GSR_OPS_TEST_LOCK
++            .lock()
++            .unwrap_or_else(|e| e.into_inner());
++        let mut rng = rand::rngs::StdRng::seed_from_u64(2);
++        for level in 0..=16 {
++            let input = sample(&mut rng, 1 << level);
++            for expand_bits in 0..=level.min(4) {
++                let mut want = input.clone();
++                evaluate_ntt::<BabyBearElem, BabyBearElem>(&mut want, expand_bits);
++                let mut got = input.clone();
++                evaluate(&mut got, expand_bits);
++                assert_eq!(montgomery(&got), montgomery(&want), "fwd {level} {expand_bits}");
++            }
++            let mut want = input.clone();
++            interpolate_ntt::<BabyBearElem, BabyBearElem>(&mut want);
++            let mut got = input.clone();
++            interpolate(&mut got);
++            assert_eq!(montgomery(&got), montgomery(&want), "rev {level}");
++        }
++    }
++
++    #[test]
++    fn large_ntt_matches_generic() {
++        let _lock = crate::core::hash::GSR_OPS_TEST_LOCK
++            .lock()
++            .unwrap_or_else(|e| e.into_inner());
++        let mut rng = rand::rngs::StdRng::seed_from_u64(3);
++        for (level, expand_bits) in [(18, 2), (20, 2)] {
++            let input = sample(&mut rng, 1 << level);
++            let mut want = input.clone();
++            evaluate_ntt::<BabyBearElem, BabyBearElem>(&mut want, expand_bits);
++            let mut got = input.clone();
++            evaluate(&mut got, expand_bits);
++            assert_eq!(montgomery(&got), montgomery(&want));
++            interpolate_ntt::<BabyBearElem, BabyBearElem>(&mut want);
++            interpolate(&mut got);
++            assert_eq!(montgomery(&got), montgomery(&want));
++        }
++    }
++
++    #[test]
++    fn shift_matches_scalar() {
++        let _lock = crate::core::hash::GSR_OPS_TEST_LOCK
++            .lock()
++            .unwrap_or_else(|e| e.into_inner());
++        let mut rng = rand::rngs::StdRng::seed_from_u64(4);
++        for bits in [1, 2, 5, 10, 14] {
++            let table = shift_table(bits);
++            let mut row = sample(&mut rng, 1 << bits);
++            let mut want = row.clone();
++            for (pos, x) in want.iter_mut().enumerate() {
++                let rev = bit_rev_32(pos as u32) >> (32 - bits);
++                *x *= BabyBearElem::from_u64(3).pow(rev as usize);
++            }
++            shift_row(&mut row, &table);
++            assert_eq!(montgomery(&row), montgomery(&want));
++        }
++    }
++}
+diff --git a/risc0/zkp/src/hal/mod.rs b/risc0/zkp/src/hal/mod.rs
+index bdb2dc0..5ecf850 100644
+--- a/risc0/zkp/src/hal/mod.rs
++++ b/risc0/zkp/src/hal/mod.rs
+@@ -15,6 +15,7 @@
+ //! Hardware Abstraction Layer (HAL) for accelerating the ZKP system.
+ 
+ pub mod cpu;
++mod cpu_ntt;
+ #[cfg(feature = "cuda")]
+ pub mod cuda;
+ pub mod dual;

@@ -1,4 +1,4 @@
-//! `settle exec|prove <witness.json> <out-dir> [<vk.pc> <proof.pc>...]`
+//! `settle exec|prove <witness.json> <out-dir> [<proof.pc>...]`
 //!
 //! Runs the `apply_batch` guest on a batch witness (JSON `BatchWitness`, as written by the
 //! operator) and, with `prove`, produces a `sha-256-padded` succinct receipt verified natively
@@ -53,7 +53,7 @@ fn main() -> Result<()> {
     let a: Vec<String> = std::env::args().collect();
     ensure!(
         a.len() >= 4 && (a[1] == "exec" || a[1] == "prove"),
-        "usage: settle exec|prove <witness.json> <out-dir> [vk proofs..]"
+        "usage: settle exec|prove <witness.json> <out-dir> [proofs..]"
     );
     let witness_json = fs::read_to_string(&a[2])?;
     let witness: BatchWitness = serde_json::from_str(&witness_json)?;
@@ -61,8 +61,8 @@ fn main() -> Result<()> {
     fs::create_dir_all(out)?;
     let expected = apply_batch(&witness).map_err(|e| anyhow::anyhow!("native transition: {e:?}"))?.journal.encode();
     ensure!(
-        witness.transactions.is_empty() || a.len() == 5 + witness.transactions.len(),
-        "need vk + one proof per transaction"
+        a.len() == 4 + witness.transactions.len(),
+        "need one proof per transaction"
     );
 
     let mut env = ExecutorEnv::builder();

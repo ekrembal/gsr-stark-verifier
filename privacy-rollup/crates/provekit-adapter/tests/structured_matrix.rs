@@ -1,4 +1,5 @@
 use ark_ff::{AdditiveGroup, Field};
+use sha2::Digest;
 use provekit_common::{
     utils::{structured_matrix, sumcheck::calculate_external_row_by_scatter},
     FieldElement, R1CS,
@@ -105,6 +106,22 @@ fn fixed_entry_point_binds_every_key_byte() {
     changed.push(0);
     assert!(FixedJoinSplitVerifier::from_postcard(&changed).is_err());
     assert!(FixedJoinSplitVerifier::from_postcard(&encoded[..encoded.len() - 1]).is_err());
+}
+
+#[test]
+fn compiled_entry_point_is_the_hash_bound_key_configuration() {
+    use provekit_verifier::FixedJoinSplitVerifier;
+    let verifier = fixture();
+    pr_provekit_adapter::ensure_guest_key(&verifier).unwrap();
+    let encoded = pr_provekit_adapter::guest_verifier_bytes(&verifier).unwrap();
+    assert_eq!(
+        sha2::Sha256::digest(&encoded).as_slice(),
+        FixedJoinSplitVerifier::KEY_HASH.as_slice()
+    );
+    assert!(FixedJoinSplitVerifier::compiled().is_ok());
+    let mut other = verifier.clone();
+    other.r1cs.num_public_inputs += 1;
+    assert!(pr_provekit_adapter::ensure_guest_key(&other).is_err());
 }
 
 #[test]

@@ -1,30 +1,30 @@
 {
   "genesis": {
-    "txid": "fb971a90e9cae5ed20034776585db998ab7d164117e980a5d4a9041e40fdcbf3",
-    "rollup_id": "042680bf00fde523b942212848975a3ca911b7f634494249a3ce08b75f634e82",
-    "state_root": "c1bb7c06de79790ca50c83b80adbc8ba735f90ec157cbaedc691db09f985dea4",
+    "txid": "bc9f01c185ddc737a9c9eb01d0a0be87504433914a9ffdc508fd2c37f8e21e93",
+    "rollup_id": "003380687b0efc3292ac0d239dc72eeec7af024437ecfdb3d5a621ddcddfdbb4",
+    "state_root": "be32558d9d71542b925293e52486838e10fdc846a6678cd3abb30213b4c7cd11",
     "covenant_script_bytes": 159229,
     "nonce_spent": "187647f837e1aff453d2b6b14e32adcab73943ef4185e73d6a29d3a2afb8ba2c"
   },
   "consensus_negatives_of_settlement_1": {
     "rollup_input_at_index_1": {
       "rejected": true,
-      "error": "error code: -25\nerror message:\nTestBlockValidity failed: block-script-verify-flag-failed (Script failed an OP_EQUALVERIFY operation), input 1 of ffbea1d4cac581143da80e4eadab6625592892fc8cb8e4c4d5e9e3c004d2f587 (wtxid 3fad1c5c423e303d871c2b6bce2a90e8425699a98b1d029fae6d3a10307aa33f), spending fb971a90e9cae5ed20034776585db998ab7d164117e980a5d4a9041e40fdcbf3:0"
+      "error": "error code: -25\nerror message:\nTestBlockValidity failed: block-script-verify-flag-failed (Script failed an OP_EQUALVERIFY operation), input 1 of 76d9184146043df2de371dbe84c183075b030e8d5a423e5b50861ee58ef64049 (wtxid db25e03113b99015e87f6e4dae5bda9d95092e9a4bd7b278ddd6eefbe3b4090b), spending bc9f01c185ddc737a9c9eb01d0a0be87504433914a9ffdc508fd2c37f8e21e93:0"
     },
     "extra_funding_input": {
       "rejected": true,
-      "error": "error code: -25\nerror message:\nTestBlockValidity failed: block-script-verify-flag-failed (Script failed an OP_VERIFY operation), input 0 of 3f99c728f30412ad393bdc39f0cb3b557684344b7594473bc2989eda5d9f5208 (wtxid bfa7ed75b20db08afe1dab39fdd13c6c6b31907cfd24062b0b08ff79e67d1c53), spending fb971a90e9cae5ed20034776585db998ab7d164117e980a5d4a9041e40fdcbf3:0"
+      "error": "error code: -25\nerror message:\nTestBlockValidity failed: block-script-verify-flag-failed (Script failed an OP_VERIFY operation), input 0 of 84f9a742f7333f68d94bbb3e9adaf50150199eab4bd10b70f47b96b9ef583f1c (wtxid c6539b54ef206100935ef62c3f0518165d88f797434db0b3bfeac5cf93c457b3), spending bc9f01c185ddc737a9c9eb01d0a0be87504433914a9ffdc508fd2c37f8e21e93:0"
     },
     "control_block_internal_key": {
       "rejected": true,
-      "error": "error code: -25\nerror message:\nTestBlockValidity failed: block-script-verify-flag-failed (Witness program hash mismatch), input 0 of f9c88244eac9cea6976a12ff1fa67819b28cfcd6759cf675fd90d86570f37d9c (wtxid 7c512af9f8903fcafa0231c5c707bb6870ad0d060cf33fa2558eb5fcc6f8e67b), spending fb971a90e9cae5ed20034776585db998ab7d164117e980a5d4a9041e40fdcbf3:0"
+      "error": "error code: -25\nerror message:\nTestBlockValidity failed: block-script-verify-flag-failed (Witness program hash mismatch), input 0 of 26f79f1a48b920ac6840123fb3eedea2de07052a306875e53a016daa9f78d014 (wtxid 318286641bba28a71a38d4534155a5ca9df2bedff882a35c9ecb36dafafbde4a), spending bc9f01c185ddc737a9c9eb01d0a0be87504433914a9ffdc508fd2c37f8e21e93:0"
     },
     "control_block_parity": {
       "rejected": true,
-      "error": "error code: -25\nerror message:\nTestBlockValidity failed: block-script-verify-flag-failed (Witness program hash mismatch), input 0 of f9c88244eac9cea6976a12ff1fa67819b28cfcd6759cf675fd90d86570f37d9c (wtxid 0ab5ce7a484f6f1ebd3503cdf7bcbdad3670f45ce00165f2db47d722ca2248a3), spending fb971a90e9cae5ed20034776585db998ab7d164117e980a5d4a9041e40fdcbf3:0"
+      "error": "error code: -25\nerror message:\nTestBlockValidity failed: block-script-verify-flag-failed (Witness program hash mismatch), input 0 of 26f79f1a48b920ac6840123fb3eedea2de07052a306875e53a016daa9f78d014 (wtxid af3aa3b9f9f985832001820b4e1591487e8cebea499ce6552b1f4961eea70081), spending bc9f01c185ddc737a9c9eb01d0a0be87504433914a9ffdc508fd2c37f8e21e93:0"
     }
   },
-  "same_block_settlements": "rejected: error code: -25\nerror message:\nTestBlockValidity failed: bad-txns-nonfinal, contains a non-BIP68-final transaction a5940bab42ff92065d4b025c04ee6adea03aaba6fcb5392f5a3dd369b8ff53e5",
+  "same_block_settlements": "rejected: error code: -25\nerror message:\nTestBlockValidity failed: bad-txns-nonfinal, contains a non-BIP68-final transaction 5d50dafb8902d3e09dc8f2c00c1d09d5b196960c5b0a2dd19bb9ef1e0aa172d3",
   "negative_spends_of_settlement_1": {
     "redirected_successor": {
       "rejected": true,
@@ -81,16 +81,16 @@
     "commitment_count": 0,
     "nullifier_next_index": 1,
     "pending": 0,
-    "rollup_id": "042680bf00fde523b942212848975a3ca911b7f634494249a3ce08b75f634e82",
-    "state_root": "4a7a8f49efef8596a8efcb1da1f8071774ad092529e5b132e71b29da3b1ddc6e",
+    "rollup_id": "003380687b0efc3292ac0d239dc72eeec7af024437ecfdb3d5a621ddcddfdbb4",
+    "state_root": "ae963c41335a8f2a25528de30f50191f256f3b3fe1f0fdcb4614a366d21adafe",
     "utxo": [
-      "ca177556244490e0ffcc226ae273b802da2a5f7e30933ec0adb05a4f377c49eb",
+      "e227664a64d49bf3b281e4b78a4d3e3b0cdd195a35e189248ec9b59f5af9c8fc",
       0
     ]
   },
   "rollup_utxo_on_chain": {
     "value": 0.001,
-    "script_pubkey": "5120a1936879e71d8dc625be360ec51602003f1ddf44ccf2fa44a0bffe34e28db444",
+    "script_pubkey": "5120a8ed851d3e85efe28b996480ba3927e7bf163eadf8cad413b481e3580c998ab3",
     "matches_covenant": true
   },
   "reorg": {
@@ -101,10 +101,10 @@
   "settlements": [
     {
       "batch_number": 1,
-      "txid": "f9c88244eac9cea6976a12ff1fa67819b28cfcd6759cf675fd90d86570f37d9c",
+      "txid": "26f79f1a48b920ac6840123fb3eedea2de07052a306875e53a016daa9f78d014",
       "weight": 389240,
       "annex_bytes": 151,
-      "varops": 2095513495,
+      "varops": 2095525492,
       "budget": 3892400000,
       "invoked_body_bytes": 3231577,
       "peak_entries": 2666,
@@ -119,8 +119,8 @@
         "verifier": true
       },
       "standard_policy": {
-        "txid": "f9c88244eac9cea6976a12ff1fa67819b28cfcd6759cf675fd90d86570f37d9c",
-        "wtxid": "667e68a3814dc99dcd0489203be4faa1f26b038af0bf4c6680058c4bd5d2a6c7",
+        "txid": "26f79f1a48b920ac6840123fb3eedea2de07052a306875e53a016daa9f78d014",
+        "wtxid": "0c20b7601c5e0f4ecc0a9106d36fc3c227fe920f625007900d4c655c1794128d",
         "allowed": false,
         "reject-reason": "bad-witness-nonstandard",
         "reject-details": "bad-witness-nonstandard"
@@ -128,10 +128,10 @@
     },
     {
       "batch_number": 2,
-      "txid": "a5940bab42ff92065d4b025c04ee6adea03aaba6fcb5392f5a3dd369b8ff53e5",
+      "txid": "5d50dafb8902d3e09dc8f2c00c1d09d5b196960c5b0a2dd19bb9ef1e0aa172d3",
       "weight": 389240,
       "annex_bytes": 151,
-      "varops": 2095508894,
+      "varops": 2095513475,
       "budget": 3892400000,
       "invoked_body_bytes": 3231577,
       "peak_entries": 2666,
@@ -146,18 +146,18 @@
         "verifier": true
       },
       "standard_policy": {
-        "txid": "a5940bab42ff92065d4b025c04ee6adea03aaba6fcb5392f5a3dd369b8ff53e5",
-        "wtxid": "20a86e9c9813a66fb3311890a6d215b638fa9029bef6946320a073364ae06ed4",
+        "txid": "5d50dafb8902d3e09dc8f2c00c1d09d5b196960c5b0a2dd19bb9ef1e0aa172d3",
+        "wtxid": "d638555efb564d512070f8b772b37c15ce7d8bc464d22e21a488314200f571d5",
         "allowed": false,
         "reject-reason": "missing-inputs"
       }
     },
     {
       "batch_number": 3,
-      "txid": "734ea8978d738662b69cf7269fa9ff9da0db87f3513a8566575a12d473df6cd3",
+      "txid": "afe87d9f1d57cf48c1889b3f940ec0728f589de27850927a41060e6f564e68dc",
       "weight": 389240,
       "annex_bytes": 151,
-      "varops": 2095510594,
+      "varops": 2095598556,
       "budget": 3892400000,
       "invoked_body_bytes": 3231577,
       "peak_entries": 2666,
@@ -172,8 +172,8 @@
         "verifier": true
       },
       "standard_policy": {
-        "txid": "734ea8978d738662b69cf7269fa9ff9da0db87f3513a8566575a12d473df6cd3",
-        "wtxid": "9bd70573fe8f904fdf1de828abd315b1f835c58781ad31b712dfe0270eae07e1",
+        "txid": "afe87d9f1d57cf48c1889b3f940ec0728f589de27850927a41060e6f564e68dc",
+        "wtxid": "c61aa67740cd9a90e583780e89f3e869283a1c199888aff67c753cfdc018d4f7",
         "allowed": false,
         "reject-reason": "bad-witness-nonstandard",
         "reject-details": "bad-witness-nonstandard"
@@ -181,10 +181,10 @@
     },
     {
       "batch_number": 4,
-      "txid": "4467f8fbd496fe8da69183f9aa96a43bf8352e10b0cce50c281792a1245c1ec4",
+      "txid": "6f47fa80dae2c80176e869b4a95b32fa612fb3491168f18349c3b252522a85dd",
       "weight": 389240,
       "annex_bytes": 151,
-      "varops": 2095531036,
+      "varops": 2095349882,
       "budget": 3892400000,
       "invoked_body_bytes": 3231577,
       "peak_entries": 2666,
@@ -199,8 +199,8 @@
         "verifier": true
       },
       "standard_policy": {
-        "txid": "4467f8fbd496fe8da69183f9aa96a43bf8352e10b0cce50c281792a1245c1ec4",
-        "wtxid": "e80ed95e454b3668936ef8ba3047982e018a7fa8f3eb1ec691ae7f2b0f54aa3a",
+        "txid": "6f47fa80dae2c80176e869b4a95b32fa612fb3491168f18349c3b252522a85dd",
+        "wtxid": "508f14f8025f546c2099db82634177c15fd22b5a4a661ef861d81a53e0271505",
         "allowed": false,
         "reject-reason": "bad-witness-nonstandard",
         "reject-details": "bad-witness-nonstandard"
@@ -208,10 +208,10 @@
     },
     {
       "batch_number": 5,
-      "txid": "999ddacaff34757f7b1bfc0b8fc7c1eedccb7d474642c7f19611ae4239f279ed",
+      "txid": "7714768ad7062c2e3e4fa2ebe6fe0028573a87556ad918f66d8f16498916e913",
       "weight": 389240,
       "annex_bytes": 151,
-      "varops": 2095601259,
+      "varops": 2095411735,
       "budget": 3892400000,
       "invoked_body_bytes": 3231577,
       "peak_entries": 2666,
@@ -226,8 +226,8 @@
         "verifier": true
       },
       "standard_policy": {
-        "txid": "999ddacaff34757f7b1bfc0b8fc7c1eedccb7d474642c7f19611ae4239f279ed",
-        "wtxid": "54fbd589d4766fce75c7d8bb48de5d288cbfe9c130d845119f9420c8b10e66af",
+        "txid": "7714768ad7062c2e3e4fa2ebe6fe0028573a87556ad918f66d8f16498916e913",
+        "wtxid": "dc3aaec4ba5f896f04ea4f45e3dfdb7f5f83f660cc315c4313cbee29c34d4097",
         "allowed": false,
         "reject-reason": "bad-witness-nonstandard",
         "reject-details": "bad-witness-nonstandard"
@@ -235,10 +235,10 @@
     },
     {
       "batch_number": 6,
-      "txid": "ab7a050702fab8af5374fd7b4417848a7a64eefc67793b32ce0a0bee513b8bce",
+      "txid": "53cb545686e80e7067e059079fa9d26fe4695bf355c577d9fb6fd7d7ca172c94",
       "weight": 389240,
       "annex_bytes": 151,
-      "varops": 2095349807,
+      "varops": 2095515118,
       "budget": 3892400000,
       "invoked_body_bytes": 3231577,
       "peak_entries": 2666,
@@ -253,8 +253,8 @@
         "verifier": true
       },
       "standard_policy": {
-        "txid": "ab7a050702fab8af5374fd7b4417848a7a64eefc67793b32ce0a0bee513b8bce",
-        "wtxid": "9974799cf20b4c965338b6439c513d16dcc745b34ea8b4d9652bc54af2d67a5e",
+        "txid": "53cb545686e80e7067e059079fa9d26fe4695bf355c577d9fb6fd7d7ca172c94",
+        "wtxid": "794e7224e30ed68c7934f94ea209b0ac59b018b0dc5f381f0c86c7a42bf82aaa",
         "allowed": false,
         "reject-reason": "bad-witness-nonstandard",
         "reject-details": "bad-witness-nonstandard"
@@ -262,10 +262,10 @@
     },
     {
       "batch_number": 7,
-      "txid": "fdf1ce1ee2d924351040326d2176d27a304d261d8e9c9a797b5bae5356b075e5",
+      "txid": "f4b665406bf96ef6064351633cc4189a46ebbd80396b7edde17cc00d83a3461c",
       "weight": 389240,
       "annex_bytes": 151,
-      "varops": 2095494617,
+      "varops": 2095587565,
       "budget": 3892400000,
       "invoked_body_bytes": 3231577,
       "peak_entries": 2666,
@@ -280,8 +280,8 @@
         "verifier": true
       },
       "standard_policy": {
-        "txid": "fdf1ce1ee2d924351040326d2176d27a304d261d8e9c9a797b5bae5356b075e5",
-        "wtxid": "077dd9003fbf19fe715d604516546265ce450131b9d8d7179cef597f6fea95cb",
+        "txid": "f4b665406bf96ef6064351633cc4189a46ebbd80396b7edde17cc00d83a3461c",
+        "wtxid": "9bce1b0e58c38dfb39fc51f17ec26dda5657baab525fbb4e4feefeeacbe00d93",
         "allowed": false,
         "reject-reason": "bad-witness-nonstandard",
         "reject-details": "bad-witness-nonstandard"
@@ -289,10 +289,10 @@
     },
     {
       "batch_number": 8,
-      "txid": "3360a70e9a732696553f189f109127c258947e9f99634a9257360ee44c4d7afe",
+      "txid": "6124632ebacc783aec50eea9bbbcc5c74673b6fa5e34737bcfb57a628a1273c9",
       "weight": 389240,
       "annex_bytes": 151,
-      "varops": 2095450791,
+      "varops": 2095608481,
       "budget": 3892400000,
       "invoked_body_bytes": 3231577,
       "peak_entries": 2666,
@@ -307,8 +307,8 @@
         "verifier": true
       },
       "standard_policy": {
-        "txid": "3360a70e9a732696553f189f109127c258947e9f99634a9257360ee44c4d7afe",
-        "wtxid": "b1e02646aa3ff75cfd1a1320256b48348b5b78c12b05a6541d089adc69d2f579",
+        "txid": "6124632ebacc783aec50eea9bbbcc5c74673b6fa5e34737bcfb57a628a1273c9",
+        "wtxid": "a7d572a5798bc0ff41658559ac3616e9f12dd83d2b0c3fede3906fdf4e599806",
         "allowed": false,
         "reject-reason": "bad-witness-nonstandard",
         "reject-details": "bad-witness-nonstandard"
@@ -316,10 +316,10 @@
     },
     {
       "batch_number": 9,
-      "txid": "d6162d3decf4acb215a6b63682063df55764cb743db7a7bc0a87c85fe4a38432",
+      "txid": "0fc2908aa30d7b766df865bebbfc8bcef86bd5f1b4c6f24c4c547de5517cabd7",
       "weight": 389240,
       "annex_bytes": 151,
-      "varops": 2095500501,
+      "varops": 2095505299,
       "budget": 3892400000,
       "invoked_body_bytes": 3231577,
       "peak_entries": 2666,
@@ -334,8 +334,8 @@
         "verifier": true
       },
       "standard_policy": {
-        "txid": "d6162d3decf4acb215a6b63682063df55764cb743db7a7bc0a87c85fe4a38432",
-        "wtxid": "6901a3c8934fd7fe7a5ad59f5efe56a63bb9d0f83637c1596e7dca110d431895",
+        "txid": "0fc2908aa30d7b766df865bebbfc8bcef86bd5f1b4c6f24c4c547de5517cabd7",
+        "wtxid": "4faf38e9cfa0695967c764c916b8bd603998a3f0c46f2ff8418c7f271470e663",
         "allowed": false,
         "reject-reason": "bad-witness-nonstandard",
         "reject-details": "bad-witness-nonstandard"
@@ -343,10 +343,10 @@
     },
     {
       "batch_number": 10,
-      "txid": "eb497c374f5ab0adc03e93307e5f2ada02b873e26a22ccffe0904424567517ca",
+      "txid": "fcc8f95a9fb5c98e2489e1355a19dd0c3b3e4d8ab7e481b2f39bd4644a6627e2",
       "weight": 389240,
       "annex_bytes": 151,
-      "varops": 2095479175,
+      "varops": 2095443843,
       "budget": 3892400000,
       "invoked_body_bytes": 3231577,
       "peak_entries": 2666,
@@ -361,8 +361,8 @@
         "verifier": true
       },
       "standard_policy": {
-        "txid": "eb497c374f5ab0adc03e93307e5f2ada02b873e26a22ccffe0904424567517ca",
-        "wtxid": "b3f07493e1d1d3509c67c22a6c1a04fccc5a3b25aab2cf754b9a962c9561fa6e",
+        "txid": "fcc8f95a9fb5c98e2489e1355a19dd0c3b3e4d8ab7e481b2f39bd4644a6627e2",
+        "wtxid": "ba6873b8e35ff151a91857318bdc6f1c41543e57bd6c06e4a8ad0846a53f9378",
         "allowed": false,
         "reject-reason": "bad-witness-nonstandard",
         "reject-details": "bad-witness-nonstandard"

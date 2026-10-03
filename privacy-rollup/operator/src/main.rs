@@ -135,9 +135,6 @@ fn build(dir: &Path, request: &Path, out: &Path) -> Result<()> {
     fs::create_dir_all(out)?;
     let mut frames = Vec::new();
     if !entries.is_empty() {
-        let verifier = pr_provekit_adapter::load_verifier(&dir.join(VERIFIER))?;
-        fs::write(out.join("vk.pc"), pr_provekit_adapter::guest_verifier_bytes(&verifier)?)?;
-        frames.push("vk.pc".to_string());
         for (i, e) in entries.iter().enumerate() {
             let name = format!("proof{i}.pc");
             fs::write(out.join(&name), pr_provekit_adapter::guest_proof_bytes(&pr_provekit_adapter::proof_of(&e.tx))?)?;
@@ -175,7 +172,7 @@ fn main() -> Result<()> {
             ensure!(a.len() == 5, "usage: pr-operator init <dir> <descriptor.json> <joinsplit.pkv>");
             fs::create_dir_all(dir)?;
             let d: RollupDescriptor = serde_json::from_slice(&fs::read(&a[3])?)?;
-            pr_provekit_adapter::load_verifier(a[4].as_ref())?;
+            pr_provekit_adapter::ensure_guest_key(&pr_provekit_adapter::load_verifier(a[4].as_ref())?)?;
             fs::copy(&a[4], dir.join(VERIFIER))?;
             fs::write(dir.join("descriptor.json"), serde_json::to_vec_pretty(&d)?)?;
             save(dir, &Chain::default())?;

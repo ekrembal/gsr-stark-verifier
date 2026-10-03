@@ -53,6 +53,7 @@ default = []
 # Experimental fixed-modulus program for the existing RISC Zero BigInt2 AIR.
 experimental-bn254-montgomery = []
 experimental-bn254-dot32 = ["experimental-bn254-montgomery"]
+experimental-bn254-dot4 = ["experimental-bn254-montgomery"]
 parallel = [
     "std",
     "rayon",

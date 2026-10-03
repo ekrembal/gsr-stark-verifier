@@ -19,7 +19,7 @@ def main():
     output = bytearray()
     for p, width in fields:
         for seed in [0, 1, 97, 123456789]:
-            for length in [0, 1, 7, 31, 32, 33]:
+            for length in [0, 1, 3, 4, 5, 7, 31, 32, 33]:
                 value = sum(sample(i, seed, p) * sample(i+3, seed+17, p)
                             for i in range(length)) % p
                 output.extend(value.to_bytes(width, 'little'))
@@ -29,7 +29,7 @@ def main():
     else:
         args.output.parent.mkdir(parents=True, exist_ok=True)
         args.output.write_bytes(output)
-    print(f'72 outputs, {len(output)} bytes, sha256={hashlib.sha256(output).hexdigest()}')
+    print(f'{len(fields) * 4 * 9} outputs, {len(output)} bytes, sha256={hashlib.sha256(output).hexdigest()}')
 
 
 if __name__ == '__main__':

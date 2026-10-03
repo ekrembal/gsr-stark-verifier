@@ -34,6 +34,9 @@ fn cases<F: PrimeField>() {
     for seed in [0u64, 1, 97, 123456789] {
         dot::<F, 0>(seed);
         dot::<F, 1>(seed);
+        dot::<F, 3>(seed);
+        dot::<F, 4>(seed);
+        dot::<F, 5>(seed);
         dot::<F, 7>(seed);
         dot::<F, 31>(seed);
         dot::<F, 32>(seed);

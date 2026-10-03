@@ -1,5 +1,10 @@
 #!/usr/bin/env python3
-"""Sequential, durable, resumable orchestration of the frozen real prover.
+"""Durable, resumable orchestration of the frozen real prover.
+
+The default schedule is sequential (leaf, lift, prefix join). `--jobs N` proves
+up to N independent leaves concurrently and joins lifts in a deterministic
+balanced tree over segment ranges; each range [lo, hi) splits at
+lo + (hi - lo + 1) // 2, so a resumed run reproduces the same tree.
 
 No guest/AIR/prover code is rebuilt here. Configuration hashes bind the saved
 executables and single-execution spool. Every completed receipt is independently
@@ -17,7 +22,9 @@ import resource
 import shutil
 import signal
 import subprocess
+import threading
 import time
+from concurrent.futures import FIRST_COMPLETED, ThreadPoolExecutor, wait
 
 
 def digest(path):
@@ -68,6 +75,14 @@ def group_memory(group):
     return rss, vsize
 
 
+def tree_ranges(lo, hi):
+    """Post-order (lo, mid, hi) join nodes of the balanced tree over [lo, hi)."""
+    if hi - lo < 2:
+        return []
+    mid = lo + (hi - lo + 1) // 2
+    return tree_ranges(lo, mid) + tree_ranges(mid, hi) + [(lo, mid, hi)]
+
+
 def linked_copy(source, target):
     source, target = Path(source), Path(target)
     if target.exists():
@@ -86,8 +101,10 @@ class Runner:
         self.config_hash = digest(self.root / 'config.json')
         self.lock = (self.root / 'runner.lock').open('a')
         fcntl.flock(self.lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
-        active = self.root / 'active-process.json'
-        if active.exists():
+        (self.root / 'active').mkdir(exist_ok=True)
+        for active in [self.root / 'active-process.json', *(self.root / 'active').glob('*.json')]:
+            if not active.exists():
+                continue
             previous = json.loads(active.read_text())
             try:
                 stat = Path(f"/proc/{previous['pid']}/stat").read_text().rsplit(') ',1)[1].split()
@@ -95,6 +112,7 @@ class Runner:
                     raise RuntimeError('previous stage still running; do not start a second prover')
             except FileNotFoundError:
                 pass
+            active.unlink()
         if os.environ.get('RISC0_DEV_MODE') is not None:
             raise RuntimeError('RISC0_DEV_MODE must be absent')
         for path, expected in self.config['frozen_sha256'].items():
@@ -113,8 +131,10 @@ class Runner:
         self.native = self.config['native']
         self.checker = self.config['checker']
         self.completed, self.lifted, self.prefix = 0, 0, 0
-        self.current = None
-        self.rss = 0
+        self.jobs = 1
+        self.running = {}
+        self.guard = threading.RLock()
+        self.abort = threading.Event()
         previous_status = self.root / 'status.json'
         self.peak = (json.loads(previous_status.read_text()).get('sampled_peak_group_rss_kib',0)
                      if previous_status.exists() else 0)
@@ -123,12 +143,16 @@ class Runner:
 
     def event(self, event, **details):
         item = dict(time=time.time(), event=event, **details)
-        with (self.root / 'events.jsonl').open('a') as f:
+        with self.guard, (self.root / 'events.jsonl').open('a') as f:
             f.write(json.dumps(item) + '\n')
             f.flush()
             os.fsync(f.fileno())
 
     def status(self, state='running', force=False, error=None):
+        with self.guard:
+            self.write_status(state, force, error)
+
+    def write_status(self, state, force, error):
         now = time.time()
         if not force and now - self.last_status < 5:
             return
@@ -138,11 +162,12 @@ class Runner:
         result = dict(state=state, pid=os.getpid(), updated_at=now,
                       elapsed_seconds=now-self.started, completed_verified_segments=self.completed,
                       lifted_segments=self.lifted, joined_prefix_segments=self.prefix,
-                      total_segments=self.total, current_stage=self.current,
-                      current_group_rss_kib=self.rss, sampled_peak_group_rss_kib=self.peak,
+                      total_segments=self.total, jobs=self.jobs,
+                      current_stage=(sorted(self.running) or [None])[0], running_stages=sorted(self.running),
+                      current_group_rss_kib=sum(self.running.values()), sampled_peak_group_rss_kib=self.peak,
                       free_disk_bytes=shutil.disk_usage(self.root).free,
                       remaining_eta_seconds=(0 if state == 'complete' else
-                                             max(0,self.total-self.prefix)*estimate+60),
+                                             max(0,self.total-self.prefix)*estimate/self.jobs+60),
                       full_receipt_verified=state == 'complete', config_sha256=self.config_hash,
                       error=error)
         atomic_json(self.root / 'status.json', result)
@@ -158,8 +183,10 @@ class Runner:
                 raise OSError(ctypes.get_errno(), 'PR_SET_PDEATHSIG failed')
             if os.getppid() != parent_pid:
                 os._exit(125)
-            resource.setrlimit(resource.RLIMIT_AS, (14*1024**3,14*1024**3))
-            resource.setrlimit(resource.RLIMIT_CPU, (seconds*4+30,seconds*4+35))
+            space = self.config.get('address_space_bytes', 14*1024**3)
+            cpus = self.config.get('cpu_seconds_per_wall_second', 4)
+            resource.setrlimit(resource.RLIMIT_AS, (space,space))
+            resource.setrlimit(resource.RLIMIT_CPU, (seconds*cpus+30,seconds*cpus+35))
             resource.setrlimit(resource.RLIMIT_FSIZE, (512*1024**2,512*1024**2))
             resource.setrlimit(resource.RLIMIT_CORE, (0,0))
         return apply
@@ -176,31 +203,41 @@ class Runner:
             raise RuntimeError('free disk guard before ' + name)
         if time.time() >= self.config['deadline_at']:
             raise RuntimeError('overall wall-time guard; checkpoints retained')
-        self.current = name
+        active_file = self.root / 'active' / (name+'.json')
+        with self.guard:
+            self.running[name] = 0
         self.status(force=True)
         start = time.monotonic()
         peak, max_vsize, reason = 0, 0, None
         with prefix.with_suffix('.stdout').open('xb') as out, prefix.with_suffix('.stderr').open('xb') as err:
             process = subprocess.Popen(command, stdin=subprocess.DEVNULL, stdout=out, stderr=err,
                 env=self.env, start_new_session=True, close_fds=True, preexec_fn=self.limits(seconds))
-            atomic_json(self.root / 'active-process.json', {'pid':process.pid,'stage':name,
+            atomic_json(active_file, {'pid':process.pid,'stage':name,
                 'command':command,'started_at':time.time(),'config_sha256':self.config_hash,
                 'start_ticks':Path(f'/proc/{process.pid}/stat').read_text().rsplit(') ',1)[1].split()[19]})
             try:
                 while process.poll() is None:
                     rss, vsize = group_memory(process.pid)
                     peak, max_vsize = max(peak,rss), max(max_vsize,vsize)
-                    self.rss, self.peak = rss, max(self.peak,peak)
+                    with self.guard:
+                        self.running[name] = rss
+                        total_rss = sum(self.running.values())
+                        self.peak = max(self.peak,total_rss)
                     if time.monotonic()-start > seconds:
                         reason = 'stage wall-time guard'
                     elif time.time() >= self.config['deadline_at']:
                         reason = 'overall wall-time guard'
                     elif rss > self.config['maximum_group_rss_kib']:
                         reason = 'sampled RSS guard'
+                    elif total_rss > self.config.get('maximum_total_rss_kib',
+                                                     self.config['maximum_group_rss_kib']):
+                        reason = 'sampled total RSS guard'
                     elif shutil.disk_usage(self.root).free < self.config['minimum_free_bytes']:
                         reason = 'free disk guard'
                     elif (self.root / 'STOP').exists():
                         reason = 'requested stop'
+                    elif self.abort.is_set():
+                        reason = 'sibling stage failed'
                     if reason:
                         os.killpg(process.pid,signal.SIGTERM)
                         try:
@@ -223,10 +260,11 @@ class Runner:
         record = dict(command=command,exit_code=code,reason=reason,seconds=elapsed,
             peak_group_rss_kib=peak,peak_group_vsize_kib=max_vsize,
             free_disk_bytes=shutil.disk_usage(self.root).free,stage_wall_limit=seconds,
-            address_space_hard_limit_bytes=14*1024**3)
+            address_space_hard_limit_bytes=self.config.get('address_space_bytes', 14*1024**3))
         atomic_json(prefix.with_suffix('.resources.json'),record)
-        (self.root / 'active-process.json').unlink(missing_ok=True)
-        self.rss = 0
+        active_file.unlink(missing_ok=True)
+        with self.guard:
+            self.running.pop(name, None)
         if code != 0 or reason:
             raise RuntimeError(f'{name}: exit={code}, reason={reason}; see {prefix}')
         results = [json.loads(line) for line in prefix.with_suffix('.stdout').read_text().splitlines()
@@ -323,13 +361,19 @@ class Runner:
                 duration = time.monotonic()-iteration
                 if duration > 10:
                     self.sample_times.append(duration)
-                self.current = None
                 self.status(force=True)
                 if stop_after and self.prefix >= stop_after:
                     self.status('paused',force=True)
                     return
+            self.finish(self.prefix_path(self.total-1))
+        except BaseException as error:
+            self.status('stopped',force=True,error=str(error))
+            self.event('stopped',error=str(error))
+            raise
+
+    def finish(self, root_receipt):
             final = self.root/'final'
-            linked_copy(self.prefix_path(self.total-1),final/'joined.pc')
+            linked_copy(root_receipt,final/'joined.pc')
             linked_copy(Path(self.config['journal']),final/'journal.bin')
             linked_copy(Path(self.config['capture']),final/'capture.json')
             self.checkpoint('full-unpadded',final/'joined.pc',[],
@@ -339,9 +383,101 @@ class Runner:
                 [self.native,'padded',str(final),'joined'],
                 [self.checker,'full',str(final/'padded.pc'),str(final/'journal.bin'),self.config['image_id'],
                     str(final/'padded-parameters.pc')],'padded')
-            self.current = None
             self.status('complete',force=True)
             self.event('complete',segments=self.total)
+
+    def leaf(self, index):
+        """Prove, verify, lift and verify segment `index`; return its lifted claim."""
+        item = self.capture['selected'][index]
+        leaf_dir = self.root / 'leaves'
+        leaf = leaf_dir / f'receipt-{index}.pc'
+        trace = leaf_dir / f'segment-{index}.pc'
+        if not leaf.exists():
+            with Path(self.config['spool']).open('rb') as stream:
+                stream.seek(item['offset'])
+                data = stream.read(item['bytes'])
+            if len(data) != item['bytes']:
+                raise RuntimeError('truncated execution spool')
+            trace.write_bytes(data)
+            sync_file(trace)
+        leaf_meta = self.checkpoint(f'leaf-{index:04}',leaf,
+            [self.native,'prove',str(leaf_dir),str(index)],
+            [self.checker,'segment',str(leaf)],'prove',index=index)
+        trace.unlink(missing_ok=True)
+        lift = leaf_dir / f'lift-{index}.pc'
+        lift_meta = self.checkpoint(f'lift-{index:04}',lift,
+            [self.native,'lift',str(leaf_dir),str(index)],
+            [self.checker,'succinct',str(lift)],'lift',
+            expected_claim=leaf_meta['verification']['result']['result']['claim']['digest'])
+        with self.guard:
+            self.completed += 1
+            self.lifted += 1
+        return lift, lift_meta['verification']['result']['result']['claim']
+
+    def join(self, lo, mid, hi, left, right):
+        """Join the receipts for [lo, mid) and [mid, hi); return the joined receipt and claim."""
+        (left_path, left_claim), (right_path, right_claim) = left, right
+        if left_claim['post'] != right_claim['pre']:
+            raise RuntimeError('noncontiguous execution checkpoints')
+        expected = dict(pre=left_claim['pre'], input=left_claim['input'],
+                        **{k:right_claim[k] for k in ['post','output','sys_exit','user_exit']})
+        dest = self.root/'joins'/f'tree-{lo:04}-{hi:04}'
+        dest.mkdir(exist_ok=True)
+        if not (self.root/'checks'/f'tree-{lo:04}-{hi:04}.json').exists():
+            linked_copy(left_path,dest/'lift-0.pc')
+            linked_copy(right_path,dest/'lift-1.pc')
+        meta = self.checkpoint(f'tree-{lo:04}-{hi:04}',dest/'joined.pc',
+            [self.native,'join',str(dest),'0','1'],
+            [self.checker,'succinct',str(dest/'joined.pc')],'join',expected_fields=expected)
+        (dest/'lift-0.pc').unlink(missing_ok=True)
+        (dest/'lift-1.pc').unlink(missing_ok=True)
+        return dest/'joined.pc', meta['verification']['result']['result']['claim']
+
+    def run_tree(self, jobs, leaf_jobs=None):
+        """Bounded concurrent leaves; joins become ready as soon as both children verify."""
+        self.jobs = jobs
+        leaf_jobs = leaf_jobs or jobs
+        self.event('runner_started',pid=os.getpid(),config_sha256=self.config_hash,jobs=jobs,
+                   leaf_jobs=leaf_jobs)
+        joins = tree_ranges(0, self.total)
+        done = {}
+        pending_leaves = list(range(self.total))
+        running = {}
+        try:
+            with ThreadPoolExecutor(max_workers=jobs) as pool:
+                while len(done) < self.total + len(joins):
+                    stopping = (self.root/'PAUSE').exists()
+                    while len(running) < jobs:
+                        # Joins first: they are short and free disk/memory sooner.
+                        ready = next(((lo,mid,hi) for lo,mid,hi in joins
+                                      if (lo,hi) not in done and (lo,hi) not in running.values()
+                                      and (lo,mid) in done and (mid,hi) in done), None)
+                        if ready:
+                            lo, mid, hi = ready
+                            future = pool.submit(self.join, lo, mid, hi, done[(lo,mid)], done[(mid,hi)])
+                            running[future] = (lo, hi)
+                        elif (pending_leaves and not stopping and
+                              sum(hi-lo == 1 for lo,hi in running.values()) < leaf_jobs):
+                            index = pending_leaves.pop(0)
+                            running[pool.submit(self.leaf, index)] = (index, index+1)
+                        else:
+                            break
+                    if not running:
+                        self.status('paused',force=True)
+                        return
+                    try:
+                        finished, _ = wait(running, timeout=5, return_when=FIRST_COMPLETED)
+                        for future in finished:
+                            key = running.pop(future)
+                            done[key] = future.result()
+                    except BaseException:
+                        # Terminate sibling stages before the pool waits for them.
+                        self.abort.set()
+                        raise
+                    with self.guard:
+                        self.prefix = len({i for (lo,hi) in done if hi-lo > 1 for i in range(lo,hi)})
+                    self.status()
+            self.finish(done[(0, self.total)][0])
         except BaseException as error:
             self.status('stopped',force=True,error=str(error))
             self.event('stopped',error=str(error))
@@ -353,9 +489,19 @@ def main():
     p.add_argument('directory',type=Path)
     p.add_argument('--stop-after',type=int)
     p.add_argument('--status',action='store_true')
+    p.add_argument('--jobs',type=int,
+                   help='concurrent stages with a balanced join tree (default: sequential prefix)')
+    p.add_argument('--leaf-jobs',type=int,
+                   help='maximum concurrent leaf proofs within --jobs (default: --jobs)')
     a = p.parse_args()
     if a.status:
         print((a.directory/'status.json').read_text())
+    elif a.jobs:
+        if not 1 <= a.jobs <= 8 or a.stop_after:
+            p.error('--jobs must be 1..8 and cannot be combined with --stop-after')
+        if a.leaf_jobs is not None and not 1 <= a.leaf_jobs <= a.jobs:
+            p.error('--leaf-jobs must be 1..--jobs')
+        Runner(a.directory).run_tree(a.jobs, a.leaf_jobs)
     else:
         Runner(a.directory).run(a.stop_after)
 

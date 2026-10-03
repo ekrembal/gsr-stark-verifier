@@ -1,0 +1,36 @@
+diff --git a/provekit/verifier/src/whir_r1cs.rs b/provekit/verifier/src/whir_r1cs.rs
+--- a/provekit/verifier/src/whir_r1cs.rs
++++ b/provekit/verifier/src/whir_r1cs.rs
+@@ -236,7 +236,9 @@
+ 
+             self.whir_witness
+                 .verify(&mut arthur, &weight_refs_1, &evaluations_1, &commitment_1)
+-                .map_err(|_| anyhow::anyhow!("WHIR verification failed for c1"))?;
++                .map_err(|_| anyhow::anyhow!("WHIR verification failed for c1"))?
++                .verify(weight_refs_1.iter().copied())
++                .map_err(|_| anyhow::anyhow!("WHIR final claim failed for c1"))?;
+ 
+             let mut weight_refs_2: Vec<&dyn LinearForm<FieldElement>> =
+                 weights_2.iter().map(|w| w.as_ref()).collect();
+@@ -245,7 +247,9 @@
+             }
+             self.whir_witness
+                 .verify(&mut arthur, &weight_refs_2, &evaluations_2, &commitment_2)
+-                .map_err(|_| anyhow::anyhow!("WHIR verification failed for c2"))?;
++                .map_err(|_| anyhow::anyhow!("WHIR verification failed for c2"))?
++                .verify(weight_refs_2.iter().copied())
++                .map_err(|_| anyhow::anyhow!("WHIR final claim failed for c2"))?;
+ 
+             (
+                 evals_1[0] + evals_2[0],
+@@ -297,7 +301,9 @@
+ 
+             self.whir_witness
+                 .verify(&mut arthur, &weight_refs, &evaluations, &commitment_1)
+-                .map_err(|_| anyhow::anyhow!("WHIR verification failed"))?;
++                .map_err(|_| anyhow::anyhow!("WHIR verification failed"))?
++                .verify(weight_refs.iter().copied())
++                .map_err(|_| anyhow::anyhow!("WHIR final claim failed"))?;
+ 
+             (evals[0], evals[1], evals[2])
+         };

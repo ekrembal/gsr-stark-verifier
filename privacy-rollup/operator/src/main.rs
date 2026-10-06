@@ -94,10 +94,18 @@ fn save_pool(dir: &Path, pool: &Mempool) -> Result<()> {
     Ok(())
 }
 
+/// Bound on a submitted `tx.json`: a `MAX_RECEIPT_BYTES` receipt as a JSON byte array is at most
+/// 4 MiB, plus the statement and external data.
+const MAX_TX_JSON_BYTES: u64 = 8 << 20;
+
 fn submit(dir: &Path, tx: &Path, funding: Option<&String>) -> Result<usize> {
     let (replica, _) = load(dir)?;
     let mut pool = load_pool(dir, &replica)?;
+    let len = fs::metadata(tx)?.len();
+    ensure!(len <= MAX_TX_JSON_BYTES, "tx.json is {len} bytes, more than {MAX_TX_JSON_BYTES}");
     let tx: RollupTransaction = serde_json::from_slice(&fs::read(tx)?)?;
+    let tx =
+        RollupTransaction::decode(&tx.encode()).map_err(|e| anyhow::anyhow!("non-canonical transaction: {e:?}"))?;
     let funding: Vec<FundingCoin> = match funding {
         Some(p) => serde_json::from_slice(&fs::read(p)?)?,
         None => Vec::new(),

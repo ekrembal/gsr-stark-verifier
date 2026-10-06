@@ -11,6 +11,8 @@
 //! `pr-wallet tx <dir>` assembles `<dir>/tx.json` (the `RollupTransaction` sent to the operator)
 //! from `witness.json`'s public statement, `external.json` and the `receipt.bin` written by
 //! `joinsplit prove`.
+use std::io::Write;
+use std::os::unix::fs::{OpenOptionsExt, PermissionsExt};
 use std::{fs, path::Path};
 
 use pr_joinsplit::JoinSplitWitness;
@@ -19,6 +21,19 @@ use pr_wallet_core::{JoinSplitBuilder, Keys, OutputSpec, SpendInput};
 
 fn fe(hex_str: &str) -> Fe {
     Fe(hex::decode(hex_str).expect("hex").try_into().expect("32 bytes"))
+}
+
+/// Writes a file readable only by its owner; the witness holds the input notes' spending secrets.
+fn write_private(path: &Path, bytes: &[u8]) {
+    let mut f = fs::OpenOptions::new()
+        .write(true)
+        .create(true)
+        .truncate(true)
+        .mode(0o600)
+        .open(path)
+        .expect("open private file");
+    f.set_permissions(fs::Permissions::from_mode(0o600)).expect("chmod 600");
+    f.write_all(bytes).expect("write");
 }
 
 fn tx(dir: &Path) {
@@ -69,7 +84,7 @@ fn main() {
         .expect("valid join-split");
     let out = Path::new(&a[9]);
     fs::create_dir_all(out).expect("out dir");
-    fs::write(out.join("witness.json"), serde_json::to_vec(&built.witness).expect("witness")).expect("write");
+    write_private(&out.join("witness.json"), &serde_json::to_vec(&built.witness).expect("witness"));
     fs::write(out.join("external.json"), serde_json::to_vec(&built.external).expect("external")).expect("write");
     let funding = serde_json::json!([{
         "outpoint": Outpoint { txid, vout },

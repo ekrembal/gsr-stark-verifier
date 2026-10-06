@@ -17,6 +17,10 @@ name = "verify_joinsplit"
 path = "src/bin/verify_joinsplit.rs"
 
 [[bin]]
+name = "joinsplit"
+path = "src/bin/joinsplit.rs"
+
+[[bin]]
 name = "apply_batch"
 path = "src/bin/apply_batch.rs"
 
@@ -34,6 +38,7 @@ risc0-bigint2 = { path = "../../../../risc0/risc0/bigint2" }
 ark-bn254 = { version = "0.6.0", default-features = false, features = ["scalar_field"] }
 ark-ff = { version = "0.6.0", default-features = false }
 pr-crypto = { path = "../../crates/crypto" }
+pr-joinsplit = { path = "../../crates/joinsplit" }
 pr-protocol-types = { path = "../../crates/protocol-types" }
 pr-state-transition = { path = "../../crates/state-transition" }
 risc0-zkvm-platform = { path = "../../../../risc0/risc0/zkvm/platform", features = ["sys-getenv"] }

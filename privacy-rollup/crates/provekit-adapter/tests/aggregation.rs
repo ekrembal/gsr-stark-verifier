@@ -1,5 +1,6 @@
 use std::path::Path;
 
+use pr_wallet_core::ProverToml;
 use provekit_common::{
     utils::sumcheck::{calculate_external_row_by_scatter, calculate_external_row_of_r1cs_matrices},
     FieldElement, R1CS,

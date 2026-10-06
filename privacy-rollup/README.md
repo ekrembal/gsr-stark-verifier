@@ -31,6 +31,7 @@ user: joinsplit guest (private witness) -> zero-knowledge receipt (`identity_zk`
 | Empty batches | **Proven** and settled consecutively on activated regtest |
 | Covenant (`OP_TX` binding, successor leaf, `1 CSV`) | Implemented, metered, mined on regtest; altered spends rejected |
 | Relay | Consensus-valid; **nonstandard** under the pinned node's policy (annex) |
+| Rust SDK, batcher, WASM client | `pr-sdk` (wallet, witnesses, local ZK proving, HTTP client), `pr-batcher` (HTTP admission, aggregation, settlement proving, Bitcoin Core RPC), `pr-sdk-wasm` (WASI build of the client) with a browser benchmark page. SDK -> batcher -> mined settlement measured on regtest; see [reports/sdk-batcher-wasm.md](reports/sdk-batcher-wasm.md) |
 
 ## Measurements
 
@@ -87,6 +88,10 @@ Settlement weight does not depend on batch contents beyond the annex (one nullif
 | `circuits/joinsplit-2x2` | Noir circuit |
 | `methods/guest`, `prover` | `joinsplit` and `apply_batch` guests; `joinsplit prove|verify|id` and `settle prove|exec <witness> <dir> <receipts…>` hosts |
 | `tools/rollup_covenant.py`, `tools/regtest_demo.py`, `tools/operator_joinsplit.py` | covenant generator, regtest demo, real-proof operator check |
+| `prover/sdk` | `pr-sdk`: wallet, deposit/transfer witnesses, `prove` (local ZK receipt), canonical transaction codec, batcher HTTP client; `examples/wallet.rs` |
+| `prover/batcher` | `pr-batcher init|genesis|serve`: HTTP API, pool, settlement proving with `resolve_zk`, settlement witness, `sendrawtransaction`/`generateblock` |
+| `prover/sdk-wasm`, `prover/web` | WASI build of the client (`build.sh`) and the benchmark page (worker + `@bjorn3/browser_wasi_shim` 0.4.2) |
+| `tools/batcher_e2e.py`, `tools/covenant_cli.py` | SDK -> batcher -> regtest check; covenant witness helper used by the batcher |
 | `tests` | scenario and differential tests |
 | `spec/` | [protocol](spec/protocol.md), [encoding](spec/encoding.md), [join-split](spec/joinsplit.md), [Bitcoin binding](spec/bitcoin-binding.md), [security model](spec/security-model.md), [zero knowledge](spec/zero-knowledge.md) |
 | `patches/`, `vendor/` | RISC Zero ZK mode and Zirgen `resolve_zk` patches; ProveKit patch (zkVM build, transpose-free verifier row); spongefish/ark-ff copies with target-independent hashing and the BN254 accelerator |
@@ -115,6 +120,9 @@ Dependencies are path dependencies on two sibling checkouts of the repository di
   [`patches/zirgen-zk.patch`](patches/zirgen-zk.patch)
   (`bazel build -c opt //zirgen/circuit/predicates:resolve_zk.zkr`) and combined with
   `tools/assemble_zk_recursion_zip.py <upstream zip> <resolve_zk.zkr> <out zip>`.
+* WASM client build (`prover/sdk-wasm/build.sh`): after the zero-knowledge patch apply
+  [`patches/risc0-wasm.patch`](patches/risc0-wasm.patch) (sequential C++ kernels and executor on
+  `wasm32`, no NVTX, Unix-only actor code gated). Native builds are unchanged.
 * WHIR remains version 0.2.0; the vendored published source has the local
   [`patches/whir-blinding.patch`](patches/whir-blinding.patch) algorithmic optimization. Its original
   archive checksum and necessary same-version lockfile source deviation are documented in the review report.
@@ -132,4 +140,8 @@ cargo build --release -p pr-operator -p pr-provekit-adapter
 ../../provekit/target/release/provekit-cli prepare circuits/joinsplit-2x2 -p js.pkp -v js.pkv   # fixtures pin the exported verifier-key bytes
 python3 tools/operator_joinsplit.py                      # real ZK user receipt through the operator and add_assumption (copy in reports/operator-joinsplit.json)
 python3 tools/regtest_demo.py --batches 2                # proven deposit join-split + empty batch settled on regtest -> build/privacy-rollup-regtest.json (copy in reports/regtest.json)
+(cd prover && cargo test --release -p pr-sdk -p pr-batcher)  # SDK and HTTP API tests
+python3 tools/batcher_e2e.py                             # SDK proof -> batcher HTTP -> settlement mined on regtest -> build/batcher-e2e.json (copy in reports/batcher-e2e.json)
+(cd prover && bash sdk-wasm/build.sh)                    # WASI SDK 25 -> prover/web/pr-sdk-wasm.wasm
+target/release/pr-batcher serve <dir> --web prover/web   # serves the API and the benchmark page
 ```

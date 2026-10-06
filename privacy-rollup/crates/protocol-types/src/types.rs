@@ -375,30 +375,29 @@ impl Canonical for JoinSplitPublic {
     }
 }
 
-pub const MAX_PROOF_BYTES: usize = 1 << 20;
+pub const MAX_RECEIPT_BYTES: usize = 1 << 20;
 
-/// A user transaction as submitted to the mempool: statement, external data and ProveKit proof.
+/// A user transaction as submitted to the mempool: statement, external data and the user's
+/// zero-knowledge RISC Zero receipt of the `joinsplit` guest on that statement.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct RollupTransaction {
     pub public: JoinSplitPublic,
     pub external: ExternalData,
-    /// ProveKit WHIR-R1CS proof: `narg_string` then `hints`.
-    pub proof_narg: Vec<u8>,
-    pub proof_hints: Vec<u8>,
+    /// `postcard(SuccinctReceipt<ReceiptClaim>)` produced by `joinsplit prove` (`identity_zk` seal).
+    pub receipt: Vec<u8>,
 }
 
 impl Canonical for RollupTransaction {
     fn encode_to(&self, w: &mut Writer) {
         self.public.encode_to(w);
         self.external.encode_to(w);
-        w.var_bytes(&self.proof_narg).var_bytes(&self.proof_hints);
+        w.var_bytes(&self.receipt);
     }
     fn decode_from(r: &mut Reader<'_>) -> Result<Self, DecodeError> {
         Ok(RollupTransaction {
             public: JoinSplitPublic::decode_from(r)?,
             external: ExternalData::decode_from(r)?,
-            proof_narg: r.var_bytes(MAX_PROOF_BYTES)?.to_vec(),
-            proof_hints: r.var_bytes(MAX_PROOF_BYTES)?.to_vec(),
+            receipt: r.var_bytes(MAX_RECEIPT_BYTES)?.to_vec(),
         })
     }
 }

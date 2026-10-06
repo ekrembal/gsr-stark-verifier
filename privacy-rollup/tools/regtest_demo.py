@@ -5,17 +5,20 @@
 
 1. authenticated genesis: a transaction spends the descriptor's `genesis_nonce` and creates the rollup output
    (seed sats) at the covenant leaf of the genesis state root;
-2. N consecutive anchor-only settlements, each proven by the `apply_batch` guest (padded-SHA succinct
-   receipt), metered against every GSR limit and mined;
-3. negative spends of settlement 1: metered (redirected/extra/altered outputs, altered annex, new root,
+2. a user deposit: `pr-wallet deposit` builds a join-split funded by a real regtest coin, `joinsplit
+   prove` proves it on the user side as a zero-knowledge receipt, and the operator admits it;
+3. N consecutive settlements, each proven by the `apply_batch` guest (padded-SHA succinct receipt),
+   metered against every GSR limit and mined. Settlement 1 carries the deposit: the guest checks
+   the user receipt with `env::verify`, and `resolve_zk` discharges it; later ones are anchor-only;
+4. negative spends of settlement 1: metered (redirected/extra/altered outputs, altered annex, new root,
    input sequence, locktime and version, another batch's receipt, another guest's receipt, tampered seal,
    truncated witness), each rejected by the interpreter; and submitted to the node in a block
    (rollup input not at index 0, an extra funding input, altered control block), each rejected by
    consensus;
-4. policy versus consensus: standard policy rejects the annex-bearing spend, `generateblock` mines it;
-5. cadence: two consecutive settlements cannot share a block (the leaf's `1 CSV`);
-6. reorg: invalidating the last settlement block and rolling the operator back, then restoring it;
-7. restart: a fresh operator replays the annexes read back from the chain to the same state.
+5. policy versus consensus: standard policy rejects the annex-bearing spend, `generateblock` mines it;
+6. cadence: two consecutive settlements cannot share a block (the leaf's `1 CSV`);
+7. reorg: invalidating the last settlement block and rolling the operator back, then restoring it;
+8. restart: a fresh operator replays the annexes read back from the chain to the same state.
 
 Writes `build/privacy-rollup-regtest.json`.
 """
@@ -41,7 +44,8 @@ BITCOIN = rc.REPO / "build/bitcoin/bin"
 OPERATOR = PR / "target/release/pr-operator"
 SETTLE = PR / "prover/target/release/settle"
 TEMPLATE = PR / "fixtures/apply-batch/receipt-template.json"
-PKV = PR / "fixtures/joinsplit/joinsplit.pkv"
+WALLET = PR / "target/release/pr-wallet"
+JOINSPLIT = PR / "prover/target/release/joinsplit"
 OTHER_GUEST = rc.REPO / "risc0-succinct/fixtures"
 WORK = BUILD / "privacy-rollup-regtest"
 DATADIR = WORK / "node"
@@ -49,6 +53,12 @@ PORT = 19482
 OP_TRUE = b"\x51"
 OP_TRUE_SPK = b"\x00\x20" + hashlib.sha256(OP_TRUE).digest()
 SEED_SATS = 100_000
+DEPOSIT_SATS, DEPOSIT_FEE = 20_000, 700
+# Host prover switches of patches/risc0-cpu-*.patch: they change proving speed, not the proofs.
+PROVER_ENV = {"GSR_BATCH_CPU": "1", "GSR_PERIODIC_CPU": "1", "GSR_BATCH_EVAL_CPU": "1", "GSR_HASH_LANES": "16",
+              "GSR_FAST_NTT": "1"}
+for _k, _v in PROVER_ENV.items():
+    os.environ.setdefault(_k, _v)
 
 
 def rpc(method: str, *args):
@@ -87,6 +97,8 @@ class Batch:
 
     def tx(self, receipt=None, seal=None, new_root=None, annex=None, edit=None, hints=None) -> CTransaction:
         tx = rc.settlement_tx(self.batch)
+        for w in tx.wit.vtxinwit[1:]:
+            w.scriptWitness.stack = [OP_TRUE]  # funding coins are P2WSH(OP_TRUE)
         if edit:
             edit(tx)
         tx.wit.vtxinwit[0].scriptWitness.stack = self.cov.witness(
@@ -97,6 +109,24 @@ class Batch:
         return rc.meter(self.cov, tx, batch or self.batch, self.out / f"meter-{name}.json")
 
 
+def deposit(state: Path, coin: COutPoint, out: Path) -> dict:
+    """The user side: build, prove and submit a deposit join-split funded by `coin`."""
+    out.mkdir(parents=True)
+    (out / "status.json").write_text(operator("status", state))
+    subprocess.run([str(WALLET), "deposit", str(out / "status.json"), internal(f"{coin.hash:064x}"), str(coin.n),
+                    str(DEPOSIT_SATS), OP_TRUE_SPK.hex(), str(DEPOSIT_FEE), "1", str(out)], check=True)
+    t = time.time()
+    stats = json.loads(subprocess.run([str(JOINSPLIT), "prove", str(out / "witness.json"), str(out / "receipt.bin")],
+                                      check=True, capture_output=True, text=True).stdout)
+    stats["wall_seconds"] = round(time.time() - t, 1)
+    print(f"  user proved the join-split in {stats['wall_seconds']}s: {stats['receipt_bytes']} receipt bytes",
+          flush=True)
+    subprocess.run([str(WALLET), "tx", str(out)], check=True)
+    stats["tx_json_bytes"] = (out / "tx.json").stat().st_size
+    assert operator("submit", state, out / "tx.json", out / "funding.json").strip() == "1"
+    return stats
+
+
 def build_batch(state: Path, cov: rc.Covenant, out: Path) -> Batch:
     req = {"rollup_script_pubkey": cov.script_pubkey.hex(), "transactions": []}
     (out.parent / f"{out.name}-req.json").write_text(json.dumps(req))
@@ -105,8 +135,9 @@ def build_batch(state: Path, cov: rc.Covenant, out: Path) -> Batch:
     (out.parent / f"{out.name}-req.json").write_text(json.dumps(req))
     operator("build", state, out.parent / f"{out.name}-req.json", out)
     t = time.time()
-    log = subprocess.run([str(SETTLE), "prove", str(out / "witness.json"), str(out / "proof")], check=True,
-                         capture_output=True, text=True).stdout
+    receipts = [str(out / n) for n in json.loads((out / "batch.json").read_text())["assumption_receipts"]]
+    log = subprocess.run([str(SETTLE), "prove", str(out / "witness.json"), str(out / "proof"), *receipts],
+                         check=True, capture_output=True, text=True).stdout
     (out / "prove.log").write_text(log)
     print(f"  proved {out.name} in {time.time() - t:.0f}s", flush=True)
     return Batch(cov, out)
@@ -215,7 +246,7 @@ def main() -> None:
                       "internal_key": list(rc.NUMS), "seed_sats": SEED_SATS}
         (WORK / "descriptor.json").write_text(json.dumps(descriptor))
         state = WORK / "operator"
-        ids = json.loads(operator("init", state, WORK / "descriptor.json", PKV))
+        ids = json.loads(operator("init", state, WORK / "descriptor.json"))
         rollup_id, root = bytes.fromhex(ids["rollup_id"]), bytes.fromhex(ids["state_root"])
         t = time.time()
         cov = rc.Covenant(template, rollup_id, root)
@@ -224,7 +255,9 @@ def main() -> None:
         gtx.version = 2
         gtx.vin = [CTxIn(COutPoint(int(coinbase["txid"], 16), 0), b"", 0xFFFFFFFF)]
         value = round(coinbase["vout"][0]["value"] * 100_000_000)
-        gtx.vout = [CTxOut(SEED_SATS, CScript(cov.script_pubkey)), CTxOut(value - SEED_SATS - 10_000, CScript(OP_TRUE_SPK))]
+        gtx.vout = [CTxOut(SEED_SATS, CScript(cov.script_pubkey)),
+                    CTxOut(value - SEED_SATS - DEPOSIT_SATS - 10_000, CScript(OP_TRUE_SPK)),
+                    CTxOut(DEPOSIT_SATS, CScript(OP_TRUE_SPK))]
         gtx.wit.vtxinwit = [CTxInWitness()]
         gtx.wit.vtxinwit[0].scriptWitness.stack = [OP_TRUE]
         gtxid = rpc("sendrawtransaction", gtx.serialize().hex())
@@ -232,6 +265,7 @@ def main() -> None:
         operator("genesis", state, internal(gtxid), 0)
         report["genesis"] = {"txid": gtxid, "rollup_id": rollup_id.hex(), "state_root": root.hex(),
                              "covenant_script_bytes": len(cov.script), "nonce_spent": coinbase["txid"]}
+        report["user_joinsplit"] = deposit(state, COutPoint(int(gtxid, 16), 2), WORK / "user")
 
         # Settlements.
         settlements, blocks = [], []
@@ -243,7 +277,9 @@ def main() -> None:
             limits = rc.limits(current, e)
             assert all(limits.values()), (e, limits)
             raw = tx.serialize().hex()
-            entry = {"batch_number": b.batch["batch_number"], "txid": tx.txid_hex, "weight": tx.get_weight(),
+            entry = {"batch_number": b.batch["batch_number"], "transactions": b.batch["transactions"],
+                     "prove": json.loads((b.out / "proof/stats.json").read_text()),
+                     "txid": tx.txid_hex, "weight": tx.get_weight(),
                      "annex_bytes": len(b.annex), "varops": e["varops"], "budget": e["budget"],
                      "invoked_body_bytes": e["invoked_body_bytes"], "peak_entries": e["peak_entries"],
                      "limits": limits, "standard_policy": rpc("testmempoolaccept", [raw])[0]}
@@ -285,7 +321,7 @@ def main() -> None:
 
         # Restart from chain data only: read every annex back from the mined settlements.
         fresh = WORK / "replay"
-        operator("init", fresh, WORK / "descriptor.json", PKV)
+        operator("init", fresh, WORK / "descriptor.json")
         operator("genesis", fresh, internal(gtxid), 0)
         for s, block in zip(settlements, blocks):
             mined = rpc("getrawtransaction", s["txid"], True, block)

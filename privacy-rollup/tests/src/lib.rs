@@ -115,12 +115,8 @@ impl Harness {
     }
 
     pub fn submit(&mut self, built: &BuiltJoinSplit, funding: Vec<FundingCoin>) -> Result<(), MempoolError> {
-        let tx = RollupTransaction {
-            public: built.witness.public,
-            external: built.external.clone(),
-            proof_narg: Vec::new(),
-            proof_hints: Vec::new(),
-        };
+        let tx =
+            RollupTransaction { public: built.witness.public, external: built.external.clone(), receipt: Vec::new() };
         self.mempool.submit(tx, funding, &self.replica, |_| true)
     }
 

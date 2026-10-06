@@ -1,0 +1,1130 @@
+diff --git a/risc0/circuit/recursion/build.rs b/risc0/circuit/recursion/build.rs
+index cb4f8a06..167c8988 100644
+--- a/risc0/circuit/recursion/build.rs
++++ b/risc0/circuit/recursion/build.rs
+@@ -32,7 +32,7 @@ fn download_zkr() {
+     const SRC_PATH: &str = "src/recursion_zkr.zip";
+     // NOTE: This can be calculated with:
+     // shasum -a256 risc0/circuit/recursion/src/recursion_zkr.zip
+-    const SHA256_HASH: &str = "744b999f0a35b3c86753311c7efb2a0054be21727095cf105af6ee7d3f4d8849";
++    const SHA256_HASH: &str = "d7315352213c980940a4dceda8034a885e10c7871d4084dccf38caac5a5b632c";
+ 
+     fn check_sha2(path: &Path) -> bool {
+         let data = fs::read(path).unwrap();
+diff --git a/risc0/circuit/recursion/src/control_id.rs b/risc0/circuit/recursion/src/control_id.rs
+index cb50b4b4..17811ee1 100644
+--- a/risc0/circuit/recursion/src/control_id.rs
++++ b/risc0/circuit/recursion/src/control_id.rs
+@@ -48,18 +48,19 @@ pub const ALLOWED_CONTROL_IDS: &[Digest] = &[
+     digest!("ba1d7275d5840e4f998e2c5120810c0eb197e90219696e2a64dec7662aa3cb06"), // recursion resolve_unwrap_povw.zkr
+     digest!("7771415b778fea1923440e2eb22c4a1e1d7ada2d42cbe03d13402743c0988a31"), // recursion union.zkr
+     digest!("1688f04cca489638862dba455c1d5c561513f975c885a3491f0fe12df761c847"), // recursion unwrap_povw.zkr
++    digest!("0420c8574d22263be64c9f34ce66c06bc9bd251ac632f423a7807e66e8af8231"), // recursion resolve_zk.zkr
+ ];
+ 
+ /// Root of the Merkle tree constructed from [ALLOWED_CONTROL_IDS], using Poseidon2.
+ pub const ALLOWED_CONTROL_ROOT: Digest =
+-    digest!("a54dc85ac99f851c92d7c96d7318af41dbe7c0194edfcc37eb4d422a998c1f56");
++    digest!("5edc9538daecff76cae54c2228303261edeeb93ecb9a5547b250fa2c550a5b01");
+ 
+ /// Control ID for the identity recursion programs (ZKR), using Poseidon over the BN254 scalar field.
+ pub const BN254_IDENTITY_CONTROL_ID: Digest =
+     digest!("c07a65145c3cb48b6101962ea607a4dd93c753bb26975cb47feb00d3666e4404");
+ 
+ /// Control IDs for included recursion programs (ZKRs), using Poseidon2 over BabyBear.
+-pub const POSEIDON2_CONTROL_IDS: [(&str, Digest); 32] = [
++pub const POSEIDON2_CONTROL_IDS: [(&str, Digest); 33] = [
+     (
+         "identity.zkr",
+         digest!("0d79bc33b4760b4783cbb96fdc87724c7e0c463eb0ba1b2705d39f43c698bd2d"),
+@@ -188,10 +189,14 @@ pub const POSEIDON2_CONTROL_IDS: [(&str, Digest); 32] = [
+         "unwrap_povw.zkr",
+         digest!("1688f04cca489638862dba455c1d5c561513f975c885a3491f0fe12df761c847"),
+     ),
++    (
++        "resolve_zk.zkr",
++        digest!("0420c8574d22263be64c9f34ce66c06bc9bd251ac632f423a7807e66e8af8231"),
++    ),
+ ];
+ 
+ /// Control IDs for included recursion programs (ZKRs), using SHA-256.
+-pub const SHA256_CONTROL_IDS: [(&str, Digest); 32] = [
++pub const SHA256_CONTROL_IDS: [(&str, Digest); 33] = [
+     (
+         "identity.zkr",
+         digest!("d7ecd18c7d06fc468166147cf20869aa10f32e097a0c166146a5a62dd2d975ea"),
+@@ -320,4 +325,8 @@ pub const SHA256_CONTROL_IDS: [(&str, Digest); 32] = [
+         "unwrap_povw.zkr",
+         digest!("3b5de70ddecc2fabcd3b9b9150ff64e7fc084ecb80f97cac2f9ee11e326087d1"),
+     ),
++    (
++        "resolve_zk.zkr",
++        digest!("116983f76a4955e4cead0a8ca91fd545ce5ab1e92a27cbdbac4a9fbba9532907"),
++    ),
+ ];
+diff --git a/risc0/circuit/recursion/src/prove/mod.rs b/risc0/circuit/recursion/src/prove/mod.rs
+index 995047f6..9ef36b47 100644
+--- a/risc0/circuit/recursion/src/prove/mod.rs
++++ b/risc0/circuit/recursion/src/prove/mod.rs
+@@ -77,6 +77,10 @@ impl RecursionReceipt {
+ 
+ pub trait RecursionProver {
+     fn prove(&self, program: Program, input: VecDeque<u32>) -> Result<RecursionReceipt>;
++
++    /// Prove with the zero-knowledge variant of the protocol (see
++    /// [risc0_zkp::prove::Prover::new_zk]); verify with [crate::verify_zk].
++    fn prove_zk(&self, program: Program, input: VecDeque<u32>) -> Result<RecursionReceipt>;
+ }
+ 
+ pub fn recursion_prover(hashfn: &str) -> Result<Box<dyn RecursionProver>> {
+@@ -146,6 +150,12 @@ impl Prover {
+         let prover = recursion_prover(&self.hashfn)?;
+         prover.prove(self.program.clone(), self.input.clone())
+     }
++
++    /// Like [Prover::run], but produces a zero-knowledge seal.
++    pub fn run_zk(&mut self) -> Result<RecursionReceipt> {
++        let prover = recursion_prover(&self.hashfn)?;
++        prover.prove_zk(self.program.clone(), self.input.clone())
++    }
+ }
+ 
+ pub(crate) struct RecursionProverImpl<H, C>
+@@ -163,6 +173,20 @@ where
+     C: CircuitHal<H> + CircuitWitnessGenerator<H> + CircuitAccumulator<H>,
+ {
+     fn prove(&self, program: Program, input: VecDeque<u32>) -> Result<RecursionReceipt> {
++        self.prove_mode(program, input, false)
++    }
++
++    fn prove_zk(&self, program: Program, input: VecDeque<u32>) -> Result<RecursionReceipt> {
++        self.prove_mode(program, input, true)
++    }
++}
++
++impl<H, C> RecursionProverImpl<H, C>
++where
++    H: Hal<Field = BabyBear, Elem = BabyBearElem, ExtElem = BabyBearExtElem>,
++    C: CircuitHal<H> + CircuitWitnessGenerator<H> + CircuitAccumulator<H>,
++{
++    fn prove_mode(&self, program: Program, input: VecDeque<u32>, zk: bool) -> Result<RecursionReceipt> {
+         scope!("prove");
+ 
+         let preflight = self.preflight(&program, input)?;
+@@ -177,7 +201,10 @@ where
+         let global = &witgen.global;
+ 
+         let seal = scope!("prove", {
+-            let mut prover = risc0_zkp::prove::Prover::new(self.hal.as_ref(), TAPSET);
++            let mut prover = match zk {
++                true => risc0_zkp::prove::Prover::new_zk(self.hal.as_ref(), TAPSET),
++                false => risc0_zkp::prove::Prover::new(self.hal.as_ref(), TAPSET),
++            };
+             let hashfn = &self.hal.get_hash_suite().hashfn;
+ 
+             let mix = scope!("main", {
+diff --git a/risc0/circuit/recursion/src/prove/witgen.rs b/risc0/circuit/recursion/src/prove/witgen.rs
+index bcb389f2..164cdb07 100644
+--- a/risc0/circuit/recursion/src/prove/witgen.rs
++++ b/risc0/circuit/recursion/src/prove/witgen.rs
+@@ -102,7 +102,9 @@ where
+         scope!("noise", {
+             use risc0_zkp::ZK_CYCLES;
+             let mut rng = rand::rng();
+-            let noise = vec![BabyBearElem::random(&mut rng); ZK_CYCLES * CIRCUIT.data_size()];
++            let noise: Vec<BabyBearElem> = (0..ZK_CYCLES * CIRCUIT.data_size())
++                .map(|_| BabyBearElem::random(&mut rng))
++                .collect();
+             hal.eltwise_copy_elem_slice(
+                 &data,
+                 &noise,
+@@ -146,7 +148,9 @@ where
+             use risc0_zkp::ZK_CYCLES;
+             let mut rng = rand::rng();
+             let total_cycles = self.total_cycles as usize;
+-            let noise = vec![BabyBearElem::random(&mut rng); ZK_CYCLES * CIRCUIT.accum_size()];
++            let noise: Vec<BabyBearElem> = (0..ZK_CYCLES * CIRCUIT.accum_size())
++                .map(|_| BabyBearElem::random(&mut rng))
++                .collect();
+             hal.eltwise_copy_elem_slice(
+                 &self.accum,
+                 &noise,
+diff --git a/risc0/circuit/recursion/src/recursion_zkr.zip b/risc0/circuit/recursion/src/recursion_zkr.zip
+index 78e673e7..64632948 100644
+--- a/risc0/circuit/recursion/src/recursion_zkr.zip
++++ b/risc0/circuit/recursion/src/recursion_zkr.zip
+@@ -1,3 +1,3 @@
+ version https://git-lfs.github.com/spec/v1
+-oid sha256:744b999f0a35b3c86753311c7efb2a0054be21727095cf105af6ee7d3f4d8849
+-size 59768781
++oid sha256:d7315352213c980940a4dceda8034a885e10c7871d4084dccf38caac5a5b632c
++size 62546691
+diff --git a/risc0/zkp/src/hal/mod.rs b/risc0/zkp/src/hal/mod.rs
+index 5ecf850f..d04839d4 100644
+--- a/risc0/zkp/src/hal/mod.rs
++++ b/risc0/zkp/src/hal/mod.rs
+@@ -224,8 +224,8 @@ pub trait Hal {
+                     cur *= *mix;
+                     cur_pos += reg_size;
+                 }
+-                // Subtract the final 'check' coefficients
+-                for _ in 0..Self::CHECK_SIZE {
++                // Subtract the final 'check' coefficients (all remaining entries of U)
++                while cur_pos < coeff_u.len() {
+                     combos[cycles * combo_count] -= cur * coeff_u[cur_pos];
+                     cur_pos += 1;
+                     cur *= *mix;
+diff --git a/risc0/zkp/src/lib.rs b/risc0/zkp/src/lib.rs
+index de0ffeb5..e3298f63 100644
+--- a/risc0/zkp/src/lib.rs
++++ b/risc0/zkp/src/lib.rs
+@@ -42,6 +42,20 @@ pub const QUERIES: usize = 50;
+ pub const ZK_CYCLES: usize = 1024; // TODO: Ideally we'd compute ZK_CYCLES programmatically
+ pub const MIN_PO2: usize = core::log2_ceil(1 + ZK_CYCLES);
+ 
++/// Number of random field elements appended to every hidden Merkle leaf in zero-knowledge mode.
++pub const ZK_SALT_SIZE: usize = 4;
++
++/// Degree bound of the random polynomials that re-randomize the quotient pieces in
++/// zero-knowledge mode. Must exceed the number of points at which a piece is revealed
++/// (`QUERIES` plus the conjugates of the DEEP point).
++pub const ZK_QUOTIENT_MASK_SIZE: usize = 64;
++
++/// Number of quotient pieces committed in zero-knowledge mode. One more than [INV_RATE], so
++/// that the pieces can overlap by [ZK_QUOTIENT_MASK_SIZE] coefficients while each keeps degree
++/// below the trace length.
++pub const ZK_QUOTIENT_PIECES: usize = INV_RATE + 1;
++
++
+ /// Inverse of Reed-Solomon Expansion Rate
+ pub const INV_RATE: usize = 4;
+ 
+diff --git a/risc0/zkp/src/prove/poly_group.rs b/risc0/zkp/src/prove/poly_group.rs
+index 9d28aeaf..6ea236ed 100644
+--- a/risc0/zkp/src/prove/poly_group.rs
++++ b/risc0/zkp/src/prove/poly_group.rs
+@@ -14,11 +14,13 @@
+ 
+ use risc0_core::scope_with;
+ 
++use risc0_core::field::Elem;
++
+ use crate::{
+     core::log2_ceil,
+     hal::{Buffer, Hal},
+     prove::merkle::MerkleTreeProver,
+-    INV_RATE, QUERIES,
++    INV_RATE, QUERIES, ZK_SALT_SIZE,
+ };
+ 
+ /// A PolyGroup represents a group of polynomials, all of the same maximum
+@@ -81,4 +83,33 @@ impl<H: Hal> PolyGroup<H> {
+             merkle,
+         }
+     }
++
++    /// Like [PolyGroup::new], but every Merkle leaf also contains [ZK_SALT_SIZE] fresh
++    /// uniformly random field elements, so that the commitment hides the leaf values.
++    pub fn new_salted(
++        hal: &H,
++        coeffs: H::Buffer<H::Elem>,
++        count: usize,
++        size: usize,
++        name: &'static str,
++    ) -> Self {
++        scope_with!("poly_group_salted({})", name);
++        assert_eq!(coeffs.size(), count * size);
++        let domain = size * INV_RATE;
++        let evaluated = hal.alloc_elem("evaluated", count * domain);
++        hal.batch_expand_into_evaluate_ntt(&evaluated, &coeffs, count, log2_ceil(INV_RATE));
++        hal.batch_bit_reverse(&coeffs, count);
++        let mut rng = rand::rng();
++        let mut salted = Vec::with_capacity((count + ZK_SALT_SIZE) * domain);
++        evaluated.view(|view| salted.extend_from_slice(view));
++        salted.extend((0..ZK_SALT_SIZE * domain).map(|_| H::Elem::random(&mut rng)));
++        let salted = hal.copy_from_elem("salted", &salted);
++        let merkle = MerkleTreeProver::new(hal, &salted, domain, count + ZK_SALT_SIZE, QUERIES);
++        PolyGroup {
++            coeffs,
++            count,
++            evaluated,
++            merkle,
++        }
++    }
+ }
+diff --git a/risc0/zkp/src/prove/prover.rs b/risc0/zkp/src/prove/prover.rs
+index 1fbf29dc..843835d8 100644
+--- a/risc0/zkp/src/prove/prover.rs
++++ b/risc0/zkp/src/prove/prover.rs
+@@ -21,8 +21,9 @@ use crate::{
+     core::poly::poly_interpolate,
+     hal::{Buffer, CircuitHal, Hal},
+     prove::{fri::fri_prove, poly_group::PolyGroup, write_iop::WriteIOP},
++    adapter::REGISTER_GROUP_CODE,
+     taps::TapSet,
+-    INV_RATE,
++    INV_RATE, ZK_QUOTIENT_MASK_SIZE, ZK_QUOTIENT_PIECES,
+ };
+ 
+ /// Object to generate a zero-knowledge proof of the execution of some circuit.
+@@ -33,6 +34,15 @@ pub struct Prover<'a, H: Hal> {
+     groups: Vec<Option<PolyGroup<H>>>,
+     cycles: usize,
+     po2: usize,
++    zk: bool,
++}
++
++fn bit_rev(x: usize, bits: usize) -> usize {
++    if bits == 0 {
++        0
++    } else {
++        x.reverse_bits() >> (usize::BITS as usize - bits)
++    }
+ }
+ 
+ fn make_coeffs<H: Hal>(hal: &H, witness: &H::Buffer<H::Elem>, count: usize) -> H::Buffer<H::Elem> {
+@@ -59,6 +69,19 @@ impl<'a, H: Hal> Prover<'a, H> {
+                 .collect(),
+             cycles: 0,
+             po2: usize::MAX,
++            zk: false,
++        }
++    }
++
++    /// Creates a prover for the zero-knowledge variant of the protocol: hidden groups
++    /// and the quotient are committed with salted leaves, the quotient pieces are
++    /// re-randomized, and a random mask polynomial is added to the FRI batch.
++    /// The caller must fill the last [crate::ZK_CYCLES] rows of every hidden group
++    /// with independent uniform values.
++    pub fn new_zk(hal: &'a H, taps: &'a TapSet) -> Self {
++        Self {
++            zk: true,
++            ..Self::new(hal, taps)
+         }
+     }
+ 
+@@ -90,13 +113,12 @@ impl<'a, H: Hal> Prover<'a, H> {
+         );
+ 
+         let coeffs = make_coeffs(self.hal, witness, group_size);
+-        let group_ref = self.groups[tap_group_index].insert(PolyGroup::new(
+-            self.hal,
+-            coeffs,
+-            group_size,
+-            self.cycles,
+-            witness.name(),
+-        ));
++        let group = if self.zk && tap_group_index != REGISTER_GROUP_CODE {
++            PolyGroup::new_salted(self.hal, coeffs, group_size, self.cycles, witness.name())
++        } else {
++            PolyGroup::new(self.hal, coeffs, group_size, self.cycles, witness.name())
++        };
++        let group_ref = self.groups[tap_group_index].insert(group);
+ 
+         group_ref.merkle.commit(&mut self.iop);
+ 
+@@ -107,6 +129,69 @@ impl<'a, H: Hal> Prover<'a, H> {
+         );
+     }
+ 
++    /// Splits the quotient `h` (given as interpolated, bit-reversed coefficients over the
++    /// `INV_RATE * cycles` domain) into `P = ZK_QUOTIENT_PIECES` pieces as `h = sum_i x^(i*k)
++    /// h_i` with `k = cycles - ZK_QUOTIENT_MASK_SIZE`, then re-randomizes them with random
++    /// `r_1..r_{P-1}` of degree < `ZK_QUOTIENT_MASK_SIZE`: `h_i += x^k r_{i+1} - r_i`. The sum is
++    /// unchanged and every piece keeps degree < `cycles`. Returns `P * EXT_SIZE` columns of
++    /// bit-reversed coefficients, column `i * EXT_SIZE + c` holding coordinate `c` of piece `i`,
++    /// followed by `EXT_SIZE` columns of a uniformly random FRI mask polynomial of degree <
++    /// `cycles`.
++    fn zk_check_pieces(&self, check_poly: &H::Buffer<H::Elem>) -> H::Buffer<H::Elem> {
++        scope!("zk_check_pieces");
++        let ext_size = H::ExtElem::EXT_SIZE;
++        let n = self.cycles;
++        let domain = n * INV_RATE;
++        let m = ZK_QUOTIENT_MASK_SIZE;
++        assert!(m < n);
++        let k = n - m;
++        let log_domain = self.po2 + INV_RATE.trailing_zeros() as usize;
++        let mut rng = rand::rng();
++        let pieces = ZK_QUOTIENT_PIECES;
++        let masks: Vec<H::Elem> = (0..(pieces - 1) * ext_size * m)
++            .map(|_| H::Elem::random(&mut rng))
++            .collect();
++        // masks for r_i (i = 1..pieces) at index ((i - 1) * ext_size + c) * m + t
++        let mask = |i: usize, c: usize, t: usize| masks[((i - 1) * ext_size + c) * m + t];
++        let mut out = vec![H::Elem::ZERO; (pieces + 1) * ext_size * n];
++        for v in out[pieces * ext_size * n..].iter_mut() {
++            *v = H::Elem::random(&mut rng);
++        }
++        check_poly.view(|v| {
++            for c in 0..ext_size {
++                let coeff = |t: usize| v[c * domain + bit_rev(t, log_domain)];
++                for t in ((pieces - 1) * k + n).min(domain)..domain {
++                    assert!(
++                        coeff(t) == H::Elem::ZERO,
++                        "check polynomial degree too large for the zero-knowledge split"
++                    );
++                }
++                for i in 0..pieces {
++                    let col = &mut out[(i * ext_size + c) * n..(i * ext_size + c + 1) * n];
++                    let mut piece = vec![H::Elem::ZERO; n];
++                    let len = if i + 1 < pieces { k } else { n };
++                    for (t, p) in piece.iter_mut().enumerate().take(len) {
++                        if i * k + t < domain {
++                            *p = coeff(i * k + t);
++                        }
++                    }
++                    for t in 0..m {
++                        if i + 1 < pieces {
++                            piece[k + t] += mask(i + 1, c, t);
++                        }
++                        if i > 0 {
++                            piece[t] -= mask(i, c, t);
++                        }
++                    }
++                    for (t, p) in piece.into_iter().enumerate() {
++                        col[bit_rev(t, self.po2)] = p;
++                    }
++                }
++            }
++        });
++        self.hal.copy_from_elem("check_pieces", &out)
++    }
++
+     /// Generates the proof and returns the seal.
+     pub fn finalize<C>(mut self, globals: &[&H::Buffer<H::Elem>], circuit_hal: &C) -> Vec<u32>
+     where
+@@ -114,11 +199,12 @@ impl<'a, H: Hal> Prover<'a, H> {
+     {
+         scope!("finalize");
+ 
++        let ext_size = H::ExtElem::EXT_SIZE;
++
+         // Set the poly mix value, which is used for constraint compression in the
+         // DEEP-ALI protocol.
+         let poly_mix = self.iop.random_ext_elem();
+         let domain = self.cycles * INV_RATE;
+-        let ext_size = H::ExtElem::EXT_SIZE;
+ 
+         // Now generate the check polynomial.
+         // The check polynomial is the core of the STARK: if the constraints are
+@@ -175,7 +261,16 @@ impl<'a, H: Hal> Prover<'a, H> {
+         // invRate*size to 16 polys of size, without actually doing anything.
+ 
+         // Make the PolyGroup + add it to the IOP;
+-        let check_group = PolyGroup::new(self.hal, check_poly, H::CHECK_SIZE, self.cycles, "check");
++        let check_size = match self.zk {
++            true => ZK_QUOTIENT_PIECES * ext_size,
++            false => H::CHECK_SIZE,
++        };
++        let check_group = if self.zk {
++            let pieces = self.zk_check_pieces(&check_poly);
++            PolyGroup::new_salted(self.hal, pieces, check_size + ext_size, self.cycles, "check")
++        } else {
++            PolyGroup::new(self.hal, check_poly, H::CHECK_SIZE, self.cycles, "check")
++        };
+         check_group.merkle.commit(&mut self.iop);
+         tracing::debug!("checkGroup: {}", check_group.merkle.root());
+ 
+@@ -244,15 +339,15 @@ impl<'a, H: Hal> Prover<'a, H> {
+         });
+ 
+         // Add in the coeffs of the check polynomials.
+-        let z_pow = z.pow(ext_size);
++        let z_pow = if self.zk { z } else { z.pow(ext_size) };
+         scope!("misc", {
+-            let which = Vec::from_iter(0u32..H::CHECK_SIZE as u32);
+-            let xs = vec![z_pow; H::CHECK_SIZE];
+-            let out = self.hal.alloc_extelem("out", H::CHECK_SIZE);
++            let which = Vec::from_iter(0u32..check_size as u32);
++            let xs = vec![z_pow; check_size];
++            let out = self.hal.alloc_extelem("out", check_size);
+             let which = self.hal.copy_from_u32("which", which.as_slice());
+             let xs = self.hal.copy_from_extelem("xs", xs.as_slice());
+             self.hal
+-                .batch_evaluate_any(&check_group.coeffs, H::CHECK_SIZE, &which, &xs, &out);
++                .batch_evaluate_any(&check_group.coeffs, check_group.count, &which, &xs, &out);
+             out.view(|view| {
+                 coeff_u.extend(view);
+             });
+@@ -305,7 +400,7 @@ impl<'a, H: Hal> Prover<'a, H> {
+                 cur_mix *= mix.pow(group_size);
+             }
+ 
+-            let which = vec![combo_count as u32; H::CHECK_SIZE];
++            let which = vec![combo_count as u32; check_size];
+             let which_buf = self.hal.copy_from_u32("which", which.as_slice());
+             self.hal.mix_poly_coeffs(
+                 &combos,
+@@ -313,7 +408,7 @@ impl<'a, H: Hal> Prover<'a, H> {
+                 &mix,
+                 &check_group.coeffs,
+                 &which_buf,
+-                H::CHECK_SIZE,
++                check_size,
+                 self.cycles,
+             );
+         });
+@@ -363,6 +458,23 @@ impl<'a, H: Hal> Prover<'a, H> {
+             final_poly_coeffs
+         });
+ 
++        if self.zk {
++            let mask_mix = mix.pow(self.taps.reg_count() + check_size);
++            let n = self.cycles;
++            check_group.coeffs.view(|all| {
++                let r = &all[check_size * n..(check_size + ext_size) * n];
++                final_poly_coeffs.view_mut(|f| {
++                    for t in 0..n {
++                        let term = mask_mix
++                            * H::ExtElem::from_subelems((0..ext_size).map(|j| r[j * n + t]));
++                        for (c, v) in term.subelems().iter().enumerate() {
++                            f[c * n + t] += *v;
++                        }
++                    }
++                });
++            });
++        }
++
+         // Finally do the FRI protocol to prove the degree of the polynomial
+         scope!(
+             "bit_rev",
+diff --git a/risc0/zkp/src/verify/mod.rs b/risc0/zkp/src/verify/mod.rs
+index 56590960..5ed4954f 100644
+--- a/risc0/zkp/src/verify/mod.rs
++++ b/risc0/zkp/src/verify/mod.rs
+@@ -37,7 +37,7 @@ use crate::{
+     },
+     core::{digest::Digest, hash::HashSuite, log2_ceil},
+     taps::TapSet,
+-    INV_RATE, MAX_CYCLES_PO2, QUERIES,
++    INV_RATE, MAX_CYCLES_PO2, QUERIES, ZK_QUOTIENT_MASK_SIZE, ZK_QUOTIENT_PIECES, ZK_SALT_SIZE,
+ };
+ 
+ // If true, enable tracing of verifier internals.
+@@ -173,6 +173,7 @@ where
+     tot_cycles: usize,
+     // Merkle tree verifiers, indexed by register group id
+     merkle_verifiers: Vec<Option<MerkleTreeVerifier<'a>>>,
++    zk: bool,
+ }
+ 
+ impl<F: Field> VerifyParams<F> for Verifier<'_, F> {}
+@@ -191,6 +192,41 @@ impl<'a, F: Field> Verifier<'a, F> {
+             merkle_verifiers: core::iter::repeat_with(|| None)
+                 .take(taps.num_groups())
+                 .collect(),
++            zk: false,
++        }
++    }
++
++    /// Start a verification session for a seal produced by the zero-knowledge prover
++    /// ([crate::prove::Prover::new_zk]).
++    #[stability::unstable]
++    pub fn new_zk(taps: &'a TapSet<'a>, suite: &'a HashSuite<F>, seal: &'a [u32]) -> Self {
++        Self {
++            zk: true,
++            ..Self::new(taps, suite, seal)
++        }
++    }
++
++    /// Number of committed quotient columns.
++    fn check_size(&self) -> usize {
++        match self.zk {
++            true => ZK_QUOTIENT_PIECES * F::ExtElem::EXT_SIZE,
++            false => Self::CHECK_SIZE,
++        }
++    }
++
++    /// Number of FRI mask columns committed after the quotient columns of the check group.
++    fn mask_size(&self) -> usize {
++        match self.zk {
++            true => F::ExtElem::EXT_SIZE,
++            false => 0,
++        }
++    }
++
++    fn salt_size(&self, hidden: bool) -> usize {
++        if self.zk && hidden {
++            ZK_SALT_SIZE
++        } else {
++            0
+         }
+     }
+ 
+@@ -224,7 +260,8 @@ impl<'a, F: Field> Verifier<'a, F> {
+             );
+             return Err(VerificationError::ReceiptFormatError);
+         }
+-        let group_size = self.taps.group_size(reg_group_id);
++        let group_size = self.taps.group_size(reg_group_id)
++            + self.salt_size(reg_group_id != REGISTER_GROUP_CODE);
+         let domain = INV_RATE * self.tot_cycles;
+         let hashfn = self.suite.hashfn.as_ref();
+ 
+@@ -261,6 +298,7 @@ impl<'a, F: Field> Verifier<'a, F> {
+         rows: &[&[F::Elem]],
+         tap_mix_pows: &[F::ExtElem],
+         check_mix_pows: &[F::ExtElem],
++        mask: Option<(&[F::Elem], F::ExtElem)>,
+     ) -> F::ExtElem {
+         let mut tot = vec![F::ExtElem::ZERO; self.taps.combos_size() + 1];
+         let combo_count = self.taps.combos_size();
+@@ -269,7 +307,7 @@ impl<'a, F: Field> Verifier<'a, F> {
+         for (reg, cur) in zip(self.taps.regs(), tap_mix_pows.iter()) {
+             tot[reg.combo_id()] += *cur * rows[reg.group()][reg.offset()];
+         }
+-        for (i, cur) in zip(0..Self::CHECK_SIZE, check_mix_pows.iter()) {
++        for (i, cur) in check_mix_pows.iter().enumerate() {
+             tot[combo_count] += *cur * check_row[i];
+         }
+         let mut ret = F::ExtElem::ZERO;
+@@ -287,11 +325,24 @@ impl<'a, F: Field> Verifier<'a, F> {
+             ret += num * divisor.inv();
+         }
+         let check_num = tot[combo_count] - combo_u[self.taps.tot_combo_backs];
+-        let check_div = x - z.pow(INV_RATE);
++        let check_div = x - self.check_point(z);
+         ret += check_num * check_div.inv();
++        if let Some((mask_row, mask_mix)) = mask {
++            ret += mask_mix
++                * F::ExtElem::from_subelems(mask_row[..F::ExtElem::EXT_SIZE].iter().copied());
++        }
+         ret
+     }
+ 
++    /// The point at which the quotient pieces are opened.
++    fn check_point(&self, z: F::ExtElem) -> F::ExtElem {
++        if self.zk {
++            z
++        } else {
++            z.pow(INV_RATE)
++        }
++    }
++
+     /// Execute the IOP protocol to verify the validity polynomial
+     /// such that all the constraints are satisfied.  This is
+     /// currently only supported when called exactly once at the end
+@@ -311,19 +362,20 @@ impl<'a, F: Field> Verifier<'a, F> {
+             }
+         }
+ 
++        let hashfn = self.suite.hashfn.as_ref();
++        let domain = INV_RATE * self.tot_cycles;
++
+         // Get a pseudorandom value with which to mix the constraint polynomials.
+         // See DEEP-ALI protocol from DEEP-FRI paper for details on constraint mixing.
+         let poly_mix = self.iop().random_ext_elem();
+         gsr_trace_elems("poly_mix", &[poly_mix]);
+         trace_if_enabled!("Poly mix: {poly_mix:?}");
+ 
+-        let hashfn = self.suite.hashfn.as_ref();
+-        let domain = INV_RATE * self.tot_cycles;
+         let check_merkle = MerkleTreeVerifier::new(
+             self.iop().deref_mut(),
+             hashfn,
+             domain,
+-            Self::CHECK_SIZE,
++            self.check_size() + self.mask_size() + self.salt_size(true),
+             QUERIES,
+         )?;
+         trace_if_enabled!("Check merkle root: {}", check_merkle.root());
+@@ -349,7 +401,7 @@ impl<'a, F: Field> Verifier<'a, F> {
+         let num_taps = self.taps.tap_size();
+         let coeff_u = self
+             .iop()
+-            .read_field_elem_slice(num_taps + Self::CHECK_SIZE)?;
++            .read_field_elem_slice(num_taps + self.check_size())?;
+         let hash_u = hashfn.hash_ext_elem_slice(coeff_u);
+         self.iop().commit(&hash_u);
+ 
+@@ -387,7 +439,22 @@ impl<'a, F: Field> Verifier<'a, F> {
+         let remap = [0, 2, 1, 3];
+         let fp0 = F::Elem::ZERO;
+         let fp1 = F::Elem::ONE;
+-        for (i, rmi) in remap.iter().enumerate() {
++        if self.zk {
++            // h(z) = sum_i z^(i*k) h_i(z), piece i in columns i*EXT_SIZE..(i+1)*EXT_SIZE.
++            let ext_size = F::ExtElem::EXT_SIZE;
++            let z_k = z.pow(self.tot_cycles - ZK_QUOTIENT_MASK_SIZE);
++            let mut z_ik = F::ExtElem::ONE;
++            for i in 0..ZK_QUOTIENT_PIECES {
++                for c in 0..ext_size {
++                    let basis = F::ExtElem::from_subelems(
++                        (0..ext_size).map(|j| if j == c { fp1 } else { fp0 }),
++                    );
++                    check += coeff_u[num_taps + i * ext_size + c] * z_ik * basis;
++                }
++                z_ik *= z_k;
++            }
++        }
++        for (i, rmi) in remap.iter().enumerate().filter(|_| !self.zk) {
+             check += coeff_u[num_taps + rmi]
+                 * z.pow(i)
+                 * F::ExtElem::from_subelems([fp1, fp0, fp0, fp0]);
+@@ -442,8 +509,8 @@ impl<'a, F: Field> Verifier<'a, F> {
+         );
+         trace_if_enabled!("cur_mix: {cur_mix:?}, cur_pos: {cur_pos}");
+         // Handle check group
+-        let mut check_mix_pows = Vec::with_capacity(Self::CHECK_SIZE);
+-        for _ in 0..Self::CHECK_SIZE {
++        let mut check_mix_pows = Vec::with_capacity(self.check_size());
++        for _ in 0..self.check_size() {
+             combo_u[self.taps.tot_combo_backs] += cur_mix * coeff_u[cur_pos];
+             cur_pos += 1;
+             check_mix_pows.push(cur_mix);
+@@ -451,7 +518,7 @@ impl<'a, F: Field> Verifier<'a, F> {
+         }
+         assert_eq!(
+             check_mix_pows.len(),
+-            Self::CHECK_SIZE,
++            self.check_size(),
+             "Miscalculated capacity for check_mix_pows"
+         );
+         let gen = <F::Elem as RootsOfUnity>::ROU_FWD[log2_ceil(domain)];
+@@ -470,7 +537,10 @@ impl<'a, F: Field> Verifier<'a, F> {
+                 })
+                 .collect::<Result<Vec<_>,_>>()?;
+             let check_row = check_merkle.verify(self.iop().deref_mut(), hashfn, idx)?;
+-            let ret = self.fri_eval_taps(&combo_u, check_row, back_one, x, z, &rows, &tap_mix_pows, &check_mix_pows);
++            let mask = self
++                .zk
++                .then(|| (&check_row[self.check_size()..self.check_size() + self.mask_size()], cur_mix));
++            let ret = self.fri_eval_taps(&combo_u, check_row, back_one, x, z, &rows, &tap_mix_pows, &check_mix_pows, mask);
+             gsr_ops::set_phase(inner_phase);
+             Ok(ret)
+         });
+@@ -532,6 +602,36 @@ pub fn verify<F, C, CheckCode>(
+     seal: &[u32],
+     check_code: CheckCode,
+ ) -> Result<(), VerificationError>
++where
++    F: Field,
++    C: CircuitCoreDef<F>,
++    CheckCode: Fn(u32, &Digest) -> Result<(), VerificationError>,
++{
++    verify_mode(circuit, suite, seal, check_code, false)
++}
++
++/// Verify a seal produced by the zero-knowledge prover ([crate::prove::Prover::new_zk]).
++pub fn verify_zk<F, C, CheckCode>(
++    circuit: &C,
++    suite: &HashSuite<F>,
++    seal: &[u32],
++    check_code: CheckCode,
++) -> Result<(), VerificationError>
++where
++    F: Field,
++    C: CircuitCoreDef<F>,
++    CheckCode: Fn(u32, &Digest) -> Result<(), VerificationError>,
++{
++    verify_mode(circuit, suite, seal, check_code, true)
++}
++
++fn verify_mode<F, C, CheckCode>(
++    circuit: &C,
++    suite: &HashSuite<F>,
++    seal: &[u32],
++    check_code: CheckCode,
++    zk: bool,
++) -> Result<(), VerificationError>
+ where
+     F: Field,
+     C: CircuitCoreDef<F>,
+@@ -541,7 +641,10 @@ where
+         return Err(VerificationError::ReceiptFormatError);
+     }
+ 
+-    let mut verifier = Verifier::<F>::new(circuit.get_taps(), suite, seal);
++    let mut verifier = match zk {
++        true => Verifier::<F>::new_zk(circuit.get_taps(), suite, seal),
++        false => Verifier::<F>::new(circuit.get_taps(), suite, seal),
++    };
+     verifier.commit_circuit_info(&C::CIRCUIT_INFO);
+ 
+     // Read the globals (i.e. outputs) from the IOP, and mix them into the Fiat-Shamir state.
+diff --git a/risc0/zkvm/src/host/recursion/mod.rs b/risc0/zkvm/src/host/recursion/mod.rs
+index ff75474e..654bef70 100644
+--- a/risc0/zkvm/src/host/recursion/mod.rs
++++ b/risc0/zkvm/src/host/recursion/mod.rs
+@@ -33,10 +33,11 @@ pub use risc0_circuit_recursion::control_id::{ALLOWED_CONTROL_IDS, ALLOWED_CONTR
+ 
+ #[cfg(test)]
+ #[cfg(feature = "prove")]
+-pub use self::prove::test_zkr;
++pub use self::prove::{test_zkr, test_zkr_mode};
+ #[cfg(feature = "prove")]
+ pub use self::prove::{
+-    identity_p254, identity_sha256_padded, join, lift, resolve, Prover, RECURSION_PO2,
++    identity_p254, identity_sha256_padded, identity_zk, join, lift, resolve, resolve_zk, Prover,
++    RECURSION_PO2,
+ };
+ #[cfg(feature = "prove")]
+ pub use risc0_circuit_recursion::prove::Program;
+diff --git a/risc0/zkvm/src/host/recursion/prove/mod.rs b/risc0/zkvm/src/host/recursion/prove/mod.rs
+index c5f82729..a71470c1 100644
+--- a/risc0/zkvm/src/host/recursion/prove/mod.rs
++++ b/risc0/zkvm/src/host/recursion/prove/mod.rs
+@@ -389,6 +389,42 @@ pub fn identity_p254(
+     })
+ }
+ 
++/// Re-prove a succinct receipt with the identity program under the zero-knowledge prover.
++///
++/// The returned seal reveals only the claim and the control root: the inner receipt (and
++/// everything below it) is part of the hidden witness. Verify it with
++/// [SuccinctReceipt::verify_integrity_zk_with_context], or consume it with [resolve_zk].
++pub fn identity_zk(inner: &SuccinctReceipt<ReceiptClaim>) -> Result<SuccinctReceipt<ReceiptClaim>> {
++    let mut prover = Prover::new_identity(inner, ProverOpts::succinct())?;
++    let receipt = prover.prover.run_zk()?;
++    let claim =
++        MaybePruned::Value(ReceiptClaim::decode(&mut receipt.out_stream())?).merge(&inner.claim)?;
++    make_succinct_receipt(prover, receipt, claim)
++}
++
++/// Like [resolve], but the assumption receipt carries a zero-knowledge seal (see
++/// [identity_zk]); it is verified by the `resolve_zk` recursion program.
++pub fn resolve_zk<Claim>(
++    conditional: &SuccinctReceipt<ReceiptClaim>,
++    assumption: &SuccinctReceipt<Claim>,
++) -> Result<SuccinctReceipt<ReceiptClaim>>
++where
++    Claim: risc0_binfmt::Digestible + Debug,
++{
++    let mut prover = Prover::new_resolve_zk(conditional, assumption, ProverOpts::succinct())?;
++    let receipt = prover.prover.run()?;
++    let claim_decoded = ReceiptClaim::decode(&mut receipt.out_stream())?;
++    let claim = conditional
++        .claim
++        .as_value()
++        .context("conditional receipt claim is pruned")?
++        .resolve(&assumption.claim)
++        .context("failed to compute resolved claim")?
++        .merge(&claim_decoded)
++        .context("failed to merge resolved and decoded claims")?;
++    make_succinct_receipt(prover, receipt, claim)
++}
++
+ /// Prove the verification of a recursion receipt with the padded (FIPS 180-4) SHA-256 suite.
+ ///
+ /// The resulting receipt's Merkle and transcript digests are standard SHA-256 digests, so it can be
+@@ -527,6 +563,17 @@ pub fn test_zkr(
+     digest1: &Digest,
+     digest2: &Digest,
+     po2: usize,
++) -> Result<SuccinctReceipt<crate::claim::Unknown>> {
++    test_zkr_mode(digest1, digest2, po2, false)
++}
++
++/// Like [test_zkr], with the zero-knowledge prover when `zk` is set.
++#[cfg(test)]
++pub fn test_zkr_mode(
++    digest1: &Digest,
++    digest2: &Digest,
++    po2: usize,
++    zk: bool,
+ ) -> Result<SuccinctReceipt<crate::claim::Unknown>> {
+     use risc0_circuit_recursion::prove::zkr::get_zkr;
+     use risc0_zkp::core::hash::poseidon2::Poseidon2HashSuite;
+@@ -540,7 +587,10 @@ pub fn test_zkr(
+     prover.add_input_digest(digest1, DigestKind::Poseidon2);
+     prover.add_input_digest(digest2, DigestKind::Poseidon2);
+ 
+-    let receipt = prover.run()?;
++    let receipt = match zk {
++        true => prover.run_zk()?,
++        false => prover.run()?,
++    };
+ 
+     // Read the claim digest from the second of the global output slots.
+     let claim_digest = read_sha_halfs(&mut VecDeque::from_iter(
+@@ -794,14 +844,39 @@ impl Prover {
+         assum: &SuccinctReceipt<Claim>,
+         opts: ProverOpts,
+     ) -> Result<Self>
++    where
++        Claim: risc0_binfmt::Digestible + Debug,
++    {
++        let (program, control_id) = zkr::resolve(&opts.hashfn)?;
++        Self::new_resolve_with(program, control_id, cond, assum, opts)
++    }
++
++    /// Like [Prover::new_resolve], for an assumption receipt with a zero-knowledge seal.
++    pub fn new_resolve_zk<Claim>(
++        cond: &SuccinctReceipt<ReceiptClaim>,
++        assum: &SuccinctReceipt<Claim>,
++        opts: ProverOpts,
++    ) -> Result<Self>
++    where
++        Claim: risc0_binfmt::Digestible + Debug,
++    {
++        let (program, control_id) = zkr::resolve_zk(&opts.hashfn)?;
++        Self::new_resolve_with(program, control_id, cond, assum, opts)
++    }
++
++    fn new_resolve_with<Claim>(
++        program: Program,
++        control_id: Digest,
++        cond: &SuccinctReceipt<ReceiptClaim>,
++        assum: &SuccinctReceipt<Claim>,
++        opts: ProverOpts,
++    ) -> Result<Self>
+     where
+         Claim: risc0_binfmt::Digestible + Debug,
+     {
+         ensure_poseidon2!(cond);
+         ensure_poseidon2!(assum);
+ 
+-        // Load the resolve predicate as a Program and construct the prover.
+-        let (program, control_id) = zkr::resolve(&opts.hashfn)?;
+         let mut prover = Prover::new(program, control_id, opts);
+ 
+         // Load the input values needed by the predicate.
+@@ -997,6 +1072,11 @@ impl Prover {
+     pub fn run(&mut self) -> Result<RecursionReceipt> {
+         self.prover.run()
+     }
++
++    /// Like [Prover::run], with the zero-knowledge prover.
++    pub fn run_zk(&mut self) -> Result<RecursionReceipt> {
++        self.prover.run_zk()
++    }
+ }
+ 
+ fn check_resolve_assumption<Claim>(
+diff --git a/risc0/zkvm/src/host/recursion/prove/zkr.rs b/risc0/zkvm/src/host/recursion/prove/zkr.rs
+index eff5bc63..48c8793d 100644
+--- a/risc0/zkvm/src/host/recursion/prove/zkr.rs
++++ b/risc0/zkvm/src/host/recursion/prove/zkr.rs
+@@ -75,6 +75,10 @@ pub fn resolve(hashfn: &str) -> Result<(Program, Digest)> {
+     get_zkr("resolve.zkr", hashfn)
+ }
+ 
++pub fn resolve_zk(hashfn: &str) -> Result<(Program, Digest)> {
++    get_zkr("resolve_zk.zkr", hashfn)
++}
++
+ pub fn identity(hashfn: &str) -> Result<(Program, Digest)> {
+     get_zkr("identity.zkr", hashfn)
+ }
+diff --git a/risc0/zkvm/src/host/recursion/tests.rs b/risc0/zkvm/src/host/recursion/tests.rs
+index da8b44f5..e56a3791 100644
+--- a/risc0/zkvm/src/host/recursion/tests.rs
++++ b/risc0/zkvm/src/host/recursion/tests.rs
+@@ -218,6 +218,21 @@ static ECHO_SUCCINCT: LazyLock<(Journal, SuccinctReceipt<ReceiptClaim>)> = LazyL
+     (journal, succinct_receipt)
+ });
+ 
++static ECHO_SUCCINCT_OTHER: LazyLock<(Journal, SuccinctReceipt<ReceiptClaim>)> =
++    LazyLock::new(|| {
++        let env = ExecutorEnv::builder()
++            .write(&MultiTestSpec::Echo {
++                bytes: b"another statement".to_vec(),
++            })
++            .unwrap()
++            .build()
++            .unwrap();
++        let session = execute_elf(env, MULTI_TEST_ELF).unwrap();
++        let journal = session.journal.clone().unwrap();
++        let segment = prove_segments(&session).unwrap().remove(0);
++        (journal, lift(&segment).unwrap())
++    });
++
+ #[test_log::test]
+ fn test_recursion_lift_then_unwrap_povw() {
+     // Prove the base case
+@@ -716,6 +731,132 @@ fn test_po2_16() {
+     receipt.verify_integrity_with_context(&ctx).unwrap();
+ }
+ 
++fn test_po2_16_ctx() -> (Digest, VerifierContext) {
++    use risc0_zkp::core::hash::poseidon2::Poseidon2HashSuite;
++
++    let suite = Poseidon2HashSuite::new_suite();
++    let program =
++        risc0_circuit_recursion::prove::zkr::get_zkr("test_recursion_circuit.zkr", 16).unwrap();
++    let control_id = program.compute_control_id(suite.clone()).unwrap();
++    let control_root = MerkleGroup::new(vec![control_id])
++        .unwrap()
++        .calc_root(suite.hashfn.as_ref());
++    let ctx = VerifierContext::empty()
++        .with_suites(VerifierContext::default_hash_suites())
++        .with_succinct_verifier_parameters(SuccinctReceiptVerifierParameters {
++            control_root,
++            inner_control_root: Some(control_root),
++            proof_system_info: PROOF_SYSTEM_INFO,
++            circuit_info: CircuitImpl::CIRCUIT_INFO,
++        });
++    (control_root, ctx)
++}
++
++#[test_log::test]
++fn zk_po2_16_accept_and_reject() {
++    let (control_root, ctx) = test_po2_16_ctx();
++    let digest = digest!("00000000000000de00000000000000ad00000000000000be00000000000000ef");
++    let receipt = super::test_zkr_mode(&control_root, &digest, 16, true).unwrap();
++    receipt.verify_integrity_zk_with_context(&ctx).unwrap();
++
++    // The zero-knowledge seal is not a valid seal of the plain protocol, and vice versa.
++    assert!(receipt.verify_integrity_with_context(&ctx).is_err());
++    let plain = super::test_zkr_mode(&control_root, &digest, 16, false).unwrap();
++    plain.verify_integrity_with_context(&ctx).unwrap();
++    assert!(plain.verify_integrity_zk_with_context(&ctx).is_err());
++
++    // Two proofs of the same statement differ (fresh randomness) and both verify.
++    let again = super::test_zkr_mode(&control_root, &digest, 16, true).unwrap();
++    again.verify_integrity_zk_with_context(&ctx).unwrap();
++    assert_ne!(receipt.seal, again.seal);
++
++    // Flipping any part of the seal is rejected: globals, roots, openings, salts, FRI.
++    let len = receipt.seal.len();
++    for pos in [0, 20, 40, 100, len / 8, len / 4, len / 2, 3 * len / 4, len - 10, len - 1] {
++        let mut bad = receipt.clone();
++        bad.seal[pos] ^= 1;
++        assert!(
++            bad.verify_integrity_zk_with_context(&ctx).is_err(),
++            "tampered word {pos} of {len} accepted"
++        );
++    }
++    let mut short = receipt.clone();
++    short.seal.pop();
++    assert!(short.verify_integrity_zk_with_context(&ctx).is_err());
++    let mut long = receipt.clone();
++    long.seal.push(0);
++    assert!(long.verify_integrity_zk_with_context(&ctx).is_err());
++
++    // Wrong statement: a receipt for a different claim digest does not verify as this one.
++    let mut wrong_claim = receipt.clone();
++    wrong_claim.claim = MaybePruned::Pruned(Digest::ZERO);
++    assert!(wrong_claim.verify_integrity_zk_with_context(&ctx).is_err());
++}
++
++#[test_log::test]
++fn zk_identity_of_lifted_segment() {
++    let env = ExecutorEnv::builder()
++        .write(&MultiTestSpec::DoNothing)
++        .unwrap()
++        .build()
++        .unwrap();
++    let session = execute_elf(env, MULTI_TEST_ELF).unwrap();
++    let segment = prove_segments(&session).unwrap().remove(0);
++    let lifted = lift(&segment).unwrap();
++    let hidden = super::identity_zk(&lifted).unwrap();
++    let ctx = VerifierContext::default();
++    hidden.verify_integrity_zk_with_context(&ctx).unwrap();
++    assert!(hidden.verify_integrity_with_context(&ctx).is_err());
++    assert_eq!(hidden.claim.digest(), lifted.claim.digest());
++}
++
++#[test_log::test]
++fn zk_resolve_e2e() -> Result<()> {
++    let (assumption_journal, assumption_receipt) = ECHO_SUCCINCT.clone();
++    let hidden = super::identity_zk(&assumption_receipt)?;
++
++    let env = ExecutorEnv::builder()
++        .add_assumption(assumption_receipt.claim.clone())
++        .write(&MultiTestSpec::SysVerify(vec![(
++            MULTI_TEST_ID.into(),
++            assumption_journal.bytes,
++        )]))?
++        .build()?;
++    let session = execute_elf(env, MULTI_TEST_ELF)?;
++    let segments = prove_segments(&session)?;
++    assert_eq!(segments.len(), 1);
++    let conditional = lift(&segments[0])?;
++
++    let ctx = VerifierContext::default();
++    let resolved = super::resolve_zk(&conditional, &hidden)?;
++    resolved.verify_integrity_with_context(&ctx)?;
++    let journal = session.journal.clone().unwrap().bytes;
++    Receipt::new(InnerReceipt::Succinct(resolved.clone()), journal.clone()).verify(MULTI_TEST_ID)?;
++
++    // The final receipt is in the ordinary format, so it can be wrapped as before.
++    let (padded, params) = super::identity_sha256_padded(&resolved)?;
++    let padded_ctx = VerifierContext::empty()
++        .with_suites(VerifierContext::default_hash_suites())
++        .with_succinct_verifier_parameters(params);
++    Receipt::new(InnerReceipt::Succinct(padded), journal).verify_with_context(&padded_ctx, MULTI_TEST_ID)?;
++
++    // resolve_zk only accepts zero-knowledge seals, and resolve only plain ones.
++    assert!(super::resolve_zk(&conditional, &assumption_receipt).is_err());
++    assert!(super::resolve(&conditional, &hidden).is_err());
++
++    // A zero-knowledge receipt of a different claim does not resolve the assumption.
++    let (_, other) = ECHO_SUCCINCT_OTHER.clone();
++    let other_hidden = super::identity_zk(&other)?;
++    assert!(super::resolve_zk(&conditional, &other_hidden).is_err());
++
++    // Tampering with the zero-knowledge seal is rejected by resolve_zk.
++    let mut bad = hidden.clone();
++    let mid = bad.seal.len() / 2;
++    bad.seal[mid] ^= 1;
++    assert!(super::resolve_zk(&conditional, &bad).is_err());
++    Ok(())
++}
++
+ #[test_log::test]
+ fn stable_root() {
+     // This tests that none of the control IDs have changed unexpectedly.
+@@ -723,7 +864,7 @@ fn stable_root() {
+ 
+     assert_eq!(
+         ALLOWED_CONTROL_ROOT,
+-        digest!("a54dc85ac99f851c92d7c96d7318af41dbe7c0194edfcc37eb4d422a998c1f56")
++        digest!("5edc9538daecff76cae54c2228303261edeeb93ecb9a5547b250fa2c550a5b01")
+     );
+ }
+ 
+diff --git a/risc0/zkvm/src/receipt/succinct.rs b/risc0/zkvm/src/receipt/succinct.rs
+index f8b2142d..2b2cee18 100644
+--- a/risc0/zkvm/src/receipt/succinct.rs
++++ b/risc0/zkvm/src/receipt/succinct.rs
+@@ -103,6 +103,25 @@ impl<Claim> SuccinctReceipt<Claim> {
+         &self,
+         ctx: &VerifierContext,
+     ) -> Result<(), VerificationError>
++    where
++        Claim: risc0_binfmt::Digestible + core::fmt::Debug,
++    {
++        self.verify_integrity_mode(ctx, false)
++    }
++
++    /// Verify the integrity of a receipt whose seal was produced by the zero-knowledge
++    /// recursion prover (e.g. [crate::recursion::identity_zk]).
++    pub fn verify_integrity_zk_with_context(
++        &self,
++        ctx: &VerifierContext,
++    ) -> Result<(), VerificationError>
++    where
++        Claim: risc0_binfmt::Digestible + core::fmt::Debug,
++    {
++        self.verify_integrity_mode(ctx, true)
++    }
++
++    fn verify_integrity_mode(&self, ctx: &VerifierContext, zk: bool) -> Result<(), VerificationError>
+     where
+         Claim: risc0_binfmt::Digestible + core::fmt::Debug,
+     {
+@@ -162,7 +181,10 @@ impl<Claim> SuccinctReceipt<Claim> {
+ 
+         // Verify the receipt itself is correct, and therefore the encoded globals are
+         // reliable.
+-        risc0_zkp::verify::verify(&CIRCUIT, suite, &self.seal, check_code)?;
++        match zk {
++            true => risc0_zkp::verify::verify_zk(&CIRCUIT, suite, &self.seal, check_code)?,
++            false => risc0_zkp::verify::verify(&CIRCUIT, suite, &self.seal, check_code)?,
++        }
+ 
+         // Extract the globals from the seal
+         let output_elems: &[BabyBearElem] =
+diff --git a/xtask/src/bootstrap.rs b/xtask/src/bootstrap.rs
+index 915e5ecb..439670ab 100644
+--- a/xtask/src/bootstrap.rs
++++ b/xtask/src/bootstrap.rs
+@@ -83,6 +83,7 @@ impl Bootstrap {
+             "join_povw.zkr",
+             "join_unwrap_povw.zkr",
+             "resolve.zkr",
++            "resolve_zk.zkr",
+             "resolve_povw.zkr",
+             "resolve_unwrap_povw.zkr",
+             "identity.zkr",

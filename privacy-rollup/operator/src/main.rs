@@ -4,15 +4,16 @@
 //! handling share one code path.
 //!
 //! ```text
-//! pr-operator init     <dir> <descriptor.json> <joinsplit.pkv>
+//! pr-operator init     <dir> <descriptor.json>
 //! pr-operator genesis  <dir> <txid-hex> <vout>          # rollup outpoint created by the genesis tx
-//! pr-operator submit   <dir> <tx.json> [<funding.json>] # verify the ProveKit proof, reserve, queue
+//! pr-operator submit   <dir> <tx.json> [<funding.json>] # verify the join-split receipt, reserve, queue
 //! pr-operator build    <dir> <request.json> <out-dir>   # witness, guest frames, annex, journal
 //! pr-operator accept   <dir> <annex-hex> <value> <txid-hex> <vout>
 //! pr-operator rollback <dir>
 //! pr-operator status   <dir>
 //! ```
-//! Txids are hex in serialization (internal) byte order. `tx.json` is a `RollupTransaction`,
+//! Txids are hex in serialization (internal) byte order. `tx.json` is a `RollupTransaction` whose
+//! `receipt` is the user's zero-knowledge receipt of the `joinsplit` guest (`joinsplit prove`);
 //! `funding.json` the `FundingCoin`s its deposit spends, in declaration order. Transactions settled by
 //! an accepted batch leave the pool; after a rollback they must be resubmitted.
 use std::fs;
@@ -23,6 +24,7 @@ use pr_mempool::{assemble_settlement, batch_transactions, Entry, FundingCoin, Me
 use pr_protocol_types::{Canonical, Outpoint, RollupDescriptor, RollupTransaction, TxOut};
 use pr_scanner::Replica;
 use pr_state_transition::apply_batch;
+use risc0_zkvm::{sha::Digestible, ReceiptClaim, SuccinctReceipt, VerifierContext};
 use serde::{Deserialize, Serialize};
 
 #[derive(Serialize, Deserialize)]
@@ -40,7 +42,18 @@ struct Chain {
 }
 
 const PENDING: &str = "pending.json";
-const VERIFIER: &str = "joinsplit.pkv";
+/// Image ID of the user-side `joinsplit` guest, as compiled into `apply_batch`.
+const JOINSPLIT_ID: [u32; 8] = include!("../../methods/guest/src/joinsplit_id.rs");
+
+/// Accepts a transaction only if its receipt is a zero-knowledge (`identity_zk`) seal of the
+/// `joinsplit` guest whose journal is the transaction's own statement.
+fn verify_receipt(tx: &RollupTransaction) -> Result<()> {
+    let receipt: SuccinctReceipt<ReceiptClaim> = postcard::from_bytes(&tx.receipt).context("receipt encoding")?;
+    receipt.verify_integrity_zk_with_context(&VerifierContext::default()).context("zero-knowledge seal")?;
+    let expected = ReceiptClaim::ok(JOINSPLIT_ID, tx.public.encode());
+    ensure!(receipt.claim.digest() == expected.digest(), "receipt is not of this statement");
+    Ok(())
+}
 
 /// Next-batch request; the batch is the pool's fee-ordered selection. `successor_script_pubkey` is
 /// derived by the covenant template from the new state root; without it `build` only reports the new
@@ -89,8 +102,7 @@ fn submit(dir: &Path, tx: &Path, funding: Option<&String>) -> Result<usize> {
         Some(p) => serde_json::from_slice(&fs::read(p)?)?,
         None => Vec::new(),
     };
-    let verifier = pr_provekit_adapter::load_verifier(&dir.join(VERIFIER))?;
-    pool.submit(tx, funding, &replica, |t| pr_provekit_adapter::verify(&verifier, t).is_ok())
+    pool.submit(tx, funding, &replica, |t| verify_receipt(t).is_ok())
         .map_err(|e| anyhow::anyhow!("rejected: {e:?}"))?;
     save_pool(dir, &pool)?;
     Ok(pool.entries.len())
@@ -103,7 +115,10 @@ fn save(dir: &Path, chain: &Chain) -> Result<()> {
 
 fn status(dir: &Path, replica: &Replica) -> Result<serde_json::Value> {
     let tip = replica.tip();
+    let anchor = tip.anchors.0.last().context("anchor")?;
     Ok(serde_json::json!({
+        "anchor": {"root": hex::encode(anchor.commitment_root.0), "commitment_count": anchor.commitment_count,
+                   "batch_number": anchor.batch_number},
         "rollup_id": hex::encode(tip.state.rollup_id.0),
         "batch_number": tip.state.batch_number,
         "state_root": hex::encode(tip.state.root()),
@@ -134,12 +149,10 @@ fn build(dir: &Path, request: &Path, out: &Path) -> Result<()> {
     let effects = apply_batch(&witness).map_err(|e| anyhow::anyhow!("transition: {e:?}"))?;
     fs::create_dir_all(out)?;
     let mut frames = Vec::new();
-    if !entries.is_empty() {
-        for (i, e) in entries.iter().enumerate() {
-            let name = format!("proof{i}.pc");
-            fs::write(out.join(&name), pr_provekit_adapter::guest_proof_bytes(&pr_provekit_adapter::proof_of(&e.tx))?)?;
-            frames.push(name);
-        }
+    for (i, e) in entries.iter().enumerate() {
+        let name = format!("receipt{i}.bin");
+        fs::write(out.join(&name), &e.tx.receipt)?;
+        frames.push(name);
     }
     let summary = serde_json::json!({
         "batch_number": effects.new_state.batch_number,
@@ -148,7 +161,7 @@ fn build(dir: &Path, request: &Path, out: &Path) -> Result<()> {
         "backing_sats": effects.new_state.backing_sats,
         "complete": req.successor_script_pubkey.is_some(),
         "transactions": entries.len(),
-        "guest_frames": frames,
+        "assumption_receipts": frames,
         "annex": hex::encode(&effects.annex_bytes),
         "journal": hex::encode(effects.journal.encode()),
         "inputs": witness.settlement.inputs.iter().map(|i| serde_json::json!({
@@ -169,11 +182,9 @@ fn main() -> Result<()> {
     let dir = Path::new(&a[2]);
     match a[1].as_str() {
         "init" => {
-            ensure!(a.len() == 5, "usage: pr-operator init <dir> <descriptor.json> <joinsplit.pkv>");
+            ensure!(a.len() == 4, "usage: pr-operator init <dir> <descriptor.json>");
             fs::create_dir_all(dir)?;
             let d: RollupDescriptor = serde_json::from_slice(&fs::read(&a[3])?)?;
-            pr_provekit_adapter::ensure_guest_key(&pr_provekit_adapter::load_verifier(a[4].as_ref())?)?;
-            fs::copy(&a[4], dir.join(VERIFIER))?;
             fs::write(dir.join("descriptor.json"), serde_json::to_vec_pretty(&d)?)?;
             save(dir, &Chain::default())?;
             let (state, _, _) = pr_state_transition::genesis(&d);

@@ -1,19 +1,38 @@
 {
+  "user_proving": {
+    "claim": "d150be4b2d4ee2ac9521041d712d53706de762874d055dd77a0b7b46e446b36b",
+    "cycles_total": 3145728,
+    "cycles_user": 2873609,
+    "identity_zk_seconds": 30.133556464,
+    "receipt_bytes": 276302,
+    "seal_words": 56683,
+    "segments": 3,
+    "succinct_seconds": 908.421430386,
+    "wall_seconds": 938.6
+  },
+  "verify_standalone": "ok",
   "reject_forged_statement": "Error: rejected: Proof",
-  "reject_corrupt_proof": "Error: rejected: Proof",
-  "submit_seconds": 1.46,
+  "reject_corrupt_receipt": "Error: rejected: Proof",
+  "reject_other_statement_receipt": "Error: rejected: Proof",
+  "submit_seconds": 0.06,
   "reject_resubmission": "Error: rejected: NullifierReserved",
   "reject_missing_funding": "Error: rejected: Rule(FundingInput)",
-  "witness_equals_reference": true,
-  "guest_exec_seconds": 21.5,
+  "receipt_forwarded_unchanged": true,
+  "guest_exec_seconds": 0.4,
   "guest_log": [
-    "image id 552b779f6f59ef31f79acad0a18d86a85a926d392c9c86bd1dce55214f383cb8",
-    "executed: 187701808 cycles, 202 segments, 21.393547931s"
+    "image id 00eb5e479d22dcb2726aea4d9e9354e7a8f8d522f3d2bbd953a890b2bb31e50f",
+    "executed: 14055612 cycles, 15 segments, 362.587723ms"
   ],
   "guest_journal_equals_native": true,
+  "reject_settle_with_other_receipt": "Error: /home/ubuntu/gsr-pr12/build/privacy-rollup-operator/other/receipt.bin: not a receipt of this transaction's statement",
   "reject_after_settlement": "Error: rejected: NullifierSpent",
   "accept_and_rollback": {
     "before": {
+      "anchor": {
+        "batch_number": 0,
+        "commitment_count": 0,
+        "root": "24e3e468cd87d022023f700143173c98bcc1df318608c6373574a837129ae8c6"
+      },
       "backing_sats": 10000,
       "batch_number": 0,
       "commitment_count": 0,
@@ -27,19 +46,29 @@
       ]
     },
     "after": {
+      "anchor": {
+        "batch_number": 1,
+        "commitment_count": 2,
+        "root": "140156364cff05af3c6a386945dec9ea53733d1000aef87597a8553337bf144e"
+      },
       "backing_sats": 29300,
       "batch_number": 1,
       "commitment_count": 2,
       "nullifier_next_index": 3,
       "pending": 0,
       "rollup_id": "181e83faa3916307d316fd28fd792439464ed60145a313fa3b9b5f88354d2779",
-      "state_root": "09c931765c09a4d632a09fbef6e8cc28647a9bef9b7cd53e4d28cfb9eaa70369",
+      "state_root": "c48b5b0a0241ca46b9c4ed5a4874b8549d2a4e48212fa9a317e6e358cd0b47aa",
       "utxo": [
         "0202020202020202020202020202020202020202020202020202020202020202",
         0
       ]
     },
     "restored": {
+      "anchor": {
+        "batch_number": 0,
+        "commitment_count": 0,
+        "root": "24e3e468cd87d022023f700143173c98bcc1df318608c6373574a837129ae8c6"
+      },
       "backing_sats": 10000,
       "batch_number": 0,
       "commitment_count": 0,

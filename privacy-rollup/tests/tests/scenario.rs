@@ -166,8 +166,7 @@ fn deposit_witness(
         tx: pr_protocol_types::RollupTransaction {
             public: js.witness.public,
             external: js.external.clone(),
-            proof_narg: vec![],
-            proof_hints: vec![],
+            receipt: vec![],
         },
         funding,
         arrival: 1,
@@ -290,8 +289,7 @@ fn mempool_admission_rules() {
     let tx = pr_protocol_types::RollupTransaction {
         public: js.witness.public,
         external: js.external.clone(),
-        proof_narg: vec![],
-        proof_hints: vec![],
+        receipt: vec![],
     };
     assert_eq!(h.mempool.submit(tx, funding.clone(), &h.replica, |_| false), Err(MempoolError::Proof));
     h.submit(&js, funding.clone()).unwrap();

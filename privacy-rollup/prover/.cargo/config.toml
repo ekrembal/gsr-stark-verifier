@@ -1,0 +1,4 @@
+# The committed image IDs (methods/guest/src/joinsplit_id.rs, the covenant template) are those of
+# the guests built with the fused BN254 dot4 kernels.
+[env]
+GSR_FUSED_DOT4 = "1"

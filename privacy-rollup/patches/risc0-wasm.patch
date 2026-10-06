@@ -1,0 +1,346 @@
+diff --git a/risc0/build_kernel/src/lib.rs b/risc0/build_kernel/src/lib.rs
+index 0eca9771..bde5bef9 100644
+--- a/risc0/build_kernel/src/lib.rs
++++ b/risc0/build_kernel/src/lib.rs
+@@ -138,7 +138,8 @@ impl KernelBuild {
+ 
+         // It's *highly* recommended to install `sccache` and use this combined with
+         // `RUSTC_WRAPPER=/path/to/sccache` to speed up rebuilds of C++ kernels
+-        cc::Build::new()
++        let mut build = cc::Build::new();
++        build
+             .cpp(true)
+             .debug(false)
+             .files(&self.files)
+@@ -147,8 +148,15 @@ impl KernelBuild {
+             .flag_if_supported("-std=c++17")
+             .flag_if_supported("-fno-var-tracking")
+             .flag_if_supported("-fno-var-tracking-assignments")
+-            .flag_if_supported("-g0")
+-            .compile(output);
++            .flag_if_supported("-g0");
++        if env::var("CARGO_CFG_TARGET_FAMILY").as_deref() == Ok("wasm") {
++            let compat = Path::new(env!("CARGO_MANIFEST_DIR")).join("../sys/cxx/wasm_compat.h");
++            build
++                .flag("-fno-exceptions")
++                .flag("-include")
++                .flag(compat.to_str().unwrap());
++        }
++        build.compile(output);
+     }
+ 
+     fn compile_cuda(&mut self, output: &str) {
+diff --git a/risc0/circuit/rv32im-sys/kernels/cxx/ffi.cpp b/risc0/circuit/rv32im-sys/kernels/cxx/ffi.cpp
+index 3db50f2c..3bcfeb07 100644
+--- a/risc0/circuit/rv32im-sys/kernels/cxx/ffi.cpp
++++ b/risc0/circuit/rv32im-sys/kernels/cxx/ffi.cpp
+@@ -301,9 +301,12 @@ const char* risc0_circuit_rv32im_cpu_witgen(uint32_t mode,
+     }
+   } catch (const std::exception& err) {
+     return strdup(err.what());
+-  } catch (...) {
++  }
++#ifndef __wasm__
++  catch (...) {
+     return strdup("Generic exception");
+   }
++#endif
+   return nullptr;
+ }
+ 
+@@ -359,9 +362,12 @@ const char* risc0_circuit_rv32im_cpu_accum(AccumBuffers* buffers,
+     }
+   } catch (const std::exception& err) {
+     return strdup(err.what());
+-  } catch (...) {
++  }
++#ifndef __wasm__
++  catch (...) {
+     return strdup("Generic exception");
+   }
++#endif
+   return nullptr;
+ }
+ 
+diff --git a/risc0/circuit/rv32im/src/execute/executor.rs b/risc0/circuit/rv32im/src/execute/executor.rs
+index 90e894bd..972c3e11 100644
+--- a/risc0/circuit/rv32im/src/execute/executor.rs
++++ b/risc0/circuit/rv32im/src/execute/executor.rs
+@@ -19,7 +19,6 @@ use std::{
+     io::Read,
+     rc::Rc,
+     sync::mpsc::{sync_channel, SyncSender},
+-    thread::{self, ScopedJoinHandle},
+ };
+ 
+ use anyhow::{bail, Context, Result};
+@@ -130,9 +129,56 @@ struct CreateSegmentRequest {
+     dump_path: Option<std::ffi::OsString>,
+ }
+ 
++#[cfg(not(target_family = "wasm"))]
++use std::thread::{self, ScopedJoinHandle};
++
++#[cfg(target_family = "wasm")]
++use self::sequential as thread;
++#[cfg(target_family = "wasm")]
++use self::sequential::ScopedJoinHandle;
++
+ /// Maximum number of segments we can queue up before we block execution
++#[cfg(not(target_family = "wasm"))]
+ const MAX_OUTSTANDING_SEGMENTS: usize = 5;
+ 
++/// Without threads the segment requests are buffered and turned into segments when the
++/// execution loop joins the (deferred) callback "thread", so the queue must hold them all.
++#[cfg(target_family = "wasm")]
++const MAX_OUTSTANDING_SEGMENTS: usize = 1 << 12;
++
++/// Single-threaded stand-in for `std::thread::scope` on targets without threads: `spawn` defers
++/// the closure and `join` runs it on the calling thread.
++#[cfg(target_family = "wasm")]
++mod sequential {
++    use std::marker::PhantomData;
++
++    pub struct Scope<'scope, 'env: 'scope>(PhantomData<(&'scope mut &'scope (), &'env ())>);
++
++    pub struct ScopedJoinHandle<'scope, T>(Box<dyn FnOnce() -> T + 'scope>);
++
++    impl<'scope, T> ScopedJoinHandle<'scope, T> {
++        pub fn join(self) -> std::thread::Result<T> {
++            Ok((self.0)())
++        }
++    }
++
++    impl<'scope> Scope<'scope, '_> {
++        pub fn spawn<F, T>(&'scope self, f: F) -> ScopedJoinHandle<'scope, T>
++        where
++            F: FnOnce() -> T + 'scope,
++        {
++            ScopedJoinHandle(Box::new(f))
++        }
++    }
++
++    pub fn scope<'env, F, T>(f: F) -> T
++    where
++        F: for<'scope> FnOnce(&'scope Scope<'scope, 'env>) -> T,
++    {
++        f(&Scope(PhantomData))
++    }
++}
++
+ fn create_segments(
+     initial_image: MemoryImage,
+     recv: std::sync::mpsc::Receiver<CreateSegmentRequest>,
+diff --git a/risc0/core/Cargo.toml b/risc0/core/Cargo.toml
+index f85bcaf2..a02cd4db 100644
+--- a/risc0/core/Cargo.toml
++++ b/risc0/core/Cargo.toml
+@@ -11,8 +11,10 @@ repository = { workspace = true }
+ bytemuck = { version = "1.12", features = ["derive"] }
+ rand_core = "0.9.3"
+ 
+-[target.'cfg(not(target_os = "zkvm"))'.dependencies]
++[target.'cfg(not(any(target_os = "zkvm", target_family = "wasm")))'.dependencies]
+ nvtx = { version = "1.3", optional = true }
++
++[target.'cfg(not(target_os = "zkvm"))'.dependencies]
+ puffin = { version = "0.19", optional = true }
+ 
+ [dev-dependencies]
+diff --git a/risc0/core/src/perf.rs b/risc0/core/src/perf.rs
+index 8b266bb3..95671fd1 100644
+--- a/risc0/core/src/perf.rs
++++ b/risc0/core/src/perf.rs
+@@ -26,7 +26,10 @@ impl NvtxRange {
+     #[inline]
+     #[must_use]
+     pub fn new<M: Display>(msg: M) -> Self {
++        #[cfg(not(target_family = "wasm"))]
+         nvtx::__private::_range_push(msg);
++        #[cfg(target_family = "wasm")]
++        let _ = msg;
+         Self
+     }
+ }
+@@ -34,6 +37,7 @@ impl NvtxRange {
+ impl Drop for NvtxRange {
+     #[inline]
+     fn drop(&mut self) {
++        #[cfg(not(target_family = "wasm"))]
+         nvtx::__private::_range_pop();
+     }
+ }
+diff --git a/risc0/sys/cxx/wasm_compat.h b/risc0/sys/cxx/wasm_compat.h
+new file mode 100644
+index 00000000..cbc6eb06
+--- /dev/null
++++ b/risc0/sys/cxx/wasm_compat.h
+@@ -0,0 +1,114 @@
++// Single-threaded, exception-free build support for wasm32-wasip1.
++#pragma once
++
++#if defined(__wasm__)
++
++#define NVTX_DISABLE
++
++#include <algorithm>
++#include <array>
++#include <cassert>
++#include <cstddef>
++#include <cstdint>
++#include <cstdio>
++#include <cstdlib>
++#include <cstring>
++#include <exception>
++#include <functional>
++#include <iomanip>
++#include <iostream>
++#include <iterator>
++#include <map>
++#include <memory>
++#include <numeric>
++#include <queue>
++#include <sstream>
++#include <stdexcept>
++#include <string>
++#include <tuple>
++#include <type_traits>
++#include <utility>
++#include <vector>
++
++#define POOLSTL_HPP
++
++namespace poolstl {
++
++template <typename T> class iota_iter {
++public:
++  using value_type = T;
++  using difference_type = std::ptrdiff_t;
++  using pointer = T*;
++  using reference = T;
++  using iterator_category = std::random_access_iterator_tag;
++
++  iota_iter() : value{} {}
++  explicit iota_iter(T rhs) : value(rhs) {}
++  reference operator*() const { return value; }
++  reference operator[](difference_type rhs) const { return value + rhs; }
++  bool operator==(const iota_iter& rhs) const { return value == rhs.value; }
++  bool operator!=(const iota_iter& rhs) const { return value != rhs.value; }
++  bool operator<(const iota_iter& rhs) const { return value < rhs.value; }
++  iota_iter& operator+=(difference_type rhs) {
++    value += rhs;
++    return *this;
++  }
++  iota_iter& operator++() {
++    ++value;
++    return *this;
++  }
++  iota_iter operator++(int) {
++    iota_iter ret(value);
++    ++value;
++    return ret;
++  }
++  difference_type operator-(const iota_iter& rhs) const { return value - rhs.value; }
++  iota_iter operator+(difference_type rhs) const { return iota_iter(value + rhs); }
++
++private:
++  T value;
++};
++
++struct sequential_par {};
++inline constexpr sequential_par par{};
++
++} // namespace poolstl
++
++namespace std {
++
++template <class It, class F> void for_each(poolstl::sequential_par, It first, It last, F f) {
++  std::for_each(first, last, f);
++}
++
++template <class It> void sort(poolstl::sequential_par, It first, It last) {
++  std::sort(first, last);
++}
++
++template <class It, class Out, class T>
++Out exclusive_scan(poolstl::sequential_par, It first, It last, Out out, T init) {
++  return std::exclusive_scan(first, last, out, init);
++}
++
++} // namespace std
++
++namespace risc0_wasm {
++
++struct Thrower {
++  [[noreturn]] void operator=(const std::exception& err) const {
++    fprintf(stderr, "fatal: %s\n", err.what());
++    abort();
++  }
++};
++
++inline const std::exception& never_caught() {
++  static const std::exception err;
++  return err;
++}
++
++} // namespace risc0_wasm
++
++#define try if (true)
++#define catch(decl) for (decl = ::risc0_wasm::never_caught(); false;)
++#define throw ::risc0_wasm::Thrower{} =
++
++#endif
+diff --git a/risc0/zkvm/src/host/client/prove/mod.rs b/risc0/zkvm/src/host/client/prove/mod.rs
+index cfe87930..49b3c12f 100644
+--- a/risc0/zkvm/src/host/client/prove/mod.rs
++++ b/risc0/zkvm/src/host/client/prove/mod.rs
+@@ -14,6 +14,7 @@
+ 
+ #[cfg(feature = "bonsai")]
+ pub(crate) mod bonsai;
++#[cfg(unix)]
+ pub(crate) mod default;
+ pub(crate) mod external;
+ #[cfg(feature = "prove")]
+@@ -28,7 +29,9 @@ use anyhow::{anyhow, Result};
+ #[cfg(feature = "bonsai")]
+ use self::bonsai::BonsaiProver;
+ 
+-use self::{default::DefaultProver, external::ExternalProver, opts::ProverOpts};
++#[cfg(unix)]
++use self::default::DefaultProver;
++use self::{external::ExternalProver, opts::ProverOpts};
+ 
+ use crate::{
+     get_version, host::prove_info::ProveInfo, ExecutorEnv, Receipt, SessionInfo, VerifierContext,
+@@ -184,6 +187,7 @@ pub fn default_prover() -> Rc<dyn Prover> {
+     let explicit = std::env::var("RISC0_PROVER").unwrap_or_default();
+     if !explicit.is_empty() {
+         return match explicit.to_lowercase().as_str() {
++            #[cfg(unix)]
+             "actor" => Rc::new(DefaultProver::new(get_r0vm_path().unwrap()).unwrap()),
+             #[cfg(feature = "bonsai")]
+             "bonsai" => Rc::new(BonsaiProver::new("bonsai")),
+diff --git a/risc0/zkvm/src/lib.rs b/risc0/zkvm/src/lib.rs
+index 39f6235d..e856b9f3 100644
+--- a/risc0/zkvm/src/lib.rs
++++ b/risc0/zkvm/src/lib.rs
+@@ -118,6 +118,10 @@ pub use self::host::{
+ #[cfg(feature = "bonsai")]
+ pub use self::host::client::prove::bonsai::BonsaiProver;
+ 
++#[cfg(all(not(target_os = "zkvm"), unix))]
++#[cfg(feature = "client")]
++pub use self::host::client::prove::default::DefaultProver;
++
+ #[cfg(not(target_os = "zkvm"))]
+ #[cfg(feature = "client")]
+ pub use {
+@@ -129,7 +133,6 @@ pub use {
+         client::{
+             env::{ExecutorEnv, ExecutorEnvBuilder},
+             prove::{
+-                default::DefaultProver,
+                 default_executor, default_prover,
+                 external::ExternalProver,
+                 opts::{ProverOpts, ReceiptKind},

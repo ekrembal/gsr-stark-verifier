@@ -1,0 +1,15 @@
+[package]
+name = "pr-sdk-wasm"
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+
+# A WASI command over `pr-sdk` (no HTTP client): builds join-split witnesses and proves them.
+# Built for `wasm32-wasip1` by `build.sh`; the benchmark site runs it in a Web Worker.
+[dependencies]
+pr-sdk = { path = "../sdk", default-features = false, features = ["prove"] }
+rand_core = { version = "0.6.4", features = ["getrandom"] }
+serde = "1.0"
+serde_json = "1.0"
+hex = "0.4.3"
+anyhow = "1.0"

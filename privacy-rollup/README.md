@@ -43,7 +43,10 @@ measurements, phase profile, validation results and remaining limits are in
 [Normal-size real segment proving](reports/normal-segment-proving.md) measures actual
 CPU/memory cost; execution improvements do not establish full aggregation feasibility.
 
-Current pipeline (zero-knowledge RISC Zero user receipts; details in [reports/zk-joinsplit.md](reports/zk-joinsplit.md)):
+Current pipeline (zero-knowledge RISC Zero user receipts; details in [reports/zk-joinsplit.md](reports/zk-joinsplit.md)).
+These are the Poseidon2 measurements; with SHA-256 notes the join-split is 148,005 cycles (1 segment) and a
+one-join-split settlement 1,131,300 cycles (2 segments), proven 24× and 11× faster
+([reports/sha256-notes.md](reports/sha256-notes.md)):
 
 | Metric | Value |
 |---|---:|

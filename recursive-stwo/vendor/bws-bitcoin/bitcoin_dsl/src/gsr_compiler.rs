@@ -40,6 +40,20 @@ pub fn push_bytes(out: &mut Vec<u8>, bytes: &[u8]) {
         }
     }
 }
+/// A Bitcoin CompactSize, as OP_MACRO lengths and OP_CALLMACRO indices are encoded.
+fn push_compact(out: &mut Vec<u8>, n: usize) {
+    match n {
+        0..=252 => out.push(n as u8),
+        253..=65535 => {
+            out.push(0xfd);
+            out.extend((n as u16).to_le_bytes());
+        }
+        _ => {
+            out.push(0xfe);
+            out.extend((n as u32).to_le_bytes());
+        }
+    }
+}
 pub fn push_num(out: &mut Vec<u8>, n: usize) {
     let mut bytes = (n as u64).to_le_bytes().to_vec();
     while bytes.last() == Some(&0) {
@@ -263,10 +277,11 @@ fn compile_inner(cs: BitcoinSystemRef, differential: bool) -> Result<Program> {
     let mut functions = vec![];
     let mut ids = BTreeMap::new();
     let mut script = vec![];
+    // Reusable macros: declarations (OP_MACRO <CompactSize length> body) open the script.
     for (id, (body, n)) in candidates.into_iter().enumerate() {
-        push_bytes(&mut script, &body);
-        push_num(&mut script, id);
-        script.push(0xbb);
+        script.push(0xd0);
+        push_compact(&mut script, body.len());
+        script.extend(&body);
         ids.insert(body.clone(), id as u8);
         functions.push((id as u8, body, n));
     }
@@ -274,8 +289,8 @@ fn compile_inner(cs: BitcoinSystemRef, differential: bool) -> Result<Program> {
     for (body, share, trace) in fragments {
         let start = script.len();
         if let Some(id) = if share { ids.get(&body) } else { None } {
-            push_num(&mut script, *id as usize);
-            script.push(0xbc);
+            // OP_CALLMACRO <CompactSize index>; at most 128 declarations, so the index is one byte.
+            script.extend([0xd1, *id]);
         } else {
             script.extend(body);
         }

@@ -35,8 +35,7 @@ def limits(bundle: dict, execution: dict) -> dict:
     return {
         "standard_weight": execution["transaction_weight"] <= 400000,
         "varops": execution["varops"] <= execution["budget"],
-        "invoked_body_bytes": execution["invoked_body_bytes"] <= 4000000,
-        "function_ids": len(bundle["info"]["functions"]) <= 256,
+        "unrolled_bytes": execution["unrolled_bytes"] <= 4000000,
         "stack_entries": execution["peak_entries"] <= 32768,
         "live_payload": execution["peak_payload_bytes"] <= 8000000,
         "single_element": execution["peak_element_bytes"] <= 4000000,
@@ -50,7 +49,7 @@ def main() -> None:
     execution = meter(bundle)
     checks = limits(bundle, execution)
     keys = ("ok", "error", "transaction_weight", "budget", "varops", "sha256_calls", "sha256_input_bytes",
-            "function_calls", "invoked_body_bytes", "peak_entries", "peak_payload_bytes", "peak_element_bytes")
+            "macro_references", "unrolled_bytes", "peak_entries", "peak_payload_bytes", "peak_element_bytes")
     report = {"script_bytes": len(bytes.fromhex(bundle["script"])),
               "witness_items": len(bundle["witness"]),
               "witness_payload_bytes": sum(len(bytes.fromhex(w)) for w in bundle["witness"]),

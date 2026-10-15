@@ -227,14 +227,14 @@ def main() -> None:
     shutil.rmtree(WORK, ignore_errors=True)
     DATADIR.mkdir(parents=True)
     subprocess.run([str(BITCOIN / "bitcoind"), "-regtest", f"-datadir={DATADIR}", "-daemonwait", "-server",
-                    "-listen=0", f"-rpcport={PORT}", f"-port={PORT + 1}", "-vbparams=script_restoration:0:3999999999"],
+                    "-listen=0", f"-rpcport={PORT}", f"-port={PORT + 1}", "-vbparams=tapleaf_0xc2:0:3999999999"],
                    check=True)
     report: dict = {}
     try:
         miner = script_to_p2wsh(OP_TRUE)
         first = rpc("generatetoaddress", 1, miner)[0]
         rpc("generatetoaddress", 100, miner)
-        while rpc("getdeploymentinfo")["deployments"]["script_restoration"]["bip9"]["status"] != "active":
+        while rpc("getdeploymentinfo")["deployments"]["tapleaf_0xc2"]["bip9"]["status"] != "active":
             rpc("generatetoaddress", 144, miner)
         coinbase = rpc("getblock", first, 2)["tx"][0]
         nonce = {"txid": list(bytes.fromhex(internal(coinbase["txid"]))), "vout": 0}
@@ -281,7 +281,7 @@ def main() -> None:
                      "prove": json.loads((b.out / "proof/stats.json").read_text()),
                      "txid": tx.txid_hex, "weight": tx.get_weight(),
                      "annex_bytes": len(b.annex), "varops": e["varops"], "budget": e["budget"],
-                     "invoked_body_bytes": e["invoked_body_bytes"], "peak_entries": e["peak_entries"],
+                     "unrolled_bytes": e["unrolled_bytes"], "peak_entries": e["peak_entries"],
                      "limits": limits, "standard_policy": rpc("testmempoolaccept", [raw])[0]}
             if k == 2:
                 # Cadence: settlement 2 cannot be mined in the block that confirms settlement 1.

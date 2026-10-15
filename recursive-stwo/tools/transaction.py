@@ -18,7 +18,8 @@ def meter_request(bundle,tx=None,spent_value=5_000_000_000):
     else:_,taproot,_=build(bundle)
     # Exact size is known before funding. Core independently recomputes weight
     # and eligibility from the complete serialized transaction and spent output.
-    out={**bundle,'budget':tx.get_weight()*10000,'transaction_hex':tx.serialize().hex(),
+    # BIP 440 deducts one signature check (500,000) for the leaf's commitment check.
+    out={**bundle,'budget':tx.get_weight()*10000-500_000,'transaction_hex':tx.serialize().hex(),
          'spent_outputs':[{'value':spent_value,'script_pub_key':taproot.scriptPubKey.hex()}]}
     spans=bundle.get('spans',[])
     out['stage_script_ends']=[max((end for _,end,t in spans if t<cutoff),default=0)for cutoff in bundle.get('stage_trace_ends',[])]

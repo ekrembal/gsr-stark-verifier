@@ -23,7 +23,7 @@ def digest(path):
 def main():
     pr = Path(__file__).resolve().parents[1]
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("inputs", type=Path, help="directory containing vk.pc, proof0.pc, witness.json")
+    parser.add_argument("inputs", type=Path, help="directory containing proof0.pc and witness.json (plus vk.pc for --kind verify)")
     parser.add_argument("--label", required=True)
     parser.add_argument("--runs", type=int, default=3)
     parser.add_argument("--kind", choices=["verify", "batch"], default="verify")
@@ -45,7 +45,7 @@ def main():
     inputs = args.inputs.resolve()
     binary = (args.binary or pr / "prover/target/release" / ("exec_joinsplit" if args.kind == "verify" else "settle")).resolve()
     hashes = {name: {"bytes": (inputs / name).stat().st_size, "sha256": digest(inputs / name)}
-              for name in ["vk.pc", "proof0.pc", "witness.json"]}
+              for name in (["vk.pc"] if args.kind == "verify" else []) + ["proof0.pc", "witness.json"]}
     runs = []
     for i in range(args.runs):
         stem = args.out / f"{args.label}-{args.kind}-{i}"
@@ -54,7 +54,7 @@ def main():
             if args.program:
                 cmd.append(str(args.program.resolve()))
         else:
-            cmd = [str(binary), "exec", str(inputs / "witness.json"), str(stem) + "-journal", str(inputs / "vk.pc"), str(inputs / "proof0.pc")]
+            cmd = [str(binary), "exec", str(inputs / "witness.json"), str(stem) + "-journal", str(inputs / "proof0.pc")]
         timed = [time_binary, "-v", "-o", str(stem) + ".time", *cmd]
         result = subprocess.run(timed, capture_output=True, text=True, timeout=900)
         log = result.stdout + result.stderr

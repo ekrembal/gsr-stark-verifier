@@ -46,7 +46,7 @@ fn main() -> Result<()> {
             ensure!(count > 0 && count <= 4, "capture at most four segments per bounded experiment");
             let end = first.checked_add(count).context("segment range overflow")?;
             let po2: u32 = a[7].parse()?;
-            ensure!((15..=20).contains(&po2), "bounded segment po2 must be 15..20");
+            ensure!((15..=22).contains(&po2), "bounded segment po2 must be 15..22");
             let mut env = ExecutorEnv::builder();
             env.segment_limit_po2(po2).session_limit(Some(2_000_000_000));
             for f in &a[8..] {

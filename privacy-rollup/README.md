@@ -25,7 +25,7 @@ ProveKit join-split proofs (Noir, WHIR over BN254, hash-only)
 | ProveKit join-split circuit | Implemented; proofs generated and verified natively and inside the guest |
 | `apply_batch` guest | Implemented; journal equals the native transition byte for byte |
 | Empty / anchor-only batches | **Proven** (succinct receipt) and settled consecutively on activated regtest |
-| Batches containing join-splits | **Full proving in progress; no complete receipt yet**: optional optimized guest executes the frozen batch in 191.12M cycles / 208 segments. Same-segment CPU proving improves from 411.34 s to 140.44 s; see the current review. |
+| Batches containing join-splits | **Proven** (padded succinct receipt, image `552b779f…3cb8`): the frozen one-JoinSplit batch, 98 po2=21 segments, 4.53 h on one 8-vCPU AVX-512 machine; native, Python-reference and Script checks pass. See [reports/prover-speedups.md](reports/prover-speedups.md). Not yet settled on regtest (placeholder scripts in the frozen batch). |
 | Covenant (`OP_TX` binding, successor leaf, `1 CSV`) | Implemented, metered, mined on regtest; altered spends rejected |
 | Relay | Consensus-valid; **nonstandard** under the pinned node's policy (annex) |
 
@@ -84,6 +84,13 @@ Dependencies are path dependencies on two sibling checkouts of the repository di
   then the cumulative [`patches/provekit-structured.patch`](patches/provekit-structured.patch)
   with `git apply --unidiff-zero`. The last patch includes the hash-bound compiled
   configuration and exact matrix specialization; it is required by the current guest.
+* Optional host-prover speedups (no circuit, verifier or covenant change): after the RISC Zero patch apply
+  `patches/risc0-cpu-profile.patch`, `risc0-cpu-batch.patch`, `risc0-cpu-periodic.patch`,
+  `risc0-cpu-poly-batch.patch`, then [`patches/risc0-cpu-avx512.patch`](patches/risc0-cpu-avx512.patch)
+  (16-lane AVX-512 evaluation, packed recursion circuit, exact NTT/`zk_shift`); ProveKit additionally takes
+  [`patches/provekit-dot4.patch`](patches/provekit-dot4.patch) and
+  [`patches/provekit-final-claim.patch`](patches/provekit-final-claim.patch). See
+  [reports/prover-speedups.md](reports/prover-speedups.md).
 * WHIR remains version 0.2.0; the vendored published source has the local
   [`patches/whir-blinding.patch`](patches/whir-blinding.patch) algorithmic optimization. Its original
   archive checksum and necessary same-version lockfile source deviation are documented in the review report.

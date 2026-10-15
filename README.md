@@ -52,7 +52,9 @@ Privacy rollup (empty batch settlement, mined with `generateblock` because annex
 | Varops | ~2,095,500,000 (53.8%) | ≤ 3,892,400,000 |
 | Rollup leaf script | 159,229 bytes | Included in weight |
 | Join-split circuit | 38,819 R1CS constraints | |
-| Guest cycles, one join-split (executed, not proven) | 1,215,383,914 (1,276 segments) | |
+| Guest cycles, one join-split (original guest, executed only) | 1,215,383,914 (1,276 segments) | |
+| Guest cycles, one join-split (optimized guest `552b779f…`) | 205,520,896 total / 187,344,079 user (98 po2=21 segments) | |
+| Full join-split receipt, CPU proving (measured, one 8-vCPU AVX-512 host) | 4.53 h wall, 18.5 GiB peak RSS; receipt passes native, reference and Script (388,398 WU) checks | |
 
 For Recursive Stwo, the current milestone uses the original `hybrid_hash.bin` and `bitcoin_proof.bin` fixtures and retains Poseidon in the offchain recursion pipeline. New application proofs, other proof shapes, and SHA-256 throughout recursion remain follow-up work. Research notes elsewhere in this repository do not represent additional implemented verifiers.
 

@@ -1,0 +1,644 @@
+{
+ "machine": "Intel Xeon Platinum 8375C, 8 vCPU, AVX-512 (f/bw/dq/vl/ifma/vnni), 31 GiB RAM",
+ "rayon_threads": 8,
+ "sequential": true,
+ "note": "Selected segments of the same apply_batch execution (indices 5/6 at po2=20; one segment at po2=21/22). Selected-segment timings, not a complete proof. cpu op times are nanosecond profile counters summed per op name.",
+ "runs": [
+  {
+   "label": "A-join",
+   "configuration": {
+    "hash_lanes": 8,
+    "poly_lanes": 8,
+    "fast_ntt": false,
+    "recursion_batch": false
+   },
+   "po2": 20,
+   "command": [
+    "join",
+    "5",
+    "6"
+   ],
+   "exit_code": 0,
+   "stopped_by": null,
+   "supervisor_seconds": 14.911,
+   "sampled_peak_group_rss_kib": 1474860,
+   "result": {
+    "operation": "join",
+    "real_local_proof": true,
+    "result": {
+     "integrity_verified": true,
+     "seal_bytes": 222668
+    },
+    "seconds": 14.894898365
+   },
+   "top_cpu_ops_seconds": {
+    "hash_rows": 3.767,
+    "recursion_eval_check": 3.56,
+    "batch_expand_into_evaluate_ntt": 1.674,
+    "batch_evaluate_any": 1.61,
+    "hash_fold": 1.279,
+    "zk_shift": 0.48,
+    "batch_interpolate_ntt": 0.465,
+    "alloc_elem": 0.459
+   }
+  },
+  {
+   "label": "A-lift-5",
+   "configuration": {
+    "hash_lanes": 8,
+    "poly_lanes": 8,
+    "fast_ntt": false,
+    "recursion_batch": false
+   },
+   "po2": 20,
+   "command": [
+    "lift",
+    "5"
+   ],
+   "exit_code": 0,
+   "stopped_by": null,
+   "supervisor_seconds": 14.911,
+   "sampled_peak_group_rss_kib": 1449452,
+   "result": {
+    "operation": "lift",
+    "real_local_proof": true,
+    "result": {
+     "index": 5,
+     "integrity_verified": true,
+     "seal_bytes": 222668
+    },
+    "seconds": 14.790153936
+   },
+   "top_cpu_ops_seconds": {
+    "hash_rows": 3.868,
+    "recursion_eval_check": 3.554,
+    "batch_expand_into_evaluate_ntt": 1.711,
+    "batch_evaluate_any": 1.604,
+    "hash_fold": 1.247,
+    "zk_shift": 0.493,
+    "alloc_elem": 0.471,
+    "batch_interpolate_ntt": 0.456
+   }
+  },
+  {
+   "label": "A-lift-6",
+   "configuration": {
+    "hash_lanes": 8,
+    "poly_lanes": 8,
+    "fast_ntt": false,
+    "recursion_batch": false
+   },
+   "po2": 20,
+   "command": [
+    "lift",
+    "6"
+   ],
+   "exit_code": 0,
+   "stopped_by": null,
+   "supervisor_seconds": 14.911,
+   "sampled_peak_group_rss_kib": 1453048,
+   "result": {
+    "operation": "lift",
+    "real_local_proof": true,
+    "result": {
+     "index": 6,
+     "integrity_verified": true,
+     "seal_bytes": 222668
+    },
+    "seconds": 14.65814033
+   },
+   "top_cpu_ops_seconds": {
+    "hash_rows": 3.787,
+    "recursion_eval_check": 3.472,
+    "batch_expand_into_evaluate_ntt": 1.685,
+    "batch_evaluate_any": 1.675,
+    "hash_fold": 1.278,
+    "alloc_elem": 0.474,
+    "zk_shift": 0.473,
+    "batch_interpolate_ntt": 0.451
+   }
+  },
+  {
+   "label": "A-prove-5",
+   "configuration": {
+    "hash_lanes": 8,
+    "poly_lanes": 8,
+    "fast_ntt": false,
+    "recursion_batch": false
+   },
+   "po2": 20,
+   "command": [
+    "prove",
+    "5"
+   ],
+   "exit_code": 0,
+   "stopped_by": null,
+   "supervisor_seconds": 117.354,
+   "sampled_peak_group_rss_kib": 9619156,
+   "result": {
+    "operation": "prove",
+    "real_local_proof": true,
+    "result": {
+     "index": 5,
+     "integrity_verified": true,
+     "po2": 20,
+     "seal_bytes": 281128
+    },
+    "seconds": 117.266702699
+   },
+   "top_cpu_ops_seconds": {
+    "circuit_eval_check": 42.512,
+    "hash_rows": 29.146,
+    "batch_expand_into_evaluate_ntt": 13.616,
+    "batch_evaluate_any": 8.193,
+    "hash_fold": 5.09,
+    "zk_shift": 4.251,
+    "batch_interpolate_ntt": 3.573,
+    "alloc_elem": 3.411
+   }
+  },
+  {
+   "label": "A-prove-6",
+   "configuration": {
+    "hash_lanes": 8,
+    "poly_lanes": 8,
+    "fast_ntt": false,
+    "recursion_batch": false
+   },
+   "po2": 20,
+   "command": [
+    "prove",
+    "6"
+   ],
+   "exit_code": 0,
+   "stopped_by": null,
+   "supervisor_seconds": 116.055,
+   "sampled_peak_group_rss_kib": 9614300,
+   "result": {
+    "operation": "prove",
+    "real_local_proof": true,
+    "result": {
+     "index": 6,
+     "integrity_verified": true,
+     "po2": 20,
+     "seal_bytes": 281128
+    },
+    "seconds": 116.030860366
+   },
+   "top_cpu_ops_seconds": {
+    "circuit_eval_check": 41.481,
+    "hash_rows": 29.067,
+    "batch_expand_into_evaluate_ntt": 13.586,
+    "batch_evaluate_any": 8.158,
+    "hash_fold": 5.037,
+    "zk_shift": 4.249,
+    "batch_interpolate_ntt": 3.546,
+    "alloc_elem": 3.423
+   }
+  },
+  {
+   "label": "B-lift-5",
+   "configuration": {
+    "hash_lanes": 16,
+    "poly_lanes": 16,
+    "fast_ntt": false,
+    "recursion_batch": false
+   },
+   "po2": 20,
+   "command": [
+    "lift",
+    "5"
+   ],
+   "exit_code": 0,
+   "stopped_by": null,
+   "supervisor_seconds": 11.888,
+   "sampled_peak_group_rss_kib": 1453316,
+   "result": {
+    "operation": "lift",
+    "real_local_proof": true,
+    "result": {
+     "index": 5,
+     "integrity_verified": true,
+     "seal_bytes": 222668
+    },
+    "seconds": 11.86677756
+   },
+   "top_cpu_ops_seconds": {
+    "recursion_eval_check": 3.491,
+    "hash_rows": 1.785,
+    "batch_expand_into_evaluate_ntt": 1.657,
+    "batch_evaluate_any": 1.567,
+    "hash_fold": 0.566,
+    "zk_shift": 0.486,
+    "batch_interpolate_ntt": 0.475,
+    "alloc_elem": 0.462
+   }
+  },
+  {
+   "label": "B-prove-5",
+   "configuration": {
+    "hash_lanes": 16,
+    "poly_lanes": 16,
+    "fast_ntt": false,
+    "recursion_batch": false
+   },
+   "po2": 20,
+   "command": [
+    "prove",
+    "5"
+   ],
+   "exit_code": 0,
+   "stopped_by": null,
+   "supervisor_seconds": 96.386,
+   "sampled_peak_group_rss_kib": 9647672,
+   "result": {
+    "operation": "prove",
+    "real_local_proof": true,
+    "result": {
+     "index": 5,
+     "integrity_verified": true,
+     "po2": 20,
+     "seal_bytes": 281128
+    },
+    "seconds": 96.368343842
+   },
+   "top_cpu_ops_seconds": {
+    "circuit_eval_check": 40.206,
+    "hash_rows": 13.602,
+    "batch_expand_into_evaluate_ntt": 13.476,
+    "batch_evaluate_any": 8.02,
+    "zk_shift": 4.26,
+    "batch_interpolate_ntt": 3.568,
+    "alloc_elem": 3.389,
+    "mix_poly_coeffs": 2.876
+   }
+  },
+  {
+   "label": "C-lift-5",
+   "configuration": {
+    "hash_lanes": 16,
+    "poly_lanes": 16,
+    "fast_ntt": true,
+    "recursion_batch": false
+   },
+   "po2": 20,
+   "command": [
+    "lift",
+    "5"
+   ],
+   "exit_code": 0,
+   "stopped_by": null,
+   "supervisor_seconds": 9.863,
+   "sampled_peak_group_rss_kib": 1450460,
+   "result": {
+    "operation": "lift",
+    "real_local_proof": true,
+    "result": {
+     "index": 5,
+     "integrity_verified": true,
+     "seal_bytes": 222668
+    },
+    "seconds": 9.673985666
+   },
+   "top_cpu_ops_seconds": {
+    "recursion_eval_check": 3.531,
+    "hash_rows": 1.833,
+    "batch_evaluate_any": 1.585,
+    "hash_fold": 0.589,
+    "alloc_elem": 0.474,
+    "mix_poly_coeffs": 0.384,
+    "batch_expand_into_evaluate_ntt": 0.21,
+    "alloc_digest": 0.106
+   }
+  },
+  {
+   "label": "C-prove-5",
+   "configuration": {
+    "hash_lanes": 16,
+    "poly_lanes": 16,
+    "fast_ntt": true,
+    "recursion_batch": false
+   },
+   "po2": 20,
+   "command": [
+    "prove",
+    "5"
+   ],
+   "exit_code": 0,
+   "stopped_by": null,
+   "supervisor_seconds": 77.646,
+   "sampled_peak_group_rss_kib": 9678540,
+   "result": {
+    "operation": "prove",
+    "real_local_proof": true,
+    "result": {
+     "index": 5,
+     "integrity_verified": true,
+     "po2": 20,
+     "seal_bytes": 281128
+    },
+    "seconds": 77.45579144
+   },
+   "top_cpu_ops_seconds": {
+    "circuit_eval_check": 40.419,
+    "hash_rows": 13.522,
+    "batch_evaluate_any": 8.156,
+    "alloc_elem": 3.377,
+    "mix_poly_coeffs": 2.875,
+    "hash_fold": 2.367,
+    "batch_expand_into_evaluate_ntt": 1.543,
+    "batch_interpolate_ntt": 0.417
+   }
+  },
+  {
+   "label": "D-join",
+   "configuration": {
+    "hash_lanes": 16,
+    "poly_lanes": 16,
+    "fast_ntt": true,
+    "recursion_batch": true
+   },
+   "po2": 20,
+   "command": [
+    "join",
+    "5",
+    "6"
+   ],
+   "exit_code": 0,
+   "stopped_by": null,
+   "supervisor_seconds": 8.345,
+   "sampled_peak_group_rss_kib": 1469528,
+   "result": {
+    "operation": "join",
+    "real_local_proof": true,
+    "result": {
+     "integrity_verified": true,
+     "seal_bytes": 222668
+    },
+    "seconds": 8.177121933
+   },
+   "top_cpu_ops_seconds": {
+    "hash_rows": 1.872,
+    "recursion_eval_check": 1.753,
+    "batch_evaluate_any": 1.579,
+    "hash_fold": 0.635,
+    "alloc_elem": 0.473,
+    "mix_poly_coeffs": 0.389,
+    "batch_expand_into_evaluate_ntt": 0.193,
+    "alloc_digest": 0.102
+   }
+  },
+  {
+   "label": "D-lift-5",
+   "configuration": {
+    "hash_lanes": 16,
+    "poly_lanes": 16,
+    "fast_ntt": true,
+    "recursion_batch": true
+   },
+   "po2": 20,
+   "command": [
+    "lift",
+    "5"
+   ],
+   "exit_code": 0,
+   "stopped_by": null,
+   "supervisor_seconds": 8.087,
+   "sampled_peak_group_rss_kib": 1447428,
+   "result": {
+    "operation": "lift",
+    "real_local_proof": true,
+    "result": {
+     "index": 5,
+     "integrity_verified": true,
+     "seal_bytes": 222668
+    },
+    "seconds": 7.958660527
+   },
+   "top_cpu_ops_seconds": {
+    "hash_rows": 1.808,
+    "recursion_eval_check": 1.77,
+    "batch_evaluate_any": 1.622,
+    "hash_fold": 0.617,
+    "alloc_elem": 0.474,
+    "mix_poly_coeffs": 0.378,
+    "batch_expand_into_evaluate_ntt": 0.213,
+    "alloc_digest": 0.106
+   }
+  },
+  {
+   "label": "D-lift-6",
+   "configuration": {
+    "hash_lanes": 16,
+    "poly_lanes": 16,
+    "fast_ntt": true,
+    "recursion_batch": true
+   },
+   "po2": 20,
+   "command": [
+    "lift",
+    "6"
+   ],
+   "exit_code": 0,
+   "stopped_by": null,
+   "supervisor_seconds": 8.089,
+   "sampled_peak_group_rss_kib": 1447472,
+   "result": {
+    "operation": "lift",
+    "real_local_proof": true,
+    "result": {
+     "index": 6,
+     "integrity_verified": true,
+     "seal_bytes": 222668
+    },
+    "seconds": 7.935634569
+   },
+   "top_cpu_ops_seconds": {
+    "hash_rows": 1.877,
+    "recursion_eval_check": 1.739,
+    "batch_evaluate_any": 1.597,
+    "hash_fold": 0.591,
+    "alloc_elem": 0.474,
+    "mix_poly_coeffs": 0.383,
+    "batch_expand_into_evaluate_ntt": 0.194,
+    "alloc_digest": 0.111
+   }
+  },
+  {
+   "label": "D-prove-5",
+   "configuration": {
+    "hash_lanes": 16,
+    "poly_lanes": 16,
+    "fast_ntt": true,
+    "recursion_batch": true
+   },
+   "po2": 20,
+   "command": [
+    "prove",
+    "5"
+   ],
+   "exit_code": 0,
+   "stopped_by": null,
+   "supervisor_seconds": 78.657,
+   "sampled_peak_group_rss_kib": 9678364,
+   "result": {
+    "operation": "prove",
+    "real_local_proof": true,
+    "result": {
+     "index": 5,
+     "integrity_verified": true,
+     "po2": 20,
+     "seal_bytes": 281128
+    },
+    "seconds": 78.582144116
+   },
+   "top_cpu_ops_seconds": {
+    "circuit_eval_check": 40.822,
+    "hash_rows": 13.81,
+    "batch_evaluate_any": 8.382,
+    "alloc_elem": 3.405,
+    "mix_poly_coeffs": 2.87,
+    "hash_fold": 2.476,
+    "batch_expand_into_evaluate_ntt": 1.59,
+    "batch_interpolate_ntt": 0.443
+   }
+  },
+  {
+   "label": "D-prove-6",
+   "configuration": {
+    "hash_lanes": 16,
+    "poly_lanes": 16,
+    "fast_ntt": true,
+    "recursion_batch": true
+   },
+   "po2": 20,
+   "command": [
+    "prove",
+    "6"
+   ],
+   "exit_code": 0,
+   "stopped_by": null,
+   "supervisor_seconds": 79.936,
+   "sampled_peak_group_rss_kib": 9677792,
+   "result": {
+    "operation": "prove",
+    "real_local_proof": true,
+    "result": {
+     "index": 6,
+     "integrity_verified": true,
+     "po2": 20,
+     "seal_bytes": 281128
+    },
+    "seconds": 79.758890284
+   },
+   "top_cpu_ops_seconds": {
+    "circuit_eval_check": 41.843,
+    "hash_rows": 14.435,
+    "batch_evaluate_any": 7.958,
+    "alloc_elem": 3.389,
+    "mix_poly_coeffs": 2.862,
+    "hash_fold": 2.485,
+    "batch_expand_into_evaluate_ntt": 1.551,
+    "batch_interpolate_ntt": 0.444
+   }
+  },
+  {
+   "label": "D21-lift",
+   "configuration": {
+    "hash_lanes": 16,
+    "poly_lanes": 16,
+    "fast_ntt": true,
+    "recursion_batch": true
+   },
+   "po2": 21,
+   "command": [
+    "lift",
+    "2"
+   ],
+   "exit_code": 0,
+   "stopped_by": null,
+   "supervisor_seconds": 8.091,
+   "sampled_peak_group_rss_kib": 1472712,
+   "result": {
+    "operation": "lift",
+    "real_local_proof": true,
+    "result": {
+     "index": 2,
+     "integrity_verified": true,
+     "seal_bytes": 222668
+    },
+    "seconds": 8.059436615
+   },
+   "top_cpu_ops_seconds": {
+    "hash_rows": 1.873,
+    "recursion_eval_check": 1.743,
+    "batch_evaluate_any": 1.596,
+    "hash_fold": 0.706,
+    "alloc_elem": 0.459,
+    "mix_poly_coeffs": 0.382,
+    "batch_expand_into_evaluate_ntt": 0.219,
+    "alloc_digest": 0.102
+   }
+  },
+  {
+   "label": "D21-prove",
+   "configuration": {
+    "hash_lanes": 16,
+    "poly_lanes": 16,
+    "fast_ntt": true,
+    "recursion_batch": true
+   },
+   "po2": 21,
+   "command": [
+    "prove",
+    "2"
+   ],
+   "exit_code": 0,
+   "stopped_by": null,
+   "supervisor_seconds": 161.375,
+   "sampled_peak_group_rss_kib": 19302968,
+   "result": {
+    "operation": "prove",
+    "real_local_proof": true,
+    "result": {
+     "index": 2,
+     "integrity_verified": true,
+     "po2": 21,
+     "seal_bytes": 305768
+    },
+    "seconds": 161.140293773
+   },
+   "top_cpu_ops_seconds": {
+    "circuit_eval_check": 84.747,
+    "hash_rows": 29.153,
+    "batch_evaluate_any": 16.039,
+    "alloc_elem": 6.78,
+    "mix_poly_coeffs": 5.756,
+    "hash_fold": 4.823,
+    "batch_expand_into_evaluate_ntt": 3.326,
+    "batch_interpolate_ntt": 0.92
+   }
+  },
+  {
+   "label": "D22-prove",
+   "configuration": {
+    "hash_lanes": 16,
+    "poly_lanes": 16,
+    "fast_ntt": true,
+    "recursion_batch": true
+   },
+   "po2": 22,
+   "command": [
+    "prove",
+    "cD22",
+    "1"
+   ],
+   "exit_code": null,
+   "stopped_by": "kernel OOM killer",
+   "supervisor_seconds": null,
+   "sampled_peak_group_rss_kib": null,
+   "result": null,
+   "kernel_log": "Out of memory: Killed process (pcb16) total-vm:35173288kB, anon-rss:27576840kB"
+  }
+ ]
+}

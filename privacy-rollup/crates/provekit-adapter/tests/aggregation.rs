@@ -136,3 +136,44 @@ fn real_proof_acceptance_and_rejection_regressions() {
         fixed.verify_ref(&proof).unwrap();
     }
 }
+
+fn rebuild_r1cs(source: &R1CS, delta: FieldElement) -> R1CS {
+    let mut r1cs = R1CS::new();
+    r1cs.num_public_inputs = source.num_public_inputs;
+    r1cs.add_witnesses(source.num_witnesses());
+    let terms = |matrix: &provekit_common::sparse_matrix::SparseMatrix, row| -> Vec<(FieldElement, usize)> {
+        matrix.iter_row(row).map(|(col, value)| (source.interner.get(value).unwrap(), col)).collect()
+    };
+    let mut changed = false;
+    for row in 0..source.num_constraints() {
+        let mut a = terms(&source.a, row);
+        if !changed && !a.is_empty() {
+            a[0].0 += delta;
+            changed = true;
+        }
+        r1cs.add_constraint(&a, &terms(&source.b, row), &terms(&source.c, row));
+    }
+    r1cs
+}
+
+#[test]
+fn proof_is_bound_to_the_r1cs_matrices() {
+    use pr_tests::{coin, Harness, Wallet};
+    use pr_wallet_core::SpendInput;
+    let h = Harness::new();
+    let alice = Wallet::new(2);
+    let funding = vec![coin(0x42, 20000)];
+    let builder = h.deposit_builder(700, &funding, 20000, None);
+    let js = h.build(&builder, [SpendInput::Dummy, SpendInput::Dummy], [alice.pay(19300), alice.pay(0)]);
+    let proof = pr_provekit_adapter::prove(
+        pr_provekit_adapter::load_prover(&fixture("joinsplit.pkp")).unwrap(),
+        &js.witness.prover_toml(),
+        &js.witness.public,
+    )
+    .unwrap();
+    let mut verifier = pr_provekit_adapter::load_verifier(&fixture("joinsplit.pkv")).unwrap();
+    verifier.r1cs = rebuild_r1cs(&verifier.r1cs, FieldElement::from(0u64));
+    verifier.verify_ref(&proof).unwrap();
+    verifier.r1cs = rebuild_r1cs(&verifier.r1cs, FieldElement::from(1u64));
+    assert!(verifier.verify_ref(&proof).is_err());
+}

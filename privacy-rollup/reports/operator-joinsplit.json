@@ -1,14 +1,14 @@
 {
   "reject_forged_statement": "Error: rejected: Proof",
   "reject_corrupt_proof": "Error: rejected: Proof",
-  "submit_seconds": 0.09,
+  "submit_seconds": 1.46,
   "reject_resubmission": "Error: rejected: NullifierReserved",
   "reject_missing_funding": "Error: rejected: Rule(FundingInput)",
   "witness_equals_reference": true,
-  "guest_exec_seconds": 47.8,
+  "guest_exec_seconds": 21.5,
   "guest_log": [
-    "image id a55fa2f95eb766642b9bd933c834775aa90e71dd8054b129107eea7030cbf761",
-    "executed: 1215383914 cycles, 1276 segments, 47.80756625s"
+    "image id 552b779f6f59ef31f79acad0a18d86a85a926d392c9c86bd1dce55214f383cb8",
+    "executed: 187701808 cycles, 202 segments, 21.393547931s"
   ],
   "guest_journal_equals_native": true,
   "reject_after_settlement": "Error: rejected: NullifierSpent",
@@ -33,7 +33,7 @@
       "nullifier_next_index": 3,
       "pending": 0,
       "rollup_id": "181e83faa3916307d316fd28fd792439464ed60145a313fa3b9b5f88354d2779",
-      "state_root": "a97383d86022667d1a5185b55ae609774684e680e537ca90dee01adbb4e28f41",
+      "state_root": "09c931765c09a4d632a09fbef6e8cc28647a9bef9b7cd53e4d28cfb9eaa70369",
       "utxo": [
         "0202020202020202020202020202020202020202020202020202020202020202",
         0

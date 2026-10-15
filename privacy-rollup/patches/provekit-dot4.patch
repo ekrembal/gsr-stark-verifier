@@ -1,0 +1,203 @@
+diff --git a/Cargo.lock b/Cargo.lock
+index ff483ab..877f9a6 100644
+--- a/Cargo.lock
++++ b/Cargo.lock
+@@ -4092,9 +4092,11 @@ version = "1.0.2"
+ dependencies = [
+  "anyhow",
+  "ark-std 0.6.0",
++ "postcard",
+  "provekit-common",
+  "provekit-whir",
+  "rayon",
++ "sha2 0.10.9",
+  "tracing",
+ ]
+ 
+diff --git a/provekit/common/Cargo.toml b/provekit/common/Cargo.toml
+index 563bbf2..04bb2f4 100644
+--- a/provekit/common/Cargo.toml
++++ b/provekit/common/Cargo.toml
+@@ -9,6 +9,10 @@ license.workspace = true
+ homepage.workspace = true
+ repository.workspace = true
+ 
++[features]
++# Evaluate the Poseidon2 linear layers as explicit 4-term dot products.
++linear-dot4 = []
++
+ [dependencies]
+ # Workspace crates
+ # skyscraper.workspace = true
+diff --git a/provekit/common/src/utils/structured_matrix.rs b/provekit/common/src/utils/structured_matrix.rs
+index dcec964..a21d5af 100644
+--- a/provekit/common/src/utils/structured_matrix.rs
++++ b/provekit/common/src/utils/structured_matrix.rs
+@@ -172,6 +172,7 @@ fn reverse_blocks(eq: &[FieldElement], mut out: [Vec<FieldElement>; 3]) -> [Vec<
+ }
+ 
+ /// Forward external linear map; this never evaluates a nonlinear S-box.
++#[cfg_attr(feature = "linear-dot4", allow(dead_code))]
+ fn external_forward([a, b, c, d]: [FieldElement; 4]) -> [FieldElement; 4] {
+     let u = a + b;
+     let v = c + d;
+@@ -184,6 +185,63 @@ fn external_forward([a, b, c, d]: [FieldElement; 4]) -> [FieldElement; 4] {
+     [p + a + b + (d + d), p, q + (b + b) + c + d, q]
+ }
+ 
++/// Integer entries of the compiler's exact external 4x4 matrix.
++#[cfg_attr(not(any(test, feature = "linear-dot4")), allow(dead_code))]
++const EXTERNAL: [[u64; 4]; 4] = [[5, 7, 1, 3], [4, 6, 1, 1], [1, 3, 5, 7], [1, 1, 4, 6]];
++
++/// The two Poseidon2 linear layers as explicit row-major matrices. The internal
++/// layer is diag(DIAGONAL) + 11^T.
++#[cfg_attr(not(any(test, feature = "linear-dot4")), allow(dead_code))]
++struct LinearLayers {
++    external: [[FieldElement; 4]; 4],
++    internal: [[FieldElement; 4]; 4],
++}
++
++#[cfg_attr(not(any(test, feature = "linear-dot4")), allow(dead_code))]
++impl LinearLayers {
++    fn new() -> Self {
++        let one = FieldElement::from(1u64);
++        Self {
++            external: EXTERNAL.map(|row| row.map(FieldElement::from)),
++            internal: core::array::from_fn(|i| {
++                core::array::from_fn(|j| if i == j { DIAGONAL[i] + one } else { one })
++            }),
++        }
++    }
++}
++
++/// Each row is one 4-term dot product; the optional guest BigInt2 backend
++/// checks it with one canonical modular reduction.
++#[cfg_attr(not(any(test, feature = "linear-dot4")), allow(dead_code))]
++#[inline]
++fn apply_linear(matrix: &[[FieldElement; 4]; 4], state: [FieldElement; 4]) -> [FieldElement; 4] {
++    if state.iter().all(|x| *x == FieldElement::ZERO) {
++        return state;
++    }
++    core::array::from_fn(|i| FieldElement::sum_of_products(&matrix[i], &state))
++}
++
++/// External layer: explicit dot rows with `linear-dot4`, additions otherwise.
++#[inline]
++fn external_layer(_layers: &LinearLayers, state: [FieldElement; 4]) -> [FieldElement; 4] {
++    #[cfg(feature = "linear-dot4")]
++    return apply_linear(&_layers.external, state);
++    #[cfg(not(feature = "linear-dot4"))]
++    external_forward(state)
++}
++
++/// Internal layer: explicit dot rows with `linear-dot4`, diagonal plus sum otherwise.
++#[inline]
++fn internal_layer(_layers: &LinearLayers, state: [FieldElement; 4]) -> [FieldElement; 4] {
++    #[cfg(feature = "linear-dot4")]
++    return apply_linear(&_layers.internal, state);
++    #[cfg(not(feature = "linear-dot4"))]
++    {
++        let sum: FieldElement = state.iter().copied().sum();
++        core::array::from_fn(|lane| nonzero_product(DIAGONAL[lane], state[lane]) + sum)
++    }
++}
++
+ // Values outside the selected commitment are exactly zero. Avoiding products
+ // by those zeros is public-data specialization, not a witness assumption.
+ #[inline]
+@@ -254,6 +312,7 @@ pub fn evaluate_bilinear(
+     let constants = ROUND_CONSTANTS.map(|rc| nonzero_product(rc, constant));
+     let mut out: [BatchedDot; 3] = core::array::from_fn(|_| BatchedDot::new());
+     let mut common = BatchedDot::new();
++    let layers = LinearLayers::new();
+     for &(row, matrices) in RESIDUAL_ROWS {
+         for matrix in 0..3 {
+             let value: FieldElement = matrices[matrix]
+@@ -292,15 +351,12 @@ pub fn evaluate_bilinear(
+                 }
+                 state[lane] = sbox(j, state[lane]);
+             }
+-            state = external_forward(state);
++            state = external_layer(&layers, state);
+         }
+         for j in 16..72 {
+             state[0] += constants[j];
+             state[0] = sbox(j, state[0]);
+-            let sum: FieldElement = state.iter().copied().sum();
+-            for lane in 0..4 {
+-                state[lane] = nonzero_product(DIAGONAL[lane], state[lane]) + sum;
+-            }
++            state = internal_layer(&layers, state);
+         }
+         for group in 0..4 {
+             for lane in 0..4 {
+@@ -308,7 +364,7 @@ pub fn evaluate_bilinear(
+                 state[lane] += constants[j];
+                 state[lane] = sbox(j, state[lane]);
+             }
+-            state = external_forward(state);
++            state = external_layer(&layers, state);
+         }
+         for lane in 0..4 {
+             let e = eq[block.row + 264 + lane];
+@@ -411,3 +467,26 @@ impl LinearForm<FieldElement> for FixedMatrixCovector {
+         }
+     }
+ }
++
++#[cfg(test)]
++mod tests {
++    use super::*;
++    use ark_ff::UniformRand;
++
++    #[test]
++    fn linear_layers_match_poseidon2_round_maps() {
++        let mut rng = ark_std::test_rng();
++        let layers = LinearLayers::new();
++        let mut cases = vec![[FieldElement::ZERO; 4], [-FieldElement::from(1u64); 4]];
++        cases.push([FieldElement::ZERO, FieldElement::from(1u64), FieldElement::ZERO, -FieldElement::from(1u64)]);
++        cases.extend((0..256).map(|_| core::array::from_fn(|_| FieldElement::rand(&mut rng))));
++        for state in cases {
++            assert_eq!(apply_linear(&layers.external, state), external_forward(state));
++            let sum: FieldElement = state.iter().copied().sum();
++            let internal: [FieldElement; 4] = core::array::from_fn(|lane| DIAGONAL[lane] * state[lane] + sum);
++            assert_eq!(apply_linear(&layers.internal, state), internal);
++            assert_eq!(external_layer(&layers, state), external_forward(state));
++            assert_eq!(internal_layer(&layers, state), internal);
++        }
++    }
++}
+diff --git a/provekit/verifier/src/lib.rs b/provekit/verifier/src/lib.rs
+index c62f04e..a2fb34e 100644
+--- a/provekit/verifier/src/lib.rs
++++ b/provekit/verifier/src/lib.rs
+@@ -22,15 +22,23 @@ pub struct FixedJoinSplitVerifier {
+ }
+ 
+ impl FixedJoinSplitVerifier {
++    /// SHA-256 of the postcard verifier key the compiled configuration was exported from.
++    pub const KEY_HASH: [u8; 32] = [
++        0xbc,0x13,0x84,0x08,0x9b,0x1d,0xc1,0x65,0x4e,0x61,0x56,0x10,0x89,0x52,0x3a,0xe5,
++        0x21,0xd2,0xcf,0x9b,0x66,0x45,0x89,0xec,0x1e,0x96,0x51,0x08,0xb4,0xe2,0xa1,0x83,
++    ];
++
++    /// Load the compiled configuration of the key with SHA-256 `KEY_HASH`. A guest
++    /// using this entry point is bound to that key by its image ID alone.
++    pub fn compiled() -> Result<Self> {
++        Ok(Self { scheme: postcard::from_bytes(include_bytes!("joinsplit_whir.pc")).context("fixed WHIR configuration encoding")? })
++    }
++
+     /// Check every input byte before loading the exact pre-exported configuration.
+     pub fn from_postcard(bytes: &[u8]) -> Result<Self> {
+         use sha2::{Digest, Sha256};
+-        const KEY_HASH: [u8; 32] = [
+-            0xbc,0x13,0x84,0x08,0x9b,0x1d,0xc1,0x65,0x4e,0x61,0x56,0x10,0x89,0x52,0x3a,0xe5,
+-            0x21,0xd2,0xcf,0x9b,0x66,0x45,0x89,0xec,0x1e,0x96,0x51,0x08,0xb4,0xe2,0xa1,0x83,
+-        ];
+-        anyhow::ensure!(Sha256::digest(bytes).as_slice() == KEY_HASH, "join-split verifier key");
+-        Ok(Self { scheme: postcard::from_bytes(include_bytes!("joinsplit_whir.pc")).context("fixed WHIR configuration encoding")? })
++        anyhow::ensure!(Sha256::digest(bytes).as_slice() == Self::KEY_HASH, "join-split verifier key");
++        Self::compiled()
+     }
+ 
+     #[instrument(skip_all)]

@@ -1,5 +1,9 @@
 # Full real JoinSplit proving run
 
+> Superseded: a complete JoinSplit receipt under the newer image
+> `552b779f6f59ef31f79acad0a18d86a85a926d392c9c86bd1dce55214f383cb8` was proved and verified;
+> see [prover-speedups.md](prover-speedups.md). This file records the earlier `fc7c9097…` run.
+
 Status at launch: **in progress; no complete real JoinSplit receipt yet**.
 The authoritative live status is `build/full-joinsplit-191m/status.json`.
 Only `state: complete` plus the final independent checks establishes completion

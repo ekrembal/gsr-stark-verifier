@@ -31,14 +31,8 @@ def main():
                     cmd.append(str(args.program))
             else:
                 cmd = [str(args.settle), "exec", str(args.inputs / "witness.json"),
-                       str(args.out / name), str(args.inputs / "vk.pc"), str(proof)]
+                       str(args.out / name), str(proof)]
             run_rejection(cmd, args.out / f"{kind}-{name}.log", kind, name, report)
-    # The settlement image binds the entire key frame before deserializing it.
-    wrong_key = args.out / "wrong-vk.pc"
-    wrong_key.write_bytes((args.inputs / "vk.pc").read_bytes() + b"\0")
-    cmd = [str(args.settle), "exec", str(args.inputs / "witness.json"), str(args.out / "wrong-key"),
-           str(wrong_key), str(args.inputs / "proof0.pc")]
-    run_rejection(cmd, args.out / "batch-wrong-key.log", "batch", "wrong-key", report)
     (args.out / "results.json").write_text(json.dumps({"execution_only": True, "cases": report}, indent=2) + "\n")
     print(f"passed: {len(report)} guest rejections")
 

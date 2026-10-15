@@ -47,7 +47,7 @@ fn main() -> Result<()> {
             let expected = fs::read(&a[4])?;
             let po2: u32 = a[5].parse()?;
             let count: usize = a[6].parse()?;
-            ensure!((15..=20).contains(&po2) && (1..=512).contains(&count), "capture bounds");
+            ensure!((15..=22).contains(&po2) && (1..=512).contains(&count), "capture bounds");
             let mut env = ExecutorEnv::builder();
             env.segment_limit_po2(po2).session_limit(Some(2_000_000_000));
             for frame in &a[7..] {

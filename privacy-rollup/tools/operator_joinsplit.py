@@ -73,14 +73,14 @@ def main() -> None:
     req.write_text(json.dumps({"rollup_script_pubkey": ROLLUP_SPK, "successor_script_pubkey": ROLLUP_SPK}))
     run(OPERATOR, "build", state, req, out)
     batch = json.loads((out / "batch.json").read_text())
-    assert batch["transactions"] == 1 and batch["guest_frames"] == ["vk.pc", "proof0.pc"]
+    assert batch["transactions"] == 1 and batch["guest_frames"] == ["proof0.pc"]
     assert json.loads((out / "witness.json").read_text()) == json.loads((js / "witness.json").read_text())
-    assert (out / "vk.pc").read_bytes() == (js / "vk.pc").read_bytes()
+    assert not (out / "vk.pc").exists()
     assert (out / "proof0.pc").read_bytes() == (js / "proof0.pc").read_bytes()
     report["witness_equals_reference"] = True
 
     t = time.time()
-    log = run(SETTLE, "exec", out / "witness.json", out / "exec", out / "vk.pc", out / "proof0.pc").stdout
+    log = run(SETTLE, "exec", out / "witness.json", out / "exec", out / "proof0.pc").stdout
     report["guest_exec_seconds"] = round(time.time() - t, 1)
     report["guest_log"] = log.strip().splitlines()
     assert (out / "exec/journal.bin").read_bytes().hex() == batch["journal"]

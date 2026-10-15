@@ -47,9 +47,16 @@ pub fn verify(verifier: &Verifier, tx: &RollupTransaction) -> Result<()> {
     verifier.verify_ref(&proof_of(tx)).context("ProveKit verification")
 }
 
-/// Uncompressed postcard encoding of the verifier key, as read by the RISC Zero guest.
+/// Uncompressed postcard encoding of the verifier key, whose SHA-256 pins the guest's compiled configuration.
 pub fn guest_verifier_bytes(verifier: &Verifier) -> Result<Vec<u8>> {
     Ok(postcard::to_allocvec(verifier)?)
+}
+
+/// Rejects a key other than the one compiled into the settlement guest.
+pub fn ensure_guest_key(verifier: &Verifier) -> Result<()> {
+    provekit_verifier::FixedJoinSplitVerifier::from_postcard(&guest_verifier_bytes(verifier)?)
+        .map(|_| ())
+        .context("verifier key differs from the settlement guest's compiled key")
 }
 
 pub fn guest_proof_bytes(proof: &NoirProof) -> Result<Vec<u8>> {

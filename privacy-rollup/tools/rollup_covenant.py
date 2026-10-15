@@ -29,7 +29,8 @@ from transaction import NUMS  # noqa: E402
 from paths import BITCOIN_SOURCE  # noqa: E402
 
 sys.path.insert(0, str(BITCOIN_SOURCE / "test/functional"))
-from test_framework.messages import COutPoint, CTransaction, CTxIn, CTxInWitness, CTxOut  # noqa: E402
+from test_framework.messages import (  # noqa: E402
+    COutPoint, CTransaction, CTxIn, CTxInWitness, CTxOut, ser_string_vector)
 from test_framework.script import CScript, taproot_construct  # noqa: E402
 
 LEAF = 0xC2
@@ -171,7 +172,7 @@ def varops_budget(tx: CTransaction, spent_spks: list[bytes]) -> int:
         taproot = len(spk) == 34 and spk[:2] == b"\x51\x20"
         if not (taproot and len(stack) >= 2 and stack[-1] and stack[-1][0] & 0xFE == LEAF):
             weight -= 4 * len(txin.serialize())
-            weight -= len(wit.scriptWitness.serialize())
+            weight -= len(ser_string_vector(wit.scriptWitness.stack))
     return weight * 10_000
 
 

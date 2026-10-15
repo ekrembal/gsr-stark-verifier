@@ -3,7 +3,7 @@ use std::path::Path;
 
 use anyhow::{ensure, Context, Result};
 use pr_crypto::{to_fe, to_fr};
-use pr_protocol_types::{JoinSplitPublic, RollupTransaction};
+use pr_protocol_types::JoinSplitPublic;
 use provekit_common::{file::read, Format, NoirProof, Prover, PublicInputs, Verifier, WhirR1CSProof};
 use provekit_prover::Prove;
 use provekit_verifier::Verify;
@@ -29,22 +29,22 @@ pub fn check_public_inputs(proof: &NoirProof, public: &JoinSplitPublic) -> Resul
     Ok(())
 }
 
-/// Rebuilds the ProveKit proof object carried by a rollup transaction.
-pub fn proof_of(tx: &RollupTransaction) -> NoirProof {
+/// Rebuilds a ProveKit proof object from its statement and WHIR-R1CS proof bytes.
+pub fn proof_of(public: &JoinSplitPublic, narg: &[u8], hints: &[u8]) -> NoirProof {
     NoirProof {
-        public_inputs: PublicInputs(tx.public.public_inputs().iter().map(to_fr).collect()),
+        public_inputs: PublicInputs(public.public_inputs().iter().map(to_fr).collect()),
         whir_r1cs_proof: WhirR1CSProof {
-            narg_string: tx.proof_narg.clone(),
-            hints: tx.proof_hints.clone(),
+            narg_string: narg.to_vec(),
+            hints: hints.to_vec(),
             #[cfg(debug_assertions)]
             pattern: Vec::new(),
         },
     }
 }
 
-/// Native verification of a rollup transaction's proof against its own statement.
-pub fn verify(verifier: &Verifier, tx: &RollupTransaction) -> Result<()> {
-    verifier.verify_ref(&proof_of(tx)).context("ProveKit verification")
+/// Native verification of a ProveKit proof against `public`.
+pub fn verify(verifier: &Verifier, public: &JoinSplitPublic, narg: &[u8], hints: &[u8]) -> Result<()> {
+    verifier.verify_ref(&proof_of(public, narg, hints)).context("ProveKit verification")
 }
 
 /// Uncompressed postcard encoding of the verifier key, whose SHA-256 pins the guest's compiled configuration.

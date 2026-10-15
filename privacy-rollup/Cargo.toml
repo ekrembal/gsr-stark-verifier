@@ -8,6 +8,7 @@ members = [
     "crates/bitcoin-adapter",
     "crates/state-transition",
     "crates/provekit-adapter",
+    "crates/joinsplit",
     "crates/wallet-core",
     "crates/mempool",
     "crates/scanner",
@@ -29,6 +30,7 @@ pr-indexed-nullifier-tree = { path = "crates/indexed-nullifier-tree" }
 pr-bitcoin-adapter = { path = "crates/bitcoin-adapter" }
 pr-state-transition = { path = "crates/state-transition" }
 pr-provekit-adapter = { path = "crates/provekit-adapter" }
+pr-joinsplit = { path = "crates/joinsplit" }
 pr-wallet-core = { path = "crates/wallet-core" }
 pr-mempool = { path = "crates/mempool" }
 pr-scanner = { path = "crates/scanner" }

@@ -8,6 +8,7 @@ license = "MIT"
 pr-methods = { path = "../methods" }
 pr-protocol-types = { path = "../crates/protocol-types" }
 pr-state-transition = { path = "../crates/state-transition" }
+pr-joinsplit = { path = "../crates/joinsplit" }
 risc0-zkvm = { path = "../../../risc0/risc0/zkvm", features = ["prove", "unstable"] }
 postcard = { version = "1.1.3", features = ["alloc"] }
 serde_json = "1.0"

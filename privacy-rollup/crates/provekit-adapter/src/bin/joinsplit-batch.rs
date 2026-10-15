@@ -1,14 +1,15 @@
 //! `joinsplit-batch <joinsplit.pkp> <joinsplit.pkv> <out-dir>`: a deposit batch with a real ProveKit
-//! proof. The wallet builds the join-split, ProveKit proves it, the mempool admits it only after native
-//! verification, and the operator assembles the settlement. Writes `witness.json`, `vk.pc` and
-//! `proof0.pc` (the `settle` guest inputs), `tx.json` and `funding.json` (the `pr-operator submit`
-//! inputs) and prints the native journal.
+//! proof (the earlier, ProveKit-in-guest settlement path; kept for the verifier benchmarks). The
+//! wallet builds the join-split, ProveKit proves it, the mempool admits it only after native
+//! verification, and the operator assembles the settlement. Writes `witness.json`, `vk.pc`,
+//! `proof0.pc` and `joinsplit-witness.json` (the private witness, input of `joinsplit prove`), and
+//! prints the native journal.
 use std::{fs, path::Path, time::Instant};
 
 use anyhow::Result;
 use pr_protocol_types::{Canonical, RollupTransaction};
 use pr_tests::{coin, Harness, Wallet};
-use pr_wallet_core::SpendInput;
+use pr_wallet_core::{ProverToml, SpendInput};
 
 fn main() -> Result<()> {
     let a: Vec<String> = std::env::args().collect();
@@ -33,29 +34,26 @@ fn main() -> Result<()> {
         proof.whir_r1cs_proof.narg_string.len(),
         proof.whir_r1cs_proof.hints.len()
     );
-    let tx = RollupTransaction {
-        public: js.witness.public,
-        external: js.external.clone(),
-        proof_narg: proof.whir_r1cs_proof.narg_string.clone(),
-        proof_hints: proof.whir_r1cs_proof.hints.clone(),
-    };
+    let (narg, hints) = (&proof.whir_r1cs_proof.narg_string, &proof.whir_r1cs_proof.hints);
+    let tx = RollupTransaction { public: js.witness.public, external: js.external.clone(), receipt: Vec::new() };
     let t = Instant::now();
-    fs::write(out.join("tx.json"), serde_json::to_vec(&tx)?)?;
-    fs::write(out.join("funding.json"), serde_json::to_vec(&funding)?)?;
+    fs::write(out.join("joinsplit-witness.json"), serde_json::to_vec(&js.witness)?)?;
     h.mempool
-        .submit(tx.clone(), funding, &h.replica, |tx| pr_provekit_adapter::verify(&verifier, tx).is_ok())
+        .submit(tx.clone(), funding, &h.replica, |tx| {
+            pr_provekit_adapter::verify(&verifier, &tx.public, narg, hints).is_ok()
+        })
         .map_err(|e| anyhow::anyhow!("mempool: {e:?}"))?;
     println!("native verification + admission in {:?}", t.elapsed());
-    let mut forged = tx.clone();
-    forged.public.fee_sats += 1;
-    anyhow::ensure!(pr_provekit_adapter::verify(&verifier, &forged).is_err(), "forged statement verified");
+    let mut forged = tx.public;
+    forged.fee_sats += 1;
+    anyhow::ensure!(pr_provekit_adapter::verify(&verifier, &forged, narg, hints).is_err(), "forged statement verified");
     let selected = h.mempool.select();
     let settlement = h.settlement(&selected, None);
     let w = h.replica.witness(pr_mempool::batch_transactions(&selected), settlement);
     let effects = pr_state_transition::apply_batch(&w).map_err(|e| anyhow::anyhow!("{e:?}"))?;
     fs::write(out.join("witness.json"), serde_json::to_vec(&w)?)?;
     fs::write(out.join("vk.pc"), pr_provekit_adapter::guest_verifier_bytes(&verifier)?)?;
-    fs::write(out.join("proof0.pc"), pr_provekit_adapter::guest_proof_bytes(&pr_provekit_adapter::proof_of(&tx))?)?;
+    fs::write(out.join("proof0.pc"), pr_provekit_adapter::guest_proof_bytes(&proof)?)?;
     println!("journal {}", hex_str(&effects.journal.encode()));
     Ok(())
 }

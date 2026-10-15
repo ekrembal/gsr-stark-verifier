@@ -2486,6 +2486,7 @@ dependencies = [
  "ark-ff 0.6.0",
  "postcard",
  "pr-crypto",
+ "pr-joinsplit",
  "pr-protocol-types",
  "pr-state-transition",
  "provekit-common",
@@ -2502,6 +2503,16 @@ dependencies = [
 name = "pr-indexed-nullifier-tree"
 version = "0.1.0"
 dependencies = [
+ "pr-protocol-types",
+ "serde",
+]
+
+[[package]]
+name = "pr-joinsplit"
+version = "0.1.0"
+dependencies = [
+ "pr-commitment-tree",
+ "pr-crypto",
  "pr-protocol-types",
  "serde",
 ]

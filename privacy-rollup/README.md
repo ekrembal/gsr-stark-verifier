@@ -6,9 +6,10 @@ succinct receipt of the `apply_batch` guest, verified in Script by the [`risc0-s
 verifier and bound to the spending transaction with `OP_TX`.
 
 ```
-ProveKit join-split proofs (Noir, WHIR over BN254, hash-only)
-  -> apply_batch guest: verifies every proof, applies the batch, commits a 196-byte journal
-  -> succinct receipt re-proven under the padded SHA-256 suite
+user: joinsplit guest (private witness) -> zero-knowledge receipt (`identity_zk`, ~276 KB)
+  -> operator: ExecutorEnv::add_assumption; apply_batch guest calls env::verify per transaction,
+     applies the batch, commits a 196-byte journal
+  -> resolve_zk per transaction, then the succinct receipt re-proven under the padded SHA-256 suite
   -> rollup leaf: PUSH32 <state_root> 1 CSV DROP || fixed verifier suffix
   -> settlement transaction: input 0 = rollup UTXO (+ deposit funding), output 0 = successor, annex = batch data
 ```
@@ -22,10 +23,12 @@ ProveKit join-split proofs (Noir, WHIR over BN254, hash-only)
 |---|---|
 | Protocol, encodings, trees, accounting, annex, native transition | Implemented, tested (`cargo test --workspace`) |
 | Wallet (keys, ML-KEM-768 + XChaCha20-Poly1305 notes, join-split witnesses), scanner, mempool, operator CLI | Implemented, tested |
-| ProveKit join-split circuit | Implemented; proofs generated and verified natively and inside the guest |
-| `apply_batch` guest | Implemented; journal equals the native transition byte for byte |
-| Empty / anchor-only batches | **Proven** (succinct receipt) and settled consecutively on activated regtest |
-| Batches containing join-splits | **Proven** (padded succinct receipt, image `552b779f…3cb8`): the frozen one-JoinSplit batch, 98 po2=21 segments, 4.53 h on one 8-vCPU AVX-512 machine; native, Python-reference and Script checks pass. See [reports/prover-speedups.md](reports/prover-speedups.md). Not yet settled on regtest (placeholder scripts in the frozen batch). |
+| Join-split statement | `crates/joinsplit` (`JoinSplitWitness::check`), proven by the `joinsplit` RISC Zero guest; the Noir/ProveKit circuit is kept for reference |
+| Zero-knowledge user receipts | `identity_zk` seals from a ZK mode added to `risc0-zkp` ([argument](spec/zero-knowledge.md), proof sketch, not reviewed) |
+| `apply_batch` guest | Implemented; `env::verify` per transaction; journal equals the native transition byte for byte |
+| `resolve_zk.zkr` | Built with patched Zirgen and added to the allowed control root (`5edc9538…5b01`) |
+| Batches containing join-splits | **Proven and settled on regtest** (image `00eb5e47…e50f`): a real deposit join-split, 15 segments, 24.8 min to the padded receipt; mined, altered spends rejected. See [reports/zk-joinsplit.md](reports/zk-joinsplit.md) |
+| Empty batches | **Proven** and settled consecutively on activated regtest |
 | Covenant (`OP_TX` binding, successor leaf, `1 CSV`) | Implemented, metered, mined on regtest; altered spends rejected |
 | Relay | Consensus-valid; **nonstandard** under the pinned node's policy (annex) |
 
@@ -39,6 +42,20 @@ measurements, phase profile, validation results and remaining limits are in
 [fixed-key specialization](reports/fixed-config-optimization.md).
 [Normal-size real segment proving](reports/normal-segment-proving.md) measures actual
 CPU/memory cost; execution improvements do not establish full aggregation feasibility.
+
+Current pipeline (zero-knowledge RISC Zero user receipts; details in [reports/zk-joinsplit.md](reports/zk-joinsplit.md)):
+
+| Metric | Value |
+|---|---:|
+| User join-split guest | 2,877,102 cycles, 3 segments |
+| User proving (succinct + `identity_zk`) | 332 s wall, ~9.7 GB peak RSS |
+| User receipt | 276,262 B |
+| Settlement guest, one join-split | 14,055,695 cycles, 15 segments |
+| Settlement proving, one join-split | 1,487 s (incl. `resolve_zk` 9.6 s) |
+| Settlement transaction, one deposit join-split | 392,001 WU, 2,095,600,656 varops (annex 2,743 B) |
+| Settlement transaction, empty batch | 389,240 WU, 2,095,433,301 varops |
+
+Earlier ProveKit pipeline (kept for reference):
 
 | Metric | Value |
 |---|---:|
@@ -64,14 +81,15 @@ Settlement weight does not depend on batch contents beyond the annex (one nullif
 | `crates/commitment-tree`, `crates/indexed-nullifier-tree` | depth-32 incremental and indexed trees with insertion/absence witnesses |
 | `crates/state-transition` | `apply_batch`: shared by the native node, the operator and the guest |
 | `crates/bitcoin-adapter` | settlement transaction, `OP_TX` preimages, successor leaf |
-| `crates/provekit-adapter` | proving/verification; `joinsplit-batch`, `provekit-export` |
+| `crates/joinsplit` | join-split witness and constraint check, shared by the wallet and the guest |
+| `crates/provekit-adapter` | ProveKit proving/verification (reference path); `joinsplit-batch`, `provekit-export` |
 | `crates/wallet-core`, `crates/scanner`, `crates/mempool`, `operator` | wallet, replay/rollback, admission, `pr-operator` CLI |
 | `circuits/joinsplit-2x2` | Noir circuit |
-| `methods/guest`, `prover` | `apply_batch` guest; `settle prove|exec` host |
+| `methods/guest`, `prover` | `joinsplit` and `apply_batch` guests; `joinsplit prove|verify|id` and `settle prove|exec <witness> <dir> <receipts…>` hosts |
 | `tools/rollup_covenant.py`, `tools/regtest_demo.py`, `tools/operator_joinsplit.py` | covenant generator, regtest demo, real-proof operator check |
 | `tests` | scenario and differential tests |
-| `spec/` | [protocol](spec/protocol.md), [encoding](spec/encoding.md), [join-split](spec/joinsplit.md), [Bitcoin binding](spec/bitcoin-binding.md), [security model](spec/security-model.md) |
-| `patches/`, `vendor/` | ProveKit patch (zkVM build, transpose-free verifier row); spongefish/ark-ff copies with target-independent hashing and the BN254 accelerator |
+| `spec/` | [protocol](spec/protocol.md), [encoding](spec/encoding.md), [join-split](spec/joinsplit.md), [Bitcoin binding](spec/bitcoin-binding.md), [security model](spec/security-model.md), [zero knowledge](spec/zero-knowledge.md) |
+| `patches/`, `vendor/` | RISC Zero ZK mode and Zirgen `resolve_zk` patches; ProveKit patch (zkVM build, transpose-free verifier row); spongefish/ark-ff copies with target-independent hashing and the BN254 accelerator |
 
 ## Reproduce
 
@@ -91,6 +109,12 @@ Dependencies are path dependencies on two sibling checkouts of the repository di
   [`patches/provekit-dot4.patch`](patches/provekit-dot4.patch) and
   [`patches/provekit-final-claim.patch`](patches/provekit-final-claim.patch). See
   [reports/prover-speedups.md](reports/prover-speedups.md).
+* Zero-knowledge receipts (required by the current guests): after the CPU patches apply
+  [`patches/risc0-zk.patch`](patches/risc0-zk.patch). Its `recursion_zkr.zip` is RISC Zero's upstream
+  archive plus `resolve_zk.zkr`, built from Zirgen `df6fb9d` with
+  [`patches/zirgen-zk.patch`](patches/zirgen-zk.patch)
+  (`bazel build -c opt //zirgen/circuit/predicates:resolve_zk.zkr`) and combined with
+  `tools/assemble_zk_recursion_zip.py <upstream zip> <resolve_zk.zkr> <out zip>`.
 * WHIR remains version 0.2.0; the vendored published source has the local
   [`patches/whir-blinding.patch`](patches/whir-blinding.patch) algorithmic optimization. Its original
   archive checksum and necessary same-version lockfile source deviation are documented in the review report.
@@ -104,8 +128,8 @@ Build the pinned node and meter first (`bash recursive-stwo/tools/build.sh` from
 cd privacy-rollup
 cargo test --workspace                                   # protocol, trees, transition, wallet, scanner, mempool, scenarios
 cargo build --release -p pr-operator -p pr-provekit-adapter
-(cd prover && cargo build --release)                     # builds the guest; prints its image id
+(cd prover && cargo build --release && cargo test)      # builds the guests; checks methods/guest/src/joinsplit_id.rs
 ../../provekit/target/release/provekit-cli prepare circuits/joinsplit-2x2 -p js.pkp -v js.pkv   # fixtures pin the exported verifier-key bytes
-python3 tools/operator_joinsplit.py                      # real ProveKit proof through the operator and the guest (executed) (copy in reports/operator-joinsplit.json)
-python3 tools/regtest_demo.py --batches 10               # proven empty batches settled on regtest -> build/privacy-rollup-regtest.json (copy in reports/regtest.json)
+python3 tools/operator_joinsplit.py                      # real ZK user receipt through the operator and add_assumption (copy in reports/operator-joinsplit.json)
+python3 tools/regtest_demo.py --batches 2                # proven deposit join-split + empty batch settled on regtest -> build/privacy-rollup-regtest.json (copy in reports/regtest.json)
 ```

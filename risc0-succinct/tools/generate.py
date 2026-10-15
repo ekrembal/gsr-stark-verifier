@@ -17,6 +17,7 @@ import struct
 from pathlib import Path
 
 import babybear as bb
+import compress
 import packed as pk
 import reference as ref
 import witness as wit
@@ -588,6 +589,7 @@ class Gen:
         m = Asm(base + [s_items[n] for n in reversed(SETUP_ITEMS)] + list(x_items.values()) + heads, plan)
         f = Field(m, inline=False, used=self.used, pool=pool)
         self.stmt.prologue(m, x_items, heads)
+        prologue_len = len(m.s.code)
 
         # range-check masks
         masks = {}
@@ -878,6 +880,8 @@ class Gen:
         main.code = bytearray(renumber_calls(bytes(head.code + m.s.code), index))
         script = Script().extend(decls).extend(main)
         info = {"functions": {fid: sizes[fid] for fid in self.used}, "decl_len": len(decls.code),
+                # main-script byte range holding the head and the statement prologue (see compress.protect)
+                "head_prologue": (0, len(head.code) + prologue_len),
                 "query_body_bytes": len(body.code), "persist": len(persist), "accesses": m.accesses,
                 "pool": f.pool_candidates()}
         return script, info
@@ -920,12 +924,17 @@ def main() -> None:
     ap.add_argument("--receipt", default=str(ROOT / "fixtures/receipt.json"))
     ap.add_argument("--seal", default=str(ROOT / "fixtures/seal.bin"))
     ap.add_argument("--out", default=str(ROOT / "build/bundle.json"))
+    ap.add_argument("--compress", action="store_true", help="extract repeated sequences into macros")
     args = ap.parse_args()
     receipt = json.loads(Path(args.receipt).read_text())
     seal = Path(args.seal).read_bytes()
     gen = Gen(Statement(receipt), ref.load_circuit())
     first = gen.generate()[1]
     script, info = gen.generate(first["accesses"], first["pool"])
+    if args.compress:
+        code, info["compression"] = compress.compress(bytes(script.code))
+        script = Script()
+        script.code = bytearray(code)
     info["pooled"] = len(info.pop("pool"))
     del info["accesses"]
     stack = build_witness(gen, receipt, seal)

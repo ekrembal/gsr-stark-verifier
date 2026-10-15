@@ -16,6 +16,7 @@ import subprocess
 import sys
 from pathlib import Path
 
+import compress
 import differential as d
 import generate as g
 import measure
@@ -43,13 +44,16 @@ def parse_outputs(journal: bytes) -> list:
 
 
 class Covenant:
-    def __init__(self, receipt: dict, seal: bytes) -> None:
+    def __init__(self, receipt: dict, seal: bytes, compressed: bool = False) -> None:
         self.receipt, self.seal = receipt, seal
         self.journal = bytes.fromhex(receipt["journal"])
         self.gen = g.Gen(g.Statement(receipt, covenant=True), ref.load_circuit())
         first = self.gen.generate()[1]
         script, info = self.gen.generate(first["accesses"], first["pool"])
         self.script = bytes(script.code)
+        self.compression = None
+        if compressed:
+            self.script, self.compression = compress.compress(self.script)
         self.functions = info["functions"]
         self.taproot = taproot_construct(NUMS, [("verifier", CScript(self.script), LEAF)])
         self.hints = g.prover_hints(self.gen, receipt, seal)

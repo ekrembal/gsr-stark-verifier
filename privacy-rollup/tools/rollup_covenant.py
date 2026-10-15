@@ -24,6 +24,7 @@ from pathlib import Path
 REPO = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(REPO / "risc0-succinct/tools"))
 sys.path.insert(0, str(REPO / "recursive-stwo/tools"))
+import compress  # noqa: E402
 import generate as g  # noqa: E402
 import reference as ref  # noqa: E402
 from gsr import Asm, Script, V, assemble, op_success_offsets  # noqa: E402
@@ -122,16 +123,33 @@ class RollupStatement(g.Statement):
 class Covenant:
     """The covenant leaf for one state root. Everything but the 32-byte root is identical for every root."""
 
-    def __init__(self, receipt: dict, rollup_id: bytes, root: bytes) -> None:
+    def __init__(self, receipt: dict, rollup_id: bytes, root: bytes, compressed: bool = True) -> None:
         stmt = RollupStatement(receipt, rollup_id, root)
         self.gen = g.Gen(stmt, ref.load_circuit())
         first = self.gen.generate()[1]
-        # The splice offsets depend on the declarations' length, which does not depend on the offsets.
-        stmt.decl_len = self.gen.generate(first["accesses"], first["pool"])[1]["decl_len"]
-        script, info = self.gen.generate(first["accesses"], first["pool"])
-        assert info["decl_len"] == stmt.decl_len
+
+        def build() -> tuple[bytes, dict]:
+            script, info = self.gen.generate(first["accesses"], first["pool"])
+            code = bytes(script.code)
+            if compressed:
+                # The head (root push) and the prologue (which embeds the root's offset) are never merged into
+                # macros, so the root stays first in the main script and every root shares the declarations.
+                code, info["compression"] = compress.compress(code, protect=info["head_prologue"])
+                info["decl_len"] = info["compression"]["decl_len"]
+            return code, info
+
+        # The splice offsets depend on the declarations' length; the declarations do not depend on the offsets
+        # (they sit in the protected prologue), so the second build reproduces the first one's length.
+        for _ in range(3):
+            code, info = build()
+            if info["decl_len"] == stmt.decl_len:
+                break
+            stmt.decl_len = info["decl_len"]
+        else:
+            raise RuntimeError("declaration length did not converge")
         self.decl_len = stmt.decl_len
-        self.script = bytes(script.code)
+        self.compression = info.get("compression")
+        self.script = code
         d = self.decl_len
         assert self.script[d:d + 33] == b"\x20" + root and 0x10000 <= len(self.script) < 1 << 32
         assert not op_success_offsets(self.script)

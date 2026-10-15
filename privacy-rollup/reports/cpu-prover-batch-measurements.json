@@ -1,0 +1,772 @@
+{
+  "scope": "Bounded CPU prover experiments on the same complete diagnostic trace; not a JoinSplit receipt",
+  "runtime_env": {
+    "RAYON_NUM_THREADS": "4",
+    "GSR_PROFILE_CPU": "1",
+    "GSR_BATCH_CPU": "1"
+  },
+  "profiles": {
+    "scalar": {
+      "scope": "Host CPU HAL call wall times, including Rayon workers; not CPU-time samples",
+      "timer_env": "GSR_PROFILE_CPU=1",
+      "proof_result": {
+        "operation": "prove",
+        "real_local_proof": true,
+        "result": {
+          "index": 0,
+          "integrity_verified": true,
+          "po2": 18,
+          "seal_bytes": 255656
+        },
+        "seconds": 100.33831929
+      },
+      "resources": {
+        "command": [
+          "privacy-rollup/prover/target/release/proof_chain_bench",
+          "prove",
+          "build/feasibility/dot32-cpu-profile",
+          "0"
+        ],
+        "exit_code": 0,
+        "stopped_by": null,
+        "seconds": 100.5722861739996,
+        "sampled_peak_group_rss_kib": 2396616,
+        "minimum_free_disk_bytes": 2510696448,
+        "sampling_seconds": 0.25,
+        "limits": {
+          "seconds": 300,
+          "rss_mib": 4096,
+          "free_mib": 1024
+        }
+      },
+      "phases": [
+        {
+          "name": "hash_rows",
+          "calls": 7,
+          "seconds": 34.243747669,
+          "largest_call_seconds": 21.011504828,
+          "fraction_of_prover_time": 0.3412828509717008
+        },
+        {
+          "name": "hash_fold",
+          "calls": 116,
+          "seconds": 5.872235323,
+          "largest_call_seconds": 0.74605851,
+          "fraction_of_prover_time": 0.05852435405089791
+        },
+        {
+          "name": "batch_expand_into_evaluate_ntt",
+          "calls": 7,
+          "seconds": 5.544976954,
+          "largest_call_seconds": 3.400920237,
+          "fraction_of_prover_time": 0.055262804811128906
+        },
+        {
+          "name": "batch_evaluate_any",
+          "calls": 4,
+          "seconds": 2.655362197,
+          "largest_call_seconds": 2.220917574,
+          "fraction_of_prover_time": 0.02646408885248929
+        },
+        {
+          "name": "zk_shift",
+          "calls": 3,
+          "seconds": 2.259591884,
+          "largest_call_seconds": 1.510400934,
+          "fraction_of_prover_time": 0.022519730248513316
+        },
+        {
+          "name": "batch_interpolate_ntt",
+          "calls": 4,
+          "seconds": 1.39105693,
+          "largest_call_seconds": 0.812942539,
+          "fraction_of_prover_time": 0.013863665844148105
+        },
+        {
+          "name": "mix_poly_coeffs",
+          "calls": 4,
+          "seconds": 0.756752834,
+          "largest_call_seconds": 0.382889186,
+          "fraction_of_prover_time": 0.0075420122576781105
+        },
+        {
+          "name": "alloc_elem",
+          "calls": 19,
+          "seconds": 0.567885525,
+          "largest_call_seconds": 0.236333826,
+          "fraction_of_prover_time": 0.005659707368215775
+        },
+        {
+          "name": "batch_bit_reverse",
+          "calls": 6,
+          "seconds": 0.089892818,
+          "largest_call_seconds": 0.057030692,
+          "fraction_of_prover_time": 0.000895897186997819
+        },
+        {
+          "name": "alloc_digest",
+          "calls": 7,
+          "seconds": 0.072449268,
+          "largest_call_seconds": 0.018610622,
+          "fraction_of_prover_time": 0.0007220498460872714
+        },
+        {
+          "name": "fri_fold",
+          "calls": 3,
+          "seconds": 0.025459287,
+          "largest_call_seconds": 0.023796672,
+          "fraction_of_prover_time": 0.00025373443745272447
+        },
+        {
+          "name": "scatter",
+          "calls": 2,
+          "seconds": 0.015024833,
+          "largest_call_seconds": 0.014701598,
+          "fraction_of_prover_time": 0.00014974172485962117
+        },
+        {
+          "name": "eltwise_copy_elem",
+          "calls": 4,
+          "seconds": 0.011546964,
+          "largest_call_seconds": 0.007074289,
+          "fraction_of_prover_time": 0.00011508030114224569
+        },
+        {
+          "name": "eltwise_zeroize_elem",
+          "calls": 4,
+          "seconds": 0.008419966,
+          "largest_call_seconds": 0.005083822,
+          "fraction_of_prover_time": 8.391575680737116e-05
+        },
+        {
+          "name": "alloc_extelem",
+          "calls": 5,
+          "seconds": 0.00535453,
+          "largest_call_seconds": 0.005351377,
+          "fraction_of_prover_time": 5.336475673390761e-05
+        },
+        {
+          "name": "eltwise_sum_extelem",
+          "calls": 1,
+          "seconds": 0.001863069,
+          "largest_call_seconds": 0.001863069,
+          "fraction_of_prover_time": 1.856787130961719e-05
+        },
+        {
+          "name": "copy_from_elem",
+          "calls": 2,
+          "seconds": 4.947e-06,
+          "largest_call_seconds": 3.084e-06,
+          "fraction_of_prover_time": 4.9303197771352666e-08
+        },
+        {
+          "name": "copy_from_u32",
+          "calls": 8,
+          "seconds": 4.556e-06,
+          "largest_call_seconds": 8.51e-07,
+          "fraction_of_prover_time": 4.540638145265469e-08
+        },
+        {
+          "name": "copy_from_extelem",
+          "calls": 4,
+          "seconds": 1.543e-06,
+          "largest_call_seconds": 6.31e-07,
+          "fraction_of_prover_time": 1.5377973349746748e-08
+        }
+      ],
+      "hal_call_seconds": 53.521631097000004
+    },
+    "batch_portable": {
+      "scope": "Host CPU HAL call wall times, including Rayon workers; not CPU-time samples",
+      "timer_env": "GSR_PROFILE_CPU=1",
+      "proof_result": {
+        "operation": "prove",
+        "real_local_proof": true,
+        "result": {
+          "index": 0,
+          "integrity_verified": true,
+          "po2": 18,
+          "seal_bytes": 255656
+        },
+        "seconds": 77.983454038
+      },
+      "resources": {
+        "command": [
+          "privacy-rollup/prover/target/release/proof_chain_bench",
+          "prove",
+          "build/feasibility/dot32-cpu-batch",
+          "0"
+        ],
+        "exit_code": 0,
+        "stopped_by": null,
+        "seconds": 78.23301387099855,
+        "sampled_peak_group_rss_kib": 2396508,
+        "minimum_free_disk_bytes": 1993789440,
+        "sampling_seconds": 0.25,
+        "limits": {
+          "seconds": 300,
+          "rss_mib": 4096,
+          "free_mib": 1024
+        }
+      },
+      "phases": [
+        {
+          "name": "hash_rows",
+          "calls": 7,
+          "seconds": 14.921446315,
+          "largest_call_seconds": 8.988365091,
+          "fraction_of_prover_time": 0.19134118255045532
+        },
+        {
+          "name": "batch_expand_into_evaluate_ntt",
+          "calls": 7,
+          "seconds": 5.65031471,
+          "largest_call_seconds": 3.558119145,
+          "fraction_of_prover_time": 0.07245530195734468
+        },
+        {
+          "name": "hash_fold",
+          "calls": 116,
+          "seconds": 2.737741795,
+          "largest_call_seconds": 0.393577345,
+          "fraction_of_prover_time": 0.03510670088639502
+        },
+        {
+          "name": "batch_evaluate_any",
+          "calls": 4,
+          "seconds": 2.57978322,
+          "largest_call_seconds": 2.117192327,
+          "fraction_of_prover_time": 0.03308116127740271
+        },
+        {
+          "name": "zk_shift",
+          "calls": 3,
+          "seconds": 2.335804094,
+          "largest_call_seconds": 1.596740359,
+          "fraction_of_prover_time": 0.0299525601015544
+        },
+        {
+          "name": "batch_interpolate_ntt",
+          "calls": 4,
+          "seconds": 1.43168306,
+          "largest_call_seconds": 0.94651016,
+          "fraction_of_prover_time": 0.018358805437142668
+        },
+        {
+          "name": "mix_poly_coeffs",
+          "calls": 4,
+          "seconds": 0.727163941,
+          "largest_call_seconds": 0.361579652,
+          "fraction_of_prover_time": 0.009324592632761117
+        },
+        {
+          "name": "alloc_elem",
+          "calls": 19,
+          "seconds": 0.569815827,
+          "largest_call_seconds": 0.238859532,
+          "fraction_of_prover_time": 0.00730688110739925
+        },
+        {
+          "name": "batch_bit_reverse",
+          "calls": 6,
+          "seconds": 0.089365129,
+          "largest_call_seconds": 0.054774982,
+          "fraction_of_prover_time": 0.0011459498697820425
+        },
+        {
+          "name": "alloc_digest",
+          "calls": 7,
+          "seconds": 0.071145598,
+          "largest_call_seconds": 0.018223214,
+          "fraction_of_prover_time": 0.0009123165789159835
+        },
+        {
+          "name": "fri_fold",
+          "calls": 3,
+          "seconds": 0.025242711,
+          "largest_call_seconds": 0.02360971,
+          "fraction_of_prover_time": 0.0003236931642922569
+        },
+        {
+          "name": "scatter",
+          "calls": 2,
+          "seconds": 0.013513239,
+          "largest_call_seconds": 0.013176043,
+          "fraction_of_prover_time": 0.00017328341206091267
+        },
+        {
+          "name": "eltwise_copy_elem",
+          "calls": 4,
+          "seconds": 0.012913818,
+          "largest_call_seconds": 0.008427551,
+          "fraction_of_prover_time": 0.00016559689692261282
+        },
+        {
+          "name": "eltwise_zeroize_elem",
+          "calls": 4,
+          "seconds": 0.011695562,
+          "largest_call_seconds": 0.007742709,
+          "fraction_of_prover_time": 0.0001499749164008682
+        },
+        {
+          "name": "alloc_extelem",
+          "calls": 5,
+          "seconds": 0.005144163,
+          "largest_call_seconds": 0.005141078,
+          "fraction_of_prover_time": 6.596480065493556e-05
+        },
+        {
+          "name": "eltwise_sum_extelem",
+          "calls": 1,
+          "seconds": 0.002440137,
+          "largest_call_seconds": 0.002440137,
+          "fraction_of_prover_time": 3.129044526305494e-05
+        },
+        {
+          "name": "copy_from_elem",
+          "calls": 2,
+          "seconds": 5.368e-06,
+          "largest_call_seconds": 3.425e-06,
+          "fraction_of_prover_time": 6.88351146562996e-08
+        },
+        {
+          "name": "copy_from_u32",
+          "calls": 8,
+          "seconds": 4.857e-06,
+          "largest_call_seconds": 1.202e-06,
+          "fraction_of_prover_time": 6.228244260164813e-08
+        },
+        {
+          "name": "copy_from_extelem",
+          "calls": 4,
+          "seconds": 1.513e-06,
+          "largest_call_seconds": 6.01e-07,
+          "fraction_of_prover_time": 1.9401551504281164e-08
+        }
+      ],
+      "hal_call_seconds": 31.185225057
+    },
+    "batch_native": {
+      "scope": "Host CPU HAL call wall times, including Rayon workers; not CPU-time samples",
+      "timer_env": "GSR_PROFILE_CPU=1",
+      "proof_result": {
+        "operation": "prove",
+        "real_local_proof": true,
+        "result": {
+          "index": 0,
+          "integrity_verified": true,
+          "po2": 18,
+          "seal_bytes": 255656
+        },
+        "seconds": 67.965612673
+      },
+      "resources": {
+        "command": [
+          "privacy-rollup/prover/target/release/proof_chain_bench",
+          "prove",
+          "build/feasibility/dot32-cpu-batch-native",
+          "0"
+        ],
+        "exit_code": 0,
+        "stopped_by": null,
+        "seconds": 67.9791995509986,
+        "sampled_peak_group_rss_kib": 2392312,
+        "minimum_free_disk_bytes": 1903394816,
+        "sampling_seconds": 0.25,
+        "limits": {
+          "seconds": 300,
+          "rss_mib": 4096,
+          "free_mib": 1024
+        }
+      },
+      "phases": [
+        {
+          "name": "batch_expand_into_evaluate_ntt",
+          "calls": 7,
+          "seconds": 5.891341725,
+          "largest_call_seconds": 3.729689507,
+          "fraction_of_prover_time": 0.0866812126500611
+        },
+        {
+          "name": "hash_rows",
+          "calls": 7,
+          "seconds": 4.412763105,
+          "largest_call_seconds": 2.713478626,
+          "fraction_of_prover_time": 0.06492640809744386
+        },
+        {
+          "name": "batch_evaluate_any",
+          "calls": 4,
+          "seconds": 2.924489462,
+          "largest_call_seconds": 2.465957056,
+          "fraction_of_prover_time": 0.04302895754166845
+        },
+        {
+          "name": "zk_shift",
+          "calls": 3,
+          "seconds": 2.207296988,
+          "largest_call_seconds": 1.46976276,
+          "fraction_of_prover_time": 0.03247667314675544
+        },
+        {
+          "name": "batch_interpolate_ntt",
+          "calls": 4,
+          "seconds": 1.39417233,
+          "largest_call_seconds": 0.796702368,
+          "fraction_of_prover_time": 0.020512907559705536
+        },
+        {
+          "name": "mix_poly_coeffs",
+          "calls": 4,
+          "seconds": 0.77484499,
+          "largest_call_seconds": 0.386403258,
+          "fraction_of_prover_time": 0.011400544474276691
+        },
+        {
+          "name": "hash_fold",
+          "calls": 116,
+          "seconds": 0.767989222,
+          "largest_call_seconds": 0.106401129,
+          "fraction_of_prover_time": 0.011299673346505286
+        },
+        {
+          "name": "alloc_elem",
+          "calls": 19,
+          "seconds": 0.545792197,
+          "largest_call_seconds": 0.225065179,
+          "fraction_of_prover_time": 0.008030416787765107
+        },
+        {
+          "name": "batch_bit_reverse",
+          "calls": 6,
+          "seconds": 0.107301157,
+          "largest_call_seconds": 0.069065044,
+          "fraction_of_prover_time": 0.0015787565620316467
+        },
+        {
+          "name": "alloc_digest",
+          "calls": 7,
+          "seconds": 0.071883114,
+          "largest_call_seconds": 0.01985084,
+          "fraction_of_prover_time": 0.0010576394616767174
+        },
+        {
+          "name": "fri_fold",
+          "calls": 3,
+          "seconds": 0.040638829,
+          "largest_call_seconds": 0.038900747,
+          "fraction_of_prover_time": 0.0005979322101534469
+        },
+        {
+          "name": "eltwise_copy_elem",
+          "calls": 4,
+          "seconds": 0.014465273,
+          "largest_call_seconds": 0.007312916,
+          "fraction_of_prover_time": 0.0002128322313461094
+        },
+        {
+          "name": "scatter",
+          "calls": 2,
+          "seconds": 0.014070818,
+          "largest_call_seconds": 0.01373858,
+          "fraction_of_prover_time": 0.0002070284875926642
+        },
+        {
+          "name": "eltwise_zeroize_elem",
+          "calls": 4,
+          "seconds": 0.011273034,
+          "largest_call_seconds": 0.006402149,
+          "fraction_of_prover_time": 0.00016586378841661385
+        },
+        {
+          "name": "alloc_extelem",
+          "calls": 5,
+          "seconds": 0.006064577,
+          "largest_call_seconds": 0.006061312,
+          "fraction_of_prover_time": 8.923007917515929e-05
+        },
+        {
+          "name": "eltwise_sum_extelem",
+          "calls": 1,
+          "seconds": 0.0031933,
+          "largest_call_seconds": 0.0031933,
+          "fraction_of_prover_time": 4.698405376500887e-05
+        },
+        {
+          "name": "copy_from_elem",
+          "calls": 2,
+          "seconds": 1.2448e-05,
+          "largest_call_seconds": 9.594e-06,
+          "fraction_of_prover_time": 1.8315144247857402e-07
+        },
+        {
+          "name": "copy_from_u32",
+          "calls": 8,
+          "seconds": 4.046e-06,
+          "largest_call_seconds": 8.01e-07,
+          "fraction_of_prover_time": 5.953010413466504e-08
+        },
+        {
+          "name": "copy_from_extelem",
+          "calls": 4,
+          "seconds": 3.226e-06,
+          "largest_call_seconds": 1.943e-06,
+          "fraction_of_prover_time": 4.746517942126284e-08
+        }
+      ],
+      "hal_call_seconds": 19.187599841
+    }
+  },
+  "chain_operations": {
+    "dot32-cpu-batch-lift": {
+      "proof_result": {
+        "operation": "lift",
+        "real_local_proof": true,
+        "result": {
+          "index": 0,
+          "integrity_verified": true,
+          "seal_bytes": 222668
+        },
+        "seconds": 29.985269944
+      },
+      "resources": {
+        "command": [
+          "build/feasibility/cpu-batch-host/proof_chain_bench",
+          "lift",
+          "build/feasibility/dot32-cpu-batch",
+          "0"
+        ],
+        "exit_code": 0,
+        "stopped_by": null,
+        "seconds": 30.151654977998987,
+        "sampled_peak_group_rss_kib": 1446812,
+        "minimum_free_disk_bytes": 1898795008,
+        "sampling_seconds": 0.25,
+        "limits": {
+          "seconds": 180,
+          "rss_mib": 4096,
+          "free_mib": 1024
+        }
+      }
+    },
+    "dot32-cpu-batch-independent-padded": {
+      "proof_result": {
+        "operation": "padded",
+        "real_local_proof": true,
+        "result": {
+          "complete_guest_verified": true,
+          "corrupt_seal_rejected": true,
+          "hashfn": "sha-256-padded",
+          "integrity_verified": true,
+          "seal_bytes": 222668
+        },
+        "seconds": 19.981327298
+      },
+      "resources": {
+        "command": [
+          "build/aggregation/dot32-iterative-baseline/proof_chain_bench",
+          "padded",
+          "build/feasibility/dot32-cpu-batch",
+          "lift-0"
+        ],
+        "exit_code": 0,
+        "stopped_by": null,
+        "seconds": 20.119271183997625,
+        "sampled_peak_group_rss_kib": 1439756,
+        "minimum_free_disk_bytes": 1898491904,
+        "sampling_seconds": 0.25,
+        "limits": {
+          "seconds": 180,
+          "rss_mib": 4096,
+          "free_mib": 1024
+        }
+      }
+    },
+    "dot32-cpu-batch-native-lift": {
+      "proof_result": {
+        "operation": "lift",
+        "real_local_proof": true,
+        "result": {
+          "index": 0,
+          "integrity_verified": true,
+          "seal_bytes": 222668
+        },
+        "seconds": 21.368893639
+      },
+      "resources": {
+        "command": [
+          "build/feasibility/cpu-batch-native-host/proof_chain_bench",
+          "lift",
+          "build/feasibility/dot32-cpu-batch-native",
+          "0"
+        ],
+        "exit_code": 0,
+        "stopped_by": null,
+        "seconds": 21.620129304999864,
+        "sampled_peak_group_rss_kib": 1443276,
+        "minimum_free_disk_bytes": 1808297984,
+        "sampling_seconds": 0.25,
+        "limits": {
+          "seconds": 180,
+          "rss_mib": 4096,
+          "free_mib": 1024
+        }
+      }
+    },
+    "dot32-cpu-batch-native-independent-padded": {
+      "proof_result": {
+        "operation": "padded",
+        "real_local_proof": true,
+        "result": {
+          "complete_guest_verified": true,
+          "corrupt_seal_rejected": true,
+          "hashfn": "sha-256-padded",
+          "integrity_verified": true,
+          "seal_bytes": 222668
+        },
+        "seconds": 23.249083234
+      },
+      "resources": {
+        "command": [
+          "build/aggregation/dot32-iterative-baseline/proof_chain_bench",
+          "padded",
+          "build/feasibility/dot32-cpu-batch-native",
+          "lift-0"
+        ],
+        "exit_code": 0,
+        "stopped_by": null,
+        "seconds": 23.408121713000583,
+        "sampled_peak_group_rss_kib": 1440196,
+        "minimum_free_disk_bytes": 1808007168,
+        "sampling_seconds": 0.25,
+        "limits": {
+          "seconds": 180,
+          "rss_mib": 4096,
+          "free_mib": 1024
+        }
+      }
+    }
+  },
+  "patch_reapplication": {
+    "risc0_sha": "1cc70cf05033a79ebc90f07c679cb4bd1cd301b9",
+    "reapplied_dependency_files": 19,
+    "all_bytes_equal": true,
+    "patches": {
+      "risc0-succinct/risc0-v3.0.6.patch": "4bab9f2a2a12f8e98d82947b7ffdfc71d06648b3ce86786ebaa52ae62809cf1e",
+      "privacy-rollup/patches/risc0-cpu-profile.patch": "089557e11dc33410c46b0519106e8296e7c289c3fd427895bc5db902efcc90e7",
+      "privacy-rollup/patches/risc0-cpu-batch.patch": "3ca7467d40ff860ac22c4989d9be15292c75af3a3c48de7c6c13b21f23c7da91"
+    }
+  },
+  "source_guest_equality": {
+    "apply_batch.bin": "ad7f1a3c326d964c34e9ab55f662bb8831cd781eb77db3f500a1f490edf16e06",
+    "verify_joinsplit.bin": "fce10ea7a2e58f88df57da5b401f5c8fa85e2ed0f2072d7f037c9c99db36aa60"
+  },
+  "sdk_tests": {
+    "batched_passed": 35,
+    "default_hal_passed": 1,
+    "batched_resources": {
+      "command": [
+        "cargo",
+        "+1.97",
+        "test",
+        "--manifest-path",
+        "/workspace/risc0/Cargo.toml",
+        "--locked",
+        "--release",
+        "-p",
+        "risc0-zkp",
+        "--features",
+        "prove,unstable",
+        "--lib",
+        "--",
+        "--test-threads=1"
+      ],
+      "exit_code": 0,
+      "stopped_by": null,
+      "seconds": 4.821090781999374,
+      "sampled_peak_group_rss_kib": 495420,
+      "minimum_free_disk_bytes": 1992667136,
+      "sampling_seconds": 0.25,
+      "limits": {
+        "seconds": 300,
+        "rss_mib": 8192,
+        "free_mib": 1024
+      }
+    }
+  },
+  "lean_log": "'Aggregation.PackedBabyBear.addition_fits' depends on axioms: [propext, Quot.sound]\n'Aggregation.PackedBabyBear.multiplication_fits' depends on axioms: [propext, Quot.sound]\n'Aggregation.PackedBabyBear.reduction_numerator_bound' depends on axioms: [propext, Quot.sound]\n'Aggregation.PackedBabyBear.single_subtraction_canonical' depends on axioms: [propext, Quot.sound]\n'Aggregation.PackedBabyBear.montgomery_constant' does not depend on any axioms\n",
+  "artifacts": {
+    "build/feasibility/dot32-cpu-profile/journal.bin": {
+      "bytes": 128,
+      "sha256": "a93d19c597f1caf16a2cd3e3d492bb68e7ae0d1726df571b020b6edb8d916696"
+    },
+    "build/feasibility/dot32-cpu-profile/capture.json": {
+      "bytes": 344,
+      "sha256": "602a6b76c0009403170ade39137dbcf3ea3bcb724d55a0b05932208c71de1182"
+    },
+    "build/feasibility/dot32-cpu-profile/segment-0.pc": {
+      "bytes": 86939,
+      "sha256": "9cadf4f17145b650be48b5bfd2c6734788ab1c8266ef9d6a75838d246e17d53a"
+    },
+    "build/feasibility/dot32-cpu-profile/receipt-0.pc": {
+      "bytes": 310788,
+      "sha256": "82ac8e3927ba8933a92f6c44a446782b29ae76041087fdc12bee4290df118dc4"
+    },
+    "build/feasibility/dot32-cpu-batch/padded.pc": {
+      "bytes": 273565,
+      "sha256": "6b44092c967fd31c00f69535915b79a1110a61d47e8a707deb8a12bc5bbc89b6"
+    },
+    "build/feasibility/dot32-cpu-batch/journal.bin": {
+      "bytes": 128,
+      "sha256": "a93d19c597f1caf16a2cd3e3d492bb68e7ae0d1726df571b020b6edb8d916696"
+    },
+    "build/feasibility/dot32-cpu-batch/padded-parameters.pc": {
+      "bytes": 112,
+      "sha256": "819709414c1091a304e8f59de054e98b8bee490a74522136b378a8c76a11d797"
+    },
+    "build/feasibility/dot32-cpu-batch/capture.json": {
+      "bytes": 344,
+      "sha256": "602a6b76c0009403170ade39137dbcf3ea3bcb724d55a0b05932208c71de1182"
+    },
+    "build/feasibility/dot32-cpu-batch/segment-0.pc": {
+      "bytes": 86939,
+      "sha256": "9cadf4f17145b650be48b5bfd2c6734788ab1c8266ef9d6a75838d246e17d53a"
+    },
+    "build/feasibility/dot32-cpu-batch/receipt-0.pc": {
+      "bytes": 310859,
+      "sha256": "316c1d624cbfc9a08c56cf84739131c73430130d81a31a01f01544d7c821580b"
+    },
+    "build/feasibility/dot32-cpu-batch/lift-0.pc": {
+      "bytes": 271179,
+      "sha256": "7904d9db0e7205f906dd52bc739b58f21b5ec4d1065001d3d237d1f0819c3a95"
+    },
+    "build/feasibility/dot32-cpu-batch-native/padded.pc": {
+      "bytes": 273653,
+      "sha256": "79a9c5f9e438800ed9974dcaf81ec2f421354993a2ec43c7824b573121c36dc7"
+    },
+    "build/feasibility/dot32-cpu-batch-native/journal.bin": {
+      "bytes": 128,
+      "sha256": "a93d19c597f1caf16a2cd3e3d492bb68e7ae0d1726df571b020b6edb8d916696"
+    },
+    "build/feasibility/dot32-cpu-batch-native/padded-parameters.pc": {
+      "bytes": 112,
+      "sha256": "819709414c1091a304e8f59de054e98b8bee490a74522136b378a8c76a11d797"
+    },
+    "build/feasibility/dot32-cpu-batch-native/capture.json": {
+      "bytes": 344,
+      "sha256": "602a6b76c0009403170ade39137dbcf3ea3bcb724d55a0b05932208c71de1182"
+    },
+    "build/feasibility/dot32-cpu-batch-native/segment-0.pc": {
+      "bytes": 86939,
+      "sha256": "9cadf4f17145b650be48b5bfd2c6734788ab1c8266ef9d6a75838d246e17d53a"
+    },
+    "build/feasibility/dot32-cpu-batch-native/receipt-0.pc": {
+      "bytes": 310661,
+      "sha256": "05e9069c1384d626ff4a3eab96fe6420fbadbd84c91bc741ba38692347949f98"
+    },
+    "build/feasibility/dot32-cpu-batch-native/lift-0.pc": {
+      "bytes": 271226,
+      "sha256": "e20d45612d2a38e5ed09cc40965792c645566c4b35bb1aa51de1b93a25aa0611"
+    }
+  }
+}

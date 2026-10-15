@@ -2649,6 +2649,7 @@ dependencies = [
  "pr-state-transition",
  "risc0-zkvm",
  "serde_json",
+ "tracing",
 ]
 
 [[package]]

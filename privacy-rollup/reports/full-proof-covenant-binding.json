@@ -1,0 +1,41 @@
+{
+  "scope": "Commitment inspection only; no receipt verification or chain settlement",
+  "witness_sha256": "0beabb1cb720abaf578400dc3f8116ec2838e8589fc1087f7b157d208d34a0f8",
+  "journal_sha256": "4e366d165e21f04fcb31f5cd46b0abfecd9d6503f8d542c3f45399256890b43f",
+  "frozen_transaction_digests_match_journal": true,
+  "frozen_input_scripts": [
+    "5120aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "512041"
+  ],
+  "frozen_output_scripts": [
+    "5120aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+  ],
+  "images": {
+    "old_template": {
+      "image_id": "a55fa2f95eb766642b9bd933c834775aa90e71dd8054b129107eea7030cbf761",
+      "script_bytes": 159229,
+      "script_sha256": "ddc2cfc5c805382a6747aec2eb578d6996585b1b14dc69d5855ebc264d54437b",
+      "input_script_pubkey": "512008ca451b88e44b8a40ac8580ba4a2ef968cae885ec14fb853993db5d71a14eb5",
+      "successor_script_pubkey": "51201d853d97d8c4736e8a273950fcaf5bfc89d1e7e2dc072a40bde138389246f9ad",
+      "frozen_input_matches": false,
+      "frozen_successor_matches": false,
+      "replacing_scripts_preserves_inputs_digest": false,
+      "replacing_scripts_preserves_outputs_digest": false,
+      "replacement_inputs_digest": "75c1479ba3d1bd82b78a99cffa3e2fe72561f7c00233197b208599199da85b02",
+      "replacement_outputs_digest": "0b6432427d6894013ebc0891be779948189ed7cd9480539f1859128a8a178747"
+    },
+    "optimized": {
+      "image_id": "fc7c90972cfd366c450cf202c7131fea5d04f81b76f93d6925ce15e33cdd14be",
+      "script_bytes": 159229,
+      "script_sha256": "4d45fc7343aae05d01399f8b884623de626386fc325e716fab21803c0d8c104f",
+      "input_script_pubkey": "51205b8ddb7f31f57faa2247b607e4b7effc0b64f3e6c3d9e9b9f705430166884822",
+      "successor_script_pubkey": "512099f6e5f9c4191d487d27518f8733d7564774272141852e69890ecf00f84b7ba7",
+      "frozen_input_matches": false,
+      "frozen_successor_matches": false,
+      "replacing_scripts_preserves_inputs_digest": false,
+      "replacing_scripts_preserves_outputs_digest": false,
+      "replacement_inputs_digest": "ef98bba3354f9f8a6a749b5c1f4bf60bdf3b9cea7442834765bd82dbf5bb0a0d",
+      "replacement_outputs_digest": "c218e5a54f76755791c78a6a452fb08836ed8246a72623f3bc9166e2548d296c"
+    }
+  }
+}

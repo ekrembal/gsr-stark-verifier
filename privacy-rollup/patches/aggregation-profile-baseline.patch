@@ -1,0 +1,176 @@
+--- a/privacy-rollup/crates/provekit-adapter/Cargo.toml
++++ b/privacy-rollup/crates/provekit-adapter/Cargo.toml
+@@ -7,9 +7,9 @@
+ [dependencies]
+ pr-protocol-types.workspace = true
+ pr-crypto.workspace = true
+-provekit-common = { path = "../../../../../provekit/provekit/common" }
+-provekit-prover = { path = "../../../../../provekit/provekit/prover" }
+-provekit-verifier = { path = "../../../../../provekit/provekit/verifier" }
++provekit-common = { path = "../../../../provekit/provekit/common" }
++provekit-prover = { path = "../../../../provekit/provekit/prover" }
++provekit-verifier = { path = "../../../../provekit/provekit/verifier" }
+ postcard = { workspace = true, features = ["use-std"] }
+ anyhow.workspace = true
+ sha2 = { workspace = true, features = ["std"] }
+--- a/privacy-rollup/methods/Cargo.toml
++++ b/privacy-rollup/methods/Cargo.toml
+@@ -5,7 +5,7 @@
+ license = "MIT"
+ 
+ [build-dependencies]
+-risc0-build = { path = "../../../../risc0/risc0/build" }
++risc0-build = { path = "../../../risc0/risc0/build" }
+ 
+ [package.metadata.risc0]
+ methods = ["guest"]
+--- a/privacy-rollup/methods/guest/Cargo.toml
++++ b/privacy-rollup/methods/guest/Cargo.toml
+@@ -16,18 +16,18 @@
+ path = "src/bin/apply_batch.rs"
+ 
+ [dependencies]
+-risc0-zkvm = { path = "../../../../../risc0/risc0/zkvm", default-features = false, features = ["std", "unstable"] }
+-provekit-common = { path = "../../../../../provekit/provekit/common" }
+-provekit-verifier = { path = "../../../../../provekit/provekit/verifier" }
++risc0-zkvm = { path = "../../../../risc0/risc0/zkvm", default-features = false, features = ["std", "unstable"] }
++provekit-common = { path = "../../../../provekit/provekit/common" }
++provekit-verifier = { path = "../../../../provekit/provekit/verifier" }
+ postcard = { version = "1.1.3", features = ["alloc"] }
+ tracing = { version = "0.1.44", features = ["std"] }
+-risc0-bigint2 = { path = "../../../../../risc0/risc0/bigint2" }
++risc0-bigint2 = { path = "../../../../risc0/risc0/bigint2" }
+ ark-bn254 = { version = "0.6.0", default-features = false, features = ["scalar_field"] }
+ ark-ff = { version = "0.6.0", default-features = false }
+ pr-crypto = { path = "../../crates/crypto" }
+ pr-protocol-types = { path = "../../crates/protocol-types" }
+ pr-state-transition = { path = "../../crates/state-transition" }
+-risc0-zkvm-platform = { path = "../../../../../risc0/risc0/zkvm/platform", features = ["sys-getenv"] }
++risc0-zkvm-platform = { path = "../../../../risc0/risc0/zkvm/platform", features = ["sys-getenv"] }
+ 
+ [profile.release]
+ lto = true
+--- a/privacy-rollup/prover/Cargo.toml
++++ b/privacy-rollup/prover/Cargo.toml
+@@ -8,7 +8,7 @@
+ pr-methods = { path = "../methods" }
+ pr-protocol-types = { path = "../crates/protocol-types" }
+ pr-state-transition = { path = "../crates/state-transition" }
+-risc0-zkvm = { path = "../../../../risc0/risc0/zkvm", features = ["prove", "unstable"] }
++risc0-zkvm = { path = "../../../risc0/risc0/zkvm", features = ["prove", "unstable"] }
+ postcard = { version = "1.1.3", features = ["alloc"] }
+ serde_json = "1.0"
+ hex = "0.4.3"
+--- a/privacy-rollup/vendor/ark-ff/Cargo.toml
++++ b/privacy-rollup/vendor/ark-ff/Cargo.toml
+@@ -117,7 +117,7 @@
+ default-features = false
+ 
+ [target.'cfg(target_os = "zkvm")'.dependencies.risc0-bigint2]
+-path = "../../../../../risc0/risc0/bigint2"
++path = "../../../../risc0/risc0/bigint2"
+ 
+ [dev-dependencies.blake2]
+ version = "0.10"
+--- a/privacy-rollup/methods/guest/src/bin/verify_joinsplit.rs
++++ b/privacy-rollup/methods/guest/src/bin/verify_joinsplit.rs
+@@ -8,9 +8,9 @@
+ 
+ #[derive(Default)]
+ struct Profile {
+-    names: Vec<&'static str>,
+-    stack: Vec<(usize, u64)>,
+-    totals: BTreeMap<&'static str, (u64, u64)>,
++    names: Vec<(&'static str, &'static str)>,
++    stack: Vec<(usize, u64, u64)>,
++    totals: BTreeMap<(&'static str, &'static str), (u64, u64, u64)>,
+ }
+ 
+ struct CycleSub(&'static Mutex<Profile>);
+@@ -21,23 +21,33 @@
+     }
+     fn new_span(&self, a: &span::Attributes<'_>) -> Id {
+         let mut p = self.0.lock().unwrap();
+-        p.names.push(a.metadata().name());
+-        Id::from_u64(p.names.len() as u64)
++        let key = (a.metadata().module_path().unwrap_or(""), a.metadata().name());
++        let i = p.names.iter().position(|n| *n == key).unwrap_or_else(|| {
++            p.names.push(key);
++            p.names.len() - 1
++        });
++        Id::from_u64(i as u64 + 1)
+     }
+     fn record(&self, _: &Id, _: &span::Record<'_>) {}
+     fn record_follows_from(&self, _: &Id, _: &Id) {}
+     fn event(&self, _: &Event<'_>) {}
+     fn enter(&self, id: &Id) {
+-        self.0.lock().unwrap().stack.push((id.into_u64() as usize, env::cycle_count()));
++        self.0.lock().unwrap().stack.push((id.into_u64() as usize, env::cycle_count(), 0));
+     }
+-    fn exit(&self, _: &Id) {
++    fn exit(&self, id: &Id) {
+         let now = env::cycle_count();
+         let mut p = self.0.lock().unwrap();
+-        let (i, t) = p.stack.pop().unwrap();
++        let (i, t, children) = p.stack.pop().unwrap();
++        assert_eq!(i as u64, id.into_u64(), "profile span nesting");
++        let elapsed = now - t;
++        if let Some(parent) = p.stack.last_mut() {
++            parent.2 += elapsed;
++        }
+         let name = p.names[i - 1];
+         let e = p.totals.entry(name).or_default();
+-        e.0 += now - t;
+-        e.1 += 1;
++        e.0 += elapsed;
++        e.1 += elapsed - children;
++        e.2 += 1;
+     }
+ }
+ 
+@@ -92,13 +102,16 @@
+     let proof = env::read_frame();
+     let t1 = env::cycle_count();
+     let mut verifier: Verifier = postcard::from_bytes(&vk).expect("verifier key");
++    let t_vk = env::cycle_count();
+     let proof: NoirProof = postcard::from_bytes(&proof).expect("proof");
+     let t2 = env::cycle_count();
+-    eprintln!("read {} deserialize {}", t1 - t0, t2 - t1);
++    eprintln!("phase read: {} cycles", t1 - t0);
++    eprintln!("phase deserialize_vk: {} cycles", t_vk - t1);
++    eprintln!("phase deserialize_proof: {} cycles", t2 - t_vk);
+     verifier.verify(&proof).expect("join-split proof");
+     eprintln!("verify cycles: {}", env::cycle_count() - t2);
+-    for (n, (c, k)) in &PROFILE.lock().unwrap().totals {
+-        eprintln!("span {n}: {c} cycles over {k} entries");
++    for ((module, n), (inclusive, exclusive, calls)) in &PROFILE.lock().unwrap().totals {
++        eprintln!("span {module}::{n}: inclusive={inclusive} exclusive={exclusive} calls={calls}");
+     }
+     env::commit(&proof.public_inputs.0.len());
+ }
+--- a/privacy-rollup/prover/src/bin/exec_joinsplit.rs
++++ b/privacy-rollup/prover/src/bin/exec_joinsplit.rs
+@@ -3,11 +3,21 @@
+ 
+ fn main() -> anyhow::Result<()> {
+     let args: Vec<String> = std::env::args().collect();
++    anyhow::ensure!(
++        args.len() == 3 || args.len() == 4,
++        "usage: exec_joinsplit <vk.pc> <proof.pc> [combined-guest.bin]"
++    );
+     let vk = std::fs::read(&args[1])?;
+     let proof = std::fs::read(&args[2])?;
+     println!("vk {} bytes, proof {} bytes (postcard)", vk.len(), proof.len());
+-    let env = ExecutorEnv::builder().write_frame(&vk).write_frame(&proof).build()?;
+-    let info = default_executor().execute(env, pr_methods::VERIFY_JOINSPLIT_ELF)?;
++    let program = if args.len() == 4 { std::fs::read(&args[3])? } else { pr_methods::VERIFY_JOINSPLIT_ELF.to_vec() };
++    let env = ExecutorEnv::builder().session_limit(Some(2_000_000_000)).write_frame(&vk).write_frame(&proof).build()?;
++    let started = std::time::Instant::now();
++    let info = default_executor().execute(env, &program)?;
+     println!("total cycles {} segments {}", info.cycles(), info.segments.len());
++    println!(
++        "{}",
++        serde_json::json!({"cycles": info.cycles(), "segments": info.segments.len(), "runtime_seconds": started.elapsed().as_secs_f64(), "journal": hex::encode(&info.journal.bytes), "vk_bytes": vk.len(), "proof_bytes": proof.len()})
++    );
+     Ok(())
+ }

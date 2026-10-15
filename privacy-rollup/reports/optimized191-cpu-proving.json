@@ -1,0 +1,364 @@
+{
+  "scope": "Selected segment 100 only; not a complete JoinSplit receipt",
+  "capture": {
+    "complete": false,
+    "count": 1,
+    "first": 100,
+    "image_id": "fc7c90972cfd366c450cf202c7131fea5d04f81b76f93d6925ce15e33cdd14be",
+    "paging_cycles": 20920642,
+    "reserved_cycles": 6064020,
+    "segments": 208,
+    "selected": [
+      {
+        "bytes": 119191,
+        "index": 100,
+        "po2": 20
+      }
+    ],
+    "total_cycles": 218103808,
+    "user_cycles": 191119146
+  },
+  "runtime_env": {
+    "RAYON_NUM_THREADS": "4",
+    "GSR_PROFILE_CPU": "1",
+    "GSR_BATCH_CPU": "1"
+  },
+  "compiler": "Only host risc0_zkp compiled with target-cpu=native and codegen-units=1; all guest/AIR parameters unchanged",
+  "profile": {
+    "scope": "Host CPU HAL call wall times, including Rayon workers; not CPU-time samples",
+    "timer_env": "GSR_PROFILE_CPU=1",
+    "proof_result": {
+      "operation": "prove",
+      "real_local_proof": true,
+      "result": {
+        "index": 100,
+        "integrity_verified": true,
+        "po2": 20,
+        "seal_bytes": 281128
+      },
+      "seconds": 264.454877527
+    },
+    "resources": {
+      "command": [
+        "build/feasibility/cpu-batch-native-host/proof_chain_bench",
+        "prove",
+        "build/feasibility/optimized191-cpu-batch-native",
+        "100"
+      ],
+      "exit_code": 0,
+      "stopped_by": null,
+      "seconds": 264.57629701500264,
+      "sampled_peak_group_rss_kib": 9588112,
+      "minimum_free_disk_bytes": 1807593472,
+      "sampling_seconds": 0.25,
+      "limits": {
+        "seconds": 600,
+        "rss_mib": 12288,
+        "free_mib": 1024
+      }
+    },
+    "phases": [
+      {
+        "name": "batch_expand_into_evaluate_ntt",
+        "calls": 7,
+        "seconds": 26.061131,
+        "largest_call_seconds": 16.996891895,
+        "fraction_of_prover_time": 0.09854660743528634
+      },
+      {
+        "name": "hash_rows",
+        "calls": 7,
+        "seconds": 16.949491812,
+        "largest_call_seconds": 10.23283498,
+        "fraction_of_prover_time": 0.06409218831771976
+      },
+      {
+        "name": "batch_evaluate_any",
+        "calls": 4,
+        "seconds": 10.737251662,
+        "largest_call_seconds": 8.873265528,
+        "fraction_of_prover_time": 0.040601450661101005
+      },
+      {
+        "name": "zk_shift",
+        "calls": 3,
+        "seconds": 10.455009787,
+        "largest_call_seconds": 7.178299109,
+        "fraction_of_prover_time": 0.03953419155951312
+      },
+      {
+        "name": "batch_interpolate_ntt",
+        "calls": 4,
+        "seconds": 6.126716039,
+        "largest_call_seconds": 3.954896293,
+        "fraction_of_prover_time": 0.023167339911794524
+      },
+      {
+        "name": "alloc_elem",
+        "calls": 19,
+        "seconds": 4.360549287,
+        "largest_call_seconds": 1.67507881,
+        "fraction_of_prover_time": 0.016488821562970803
+      },
+      {
+        "name": "mix_poly_coeffs",
+        "calls": 4,
+        "seconds": 3.152139023,
+        "largest_call_seconds": 1.647482892,
+        "fraction_of_prover_time": 0.011919383194882373
+      },
+      {
+        "name": "hash_fold",
+        "calls": 130,
+        "seconds": 2.885430617,
+        "largest_call_seconds": 0.367816244,
+        "fraction_of_prover_time": 0.010910861784749674
+      },
+      {
+        "name": "batch_bit_reverse",
+        "calls": 6,
+        "seconds": 0.478622321,
+        "largest_call_seconds": 0.28541479,
+        "fraction_of_prover_time": 0.0018098449364055847
+      },
+      {
+        "name": "alloc_digest",
+        "calls": 7,
+        "seconds": 0.467174963,
+        "largest_call_seconds": 0.180496713,
+        "fraction_of_prover_time": 0.0017665583156139856
+      },
+      {
+        "name": "fri_fold",
+        "calls": 3,
+        "seconds": 0.110254504,
+        "largest_call_seconds": 0.103305428,
+        "fraction_of_prover_time": 0.0004169123482653231
+      },
+      {
+        "name": "alloc_extelem",
+        "calls": 5,
+        "seconds": 0.053734938,
+        "largest_call_seconds": 0.053731803,
+        "fraction_of_prover_time": 0.00020319132890454566
+      },
+      {
+        "name": "scatter",
+        "calls": 2,
+        "seconds": 0.053086889,
+        "largest_call_seconds": 0.053086288,
+        "fraction_of_prover_time": 0.000200740820121875
+      },
+      {
+        "name": "eltwise_copy_elem",
+        "calls": 4,
+        "seconds": 0.048248057,
+        "largest_call_seconds": 0.03333914,
+        "fraction_of_prover_time": 0.0001824434378037668
+      },
+      {
+        "name": "eltwise_zeroize_elem",
+        "calls": 4,
+        "seconds": 0.030412719,
+        "largest_call_seconds": 0.017554996,
+        "fraction_of_prover_time": 0.00011500154311540334
+      },
+      {
+        "name": "eltwise_sum_extelem",
+        "calls": 1,
+        "seconds": 0.009541287,
+        "largest_call_seconds": 0.009541287,
+        "fraction_of_prover_time": 3.607907363714956e-05
+      },
+      {
+        "name": "copy_from_elem",
+        "calls": 2,
+        "seconds": 7.671e-06,
+        "largest_call_seconds": 5.448e-06,
+        "fraction_of_prover_time": 2.9006838791305013e-08
+      },
+      {
+        "name": "copy_from_u32",
+        "calls": 8,
+        "seconds": 5.026e-06,
+        "largest_call_seconds": 1.232e-06,
+        "fraction_of_prover_time": 1.9005132546617e-08
+      },
+      {
+        "name": "copy_from_extelem",
+        "calls": 4,
+        "seconds": 3.034e-06,
+        "largest_call_seconds": 1.642e-06,
+        "fraction_of_prover_time": 1.1472656614889768e-08
+      }
+    ],
+    "hal_call_seconds": 81.978810636
+  },
+  "operations": {
+    "prove": {
+      "proof_result": {
+        "operation": "prove",
+        "real_local_proof": true,
+        "result": {
+          "index": 100,
+          "integrity_verified": true,
+          "po2": 20,
+          "seal_bytes": 281128
+        },
+        "seconds": 264.454877527
+      },
+      "resources": {
+        "command": [
+          "build/feasibility/cpu-batch-native-host/proof_chain_bench",
+          "prove",
+          "build/feasibility/optimized191-cpu-batch-native",
+          "100"
+        ],
+        "exit_code": 0,
+        "stopped_by": null,
+        "seconds": 264.57629701500264,
+        "sampled_peak_group_rss_kib": 9588112,
+        "minimum_free_disk_bytes": 1807593472,
+        "sampling_seconds": 0.25,
+        "limits": {
+          "seconds": 600,
+          "rss_mib": 12288,
+          "free_mib": 1024
+        }
+      }
+    },
+    "lift": {
+      "proof_result": {
+        "operation": "lift",
+        "real_local_proof": true,
+        "result": {
+          "index": 100,
+          "integrity_verified": true,
+          "seal_bytes": 222668
+        },
+        "seconds": 21.835665019
+      },
+      "resources": {
+        "command": [
+          "build/feasibility/cpu-batch-native-host/proof_chain_bench",
+          "lift",
+          "build/feasibility/optimized191-cpu-batch-native",
+          "100"
+        ],
+        "exit_code": 0,
+        "stopped_by": null,
+        "seconds": 21.880161597997358,
+        "sampled_peak_group_rss_kib": 1451132,
+        "minimum_free_disk_bytes": 1807228928,
+        "sampling_seconds": 0.25,
+        "limits": {
+          "seconds": 180,
+          "rss_mib": 4096,
+          "free_mib": 1024
+        }
+      }
+    },
+    "join": {
+      "proof_result": {
+        "operation": "join",
+        "real_local_proof": true,
+        "result": {
+          "integrity_verified": true,
+          "seal_bytes": 222668
+        },
+        "seconds": 21.970441345
+      },
+      "resources": {
+        "command": [
+          "build/feasibility/cpu-batch-native-host/proof_chain_bench",
+          "join",
+          "build/feasibility/kernel-cpu-batch-join",
+          "0",
+          "1"
+        ],
+        "exit_code": 0,
+        "stopped_by": null,
+        "seconds": 22.134910777000186,
+        "sampled_peak_group_rss_kib": 1448084,
+        "minimum_free_disk_bytes": 1564831744,
+        "sampling_seconds": 0.25,
+        "limits": {
+          "seconds": 180,
+          "rss_mib": 4096,
+          "free_mib": 1024
+        }
+      },
+      "scope": "Reused prior complete two-segment diagnostic lifts; independent of application segment 100"
+    },
+    "independent_padded": {
+      "proof_result": {
+        "operation": "padded",
+        "real_local_proof": true,
+        "result": {
+          "complete_guest_verified": true,
+          "corrupt_seal_rejected": true,
+          "hashfn": "sha-256-padded",
+          "integrity_verified": true,
+          "seal_bytes": 222668
+        },
+        "seconds": 20.707067974
+      },
+      "resources": {
+        "command": [
+          "build/aggregation/dot32-iterative-baseline/proof_chain_bench",
+          "padded",
+          "build/feasibility/kernel-cpu-batch-join",
+          "joined"
+        ],
+        "exit_code": 0,
+        "stopped_by": null,
+        "seconds": 20.862391788999957,
+        "sampled_peak_group_rss_kib": 1439760,
+        "minimum_free_disk_bytes": 1564549120,
+        "sampling_seconds": 0.25,
+        "limits": {
+          "seconds": 180,
+          "rss_mib": 4096,
+          "free_mib": 1024
+        }
+      },
+      "scope": "Reused prior complete two-segment diagnostic lifts; independent of application segment 100"
+    }
+  },
+  "projection": {
+    "measured_full_receipt": false,
+    "assumes_equivalent_segment_cost": true,
+    "segments": 208,
+    "join_count": 207,
+    "leaf_hours": 15.279615146004446,
+    "serial_total_hours_using_previous_standard_join": 19.009867527657775,
+    "previous_join_seconds": 42.83447,
+    "previous_padded_seconds": 20.35496,
+    "warning": "Extrapolation from one selected segment and earlier join costs; not an architectural bound or feasibility demonstration",
+    "serial_total_hours_with_measured_native_join": 17.810283687765832,
+    "native_join_seconds": 21.970441345,
+    "independent_padded_seconds": 20.707067974
+  },
+  "artifacts": {
+    "build/feasibility/optimized191-cpu-batch-native/lift-100.pc": {
+      "bytes": 271094,
+      "sha256": "3ee6fb675030d902e8ab6db8c12a6942bcd86a5f5e736ba02ca3513e5981b169"
+    },
+    "build/feasibility/optimized191-cpu-batch-native/journal.bin": {
+      "bytes": 196,
+      "sha256": "4e366d165e21f04fcb31f5cd46b0abfecd9d6503f8d542c3f45399256890b43f"
+    },
+    "build/feasibility/optimized191-cpu-batch-native/receipt-100.pc": {
+      "bytes": 336739,
+      "sha256": "879e92a6a77a3c76f777f2caeb36a4e318d54b11fe43ce02cd2a1dd5ad1669c1"
+    },
+    "build/feasibility/optimized191-cpu-batch-native/capture.json": {
+      "bytes": 362,
+      "sha256": "f34ae62d9a358bbf7c024e563bb6518bdd9b764255ad86f331d48c66bec61096"
+    },
+    "build/feasibility/optimized191-cpu-batch-native/segment-100.pc": {
+      "bytes": 119191,
+      "sha256": "e6e697405b8ad9afcce5deb4b38bbdcf0f7fa8293cdbd2d3d5d2d331b0b702c4"
+    }
+  }
+}

@@ -2490,9 +2490,11 @@ dependencies = [
  "pr-state-transition",
  "provekit-common",
  "provekit-verifier",
+ "provekit-whir",
  "risc0-bigint2",
  "risc0-zkvm",
  "risc0-zkvm-platform",
+ "sha2 0.10.9",
  "tracing",
 ]
 
@@ -2663,17 +2665,17 @@ version = "1.0.2"
 dependencies = [
  "anyhow",
  "ark-std 0.6.0",
+ "postcard",
  "provekit-common",
  "provekit-whir",
  "rayon",
+ "sha2 0.10.9",
  "tracing",
 ]
 
 [[package]]
 name = "provekit-whir"
 version = "0.2.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e79f9438fb42671b8437826b5d03233b0584154a300e648de38b0dae6725db6b"
 dependencies = [
  "approx",
  "ark-ff 0.6.0",
@@ -3427,8 +3429,7 @@ dependencies = [
 [[package]]
 name = "sha2"
 version = "0.10.9"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a7507d819769d01a365ab707794a4084392c824f54a7a6a7862f8c3d0892b283"
+source = "git+https://github.com/risc0/RustCrypto-hashes?rev=8631fabdea7bdffa97b11868e04e73491d8e5bcf#8631fabdea7bdffa97b11868e04e73491d8e5bcf"
 dependencies = [
  "cfg-if",
  "cpufeatures 0.2.17",

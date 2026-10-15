@@ -1,0 +1,100 @@
+diff --git a/risc0/circuit/rv32im/src/prove/hal/cpu.rs b/risc0/circuit/rv32im/src/prove/hal/cpu.rs
+index 073d0f26..cbbbd8e8 100644
+--- a/risc0/circuit/rv32im/src/prove/hal/cpu.rs
++++ b/risc0/circuit/rv32im/src/prove/hal/cpu.rs
+@@ -43,6 +43,18 @@ use crate::{
+ 
+ type CpuHal = risc0_zkp::hal::cpu::CpuHal<CircuitField>;
+ 
++// (3 * g^cycle)^(2^po2) has period INV_RATE because g has order
++// 2^po2 * INV_RATE. Evaluate the original expression at each residue;
++// preserve the field's existing inverse semantics exactly.
++fn periodic_quotients(po2: usize) -> [Val; INV_RATE] {
++    let root = Val::ROU_FWD[po2 + log2_ceil(INV_RATE)];
++    core::array::from_fn(|residue| {
++        let x = root.pow(residue);
++        let y = (Val::new(3) * x).pow(1 << po2);
++        (y - Val::new(1)).inv()
++    })
++}
++
+ #[derive(Default)]
+ pub struct CpuCircuitHal;
+ 
+@@ -152,6 +164,10 @@ impl CircuitHal<CpuHal> for CpuCircuitHal {
+         steps: usize,
+     ) {
+         scope!("eval_check");
++        let profile_start =
++            (std::env::var("GSR_PROFILE_CPU").as_deref() == Ok("1")).then(std::time::Instant::now);
++        let periodic = (std::env::var("GSR_PERIODIC_CPU").as_deref() == Ok("1"))
++            .then(|| periodic_quotients(po2));
+ 
+         const EXP_PO2: usize = log2_ceil(INV_RATE);
+         let domain = steps * INV_RATE;
+@@ -178,7 +194,9 @@ impl CircuitHal<CpuHal> for CpuCircuitHal {
+         let args: &[&[Val]] = &[accum, data, out, mix];
+ 
+         (0..domain).into_par_iter().for_each(|cycle| {
+-            let args: Vec<*const Val> = args.iter().map(|x| (*x).as_ptr()).collect();
++            // Four input groups have a fixed layout. Stack storage preserves
++            // pointer order/lifetime and avoids a heap allocation per cycle.
++            let args: [*const Val; 4] = core::array::from_fn(|i| args[i].as_ptr());
+             let mut tot = ExtVal::ZERO;
+             unsafe {
+                 risc0_circuit_rv32im_cpu_poly_fp(
+@@ -189,10 +207,14 @@ impl CircuitHal<CpuHal> for CpuCircuitHal {
+                     &mut tot,
+                 )
+             };
+-            let x = Val::ROU_FWD[po2 + EXP_PO2].pow(cycle);
+-            // TODO: what is this magic number 3?
+-            let y = (Val::new(3) * x).pow(1 << po2);
+-            let ret = tot * (y - Val::new(1)).inv();
++            let quotient = if let Some(weights) = periodic.as_ref() {
++                weights[cycle % INV_RATE]
++            } else {
++                let x = Val::ROU_FWD[po2 + EXP_PO2].pow(cycle);
++                let y = (Val::new(3) * x).pow(1 << po2);
++                (y - Val::new(1)).inv()
++            };
++            let ret = tot * quotient;
+ 
+             // SAFETY: This conversion is to make the check slice mutable, which should be
+             // safe because each thread access will not overlap with each other.
+@@ -202,6 +224,12 @@ impl CircuitHal<CpuHal> for CpuCircuitHal {
+                 check[i * domain + cycle] = ret.elems()[i];
+             }
+         });
++        if let Some(start) = profile_start {
++            eprintln!(
++                "gsr_cpu_op circuit_eval_check {}",
++                start.elapsed().as_nanos()
++            );
++        }
+     }
+ 
+     fn accumulate(
+@@ -226,3 +254,22 @@ pub fn segment_prover() -> Result<Box<dyn SegmentProver>> {
+     };
+     Ok(Box::new(SegmentProverImpl::new(hal_factory)))
+ }
++
++#[cfg(test)]
++mod periodic_tests {
++    use super::*;
++
++    #[test]
++    fn periodic_divisors_match_reference() {
++        for po2 in [5, 10, 15, 18, 20] {
++            let weights = periodic_quotients(po2);
++            let domain = (1usize << po2) * INV_RATE;
++            for cycle in (0..512).chain([domain - 1, domain, domain + 1, u32::MAX as usize]) {
++                let root = Val::ROU_FWD[po2 + log2_ceil(INV_RATE)];
++                let expected = ((Val::new(3) * root.pow(cycle)).pow(1 << po2) - Val::new(1)).inv();
++                assert_eq!(weights[cycle % INV_RATE], expected);
++                assert_ne!(expected, Val::ZERO);
++            }
++        }
++    }
++}

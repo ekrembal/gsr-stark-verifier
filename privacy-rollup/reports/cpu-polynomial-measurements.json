@@ -1,0 +1,1125 @@
+{
+  "scope": "Optional CPU prover evaluation of the identical pinned RV32IM constraint polynomials; no AIR or scalar verifier change",
+  "environment": {
+    "build_environment": {
+      "GSR_BUILD_CPU_BATCH": "1",
+      "GSR_FUSED_DOT32": "1",
+      "RUSTC_WRAPPER": "privacy-rollup/tools/native_prover_rustc.py",
+      "GSR_NATIVE_RUST_CRATES": "risc0_zkp",
+      "RISC0_BUILD_LOCKED": "1",
+      "RAYON_NUM_THREADS": "4",
+      "RISC0_HOME": "/workspace/.gsr-env/risc0-home",
+      "RECURSION_SRC_PATH": "/workspace/.gsr-env/recursion_zkr.zip"
+    },
+    "proof_environment": {
+      "RAYON_NUM_THREADS": "4",
+      "GSR_PROFILE_CPU": "1",
+      "GSR_BATCH_CPU": "1",
+      "GSR_PERIODIC_CPU": "1",
+      "GSR_BATCH_EVAL_CPU": "1"
+    },
+    "independent_verifier_environment": {
+      "RAYON_NUM_THREADS": "4"
+    },
+    "native_flags": "Rust target-cpu=native and one codegen unit for risc0_zkp only; C++ packed evaluator -O2 -march=native -fno-tree-slp-vectorize -fno-tree-loop-vectorize; original C++ kernels keep their ordinary build",
+    "stack_policy": "Optional evaluator uses a separate Rayon pool with the caller current_num_threads and 8 MiB stacks; no RUST_MIN_STACK environment override",
+    "air_or_scalar_verifier_changed": false
+  },
+  "pins": {
+    "risc0": "1cc70cf05033a79ebc90f07c679cb4bd1cd301b9",
+    "provekit": "4ee40639fb8849aeeba37761fdda07f28367e81d",
+    "bitcoin": "d2799052604eb138c5a79acf88514a0c8b07f4ef",
+    "lockfiles_changed_since_45a": [],
+    "toolchain_files": {
+      "privacy-rollup/rust-toolchain.toml": "[toolchain]\nchannel = \"1.97\"\n",
+      "recursive-stwo/rust-toolchain.toml": "[toolchain]\nchannel = \"nightly-2025-01-02\"\nprofile = \"minimal\"\n"
+    },
+    "original_patch_sha256": {
+      "risc0-succinct/risc0-v3.0.6.patch": "4bab9f2a2a12f8e98d82947b7ffdfc71d06648b3ce86786ebaa52ae62809cf1e",
+      "privacy-rollup/patches/provekit-4ee40639.patch": "954ef3fe6f06c2cba7b88a826ed6048f666e142c1d3b6ab495fd4fa7b77a31ee"
+    }
+  },
+  "builds": {
+    "cpu-poly-build": {
+      "resources": {
+        "command": [
+          "cargo",
+          "build",
+          "--locked",
+          "--release"
+        ],
+        "exit_code": 0,
+        "stopped_by": null,
+        "seconds": 191.4866786299972,
+        "sampled_peak_group_rss_kib": 2799516,
+        "minimum_free_disk_bytes": 1428967424,
+        "sampling_seconds": 0.25,
+        "limits": {
+          "seconds": 600,
+          "rss_mib": 12288,
+          "free_mib": 1024
+        }
+      },
+      "results": []
+    },
+    "cpu-poly-stack-build": {
+      "resources": {
+        "command": [
+          "cargo",
+          "build",
+          "--locked",
+          "--release"
+        ],
+        "exit_code": 0,
+        "stopped_by": null,
+        "seconds": 43.950495607998164,
+        "sampled_peak_group_rss_kib": 1636412,
+        "minimum_free_disk_bytes": 1253437440,
+        "sampling_seconds": 0.25,
+        "limits": {
+          "seconds": 300,
+          "rss_mib": 8192,
+          "free_mib": 1024
+        }
+      },
+      "results": []
+    }
+  },
+  "differential": {
+    "resources": {
+      "command": [
+        "python3",
+        "privacy-rollup/tools/check_cpu_poly.py",
+        "--sdk",
+        "/workspace/risc0",
+        "--sys-out",
+        "privacy-rollup/prover/target/release/build/risc0-circuit-rv32im-sys-37dbdac48c5c0e92/out",
+        "--out",
+        "build/feasibility/cpu-poly-abi"
+      ],
+      "exit_code": 0,
+      "stopped_by": null,
+      "seconds": 2.5119303399987984,
+      "sampled_peak_group_rss_kib": 72960,
+      "minimum_free_disk_bytes": 1455366144,
+      "sampling_seconds": 0.25,
+      "limits": {
+        "seconds": 120,
+        "rss_mib": 2048,
+        "free_mib": 1024
+      }
+    },
+    "results": [
+      {
+        "sample": 0,
+        "differential_points": 1176,
+        "rows": 2048,
+        "scalar_seconds": 0.353017176,
+        "packed_seconds": 0.114172988,
+        "speedup": 3.09195
+      },
+      {
+        "sample": 1,
+        "differential_points": 1176,
+        "rows": 2048,
+        "scalar_seconds": 0.351320071,
+        "packed_seconds": 0.109338752,
+        "speedup": 3.213134
+      },
+      {
+        "sample": 2,
+        "differential_points": 1176,
+        "rows": 2048,
+        "scalar_seconds": 0.335873674,
+        "packed_seconds": 0.107765369,
+        "speedup": 3.116713
+      }
+    ]
+  },
+  "differential_commands": {
+    "commands": [
+      [
+        "c++",
+        "-O2",
+        "-std=c++17",
+        "-march=native",
+        "-fno-tree-slp-vectorize",
+        "-fno-tree-loop-vectorize",
+        "-I/workspace/risc0/risc0/sys/cxx",
+        "-I/workspace/risc0/risc0/circuit/rv32im-sys/kernels/cxx_batch",
+        "-Iprivacy-rollup/prover/target/release/build/risc0-circuit-rv32im-sys-37dbdac48c5c0e92/out/cpu_poly_batch",
+        "/workspace/gsr-stark-verifier/privacy-rollup/tools/cpu_poly_differential.cpp",
+        "privacy-rollup/prover/target/release/build/risc0-circuit-rv32im-sys-37dbdac48c5c0e92/out/librisc0_rv32im_cpu.a",
+        "privacy-rollup/prover/target/release/build/risc0-circuit-rv32im-sys-37dbdac48c5c0e92/out/librisc0_rv32im_cpu_batch.a",
+        "-o",
+        "build/feasibility/cpu-poly-abi/check"
+      ],
+      [
+        "build/feasibility/cpu-poly-abi/check"
+      ]
+    ],
+    "sha256": {
+      "/workspace/gsr-stark-verifier/privacy-rollup/tools/cpu_poly_differential.cpp": "e02037247d3dd553b49dd0e64b3f6390b20bc30268b1a3f90dd1fc9d33ceb640",
+      "privacy-rollup/prover/target/release/build/risc0-circuit-rv32im-sys-37dbdac48c5c0e92/out/librisc0_rv32im_cpu.a": "f07b82168beb8e4b4138ca60519d91d9f6d56eb9fce5d4df8730bfb9e12d3587",
+      "privacy-rollup/prover/target/release/build/risc0-circuit-rv32im-sys-37dbdac48c5c0e92/out/librisc0_rv32im_cpu_batch.a": "8ab832148fcb7e17ddcdd900b73e4749246324be0a4b5fa20fd537a9893da418",
+      "build/feasibility/cpu-poly-abi/check": "74238877cf606d2eac4393c0b3765d06a4a6595a4720acd26dc0a6056e981f18"
+    },
+    "compiler": "c++ (Debian 14.2.0-19) 14.2.0\nCopyright (C) 2024 Free Software Foundation, Inc.\nThis is free software; see the source for copying conditions.  There is NO\nwarranty; not even for MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.\n\n"
+  },
+  "source_divergence_rejection": {
+    "command": [
+      "python3",
+      "/workspace/risc0/risc0/circuit/rv32im-sys/kernels/cxx_batch/generate.py",
+      "build/feasibility/cpu-poly-generator-negative",
+      "/workspace/risc0/risc0/sys/cxx",
+      "build/feasibility/cpu-poly-generator-negative/out"
+    ],
+    "exit_code": 1,
+    "stdout": "",
+    "stderr": "unsupported scalar source digest: build/feasibility/cpu-poly-generator-negative/rust_poly_fp_0.cpp\n",
+    "source_divergence_rejected": true
+  },
+  "stack_disassembly": {
+    "library": "privacy-rollup/prover/target/release/build/risc0-circuit-rv32im-sys-37dbdac48c5c0e92/out/librisc0_rv32im_cpu_batch.a",
+    "scope": "Disassembly evidence only: largest positive fixed stack allocation per function, summed over the 21-function call chain; excludes call overhead and other frames, not a universal stack bound",
+    "functions": [
+      {
+        "symbol": "gsr_poly_batch::rv32im_v2_19(unsigned long, unsigned long, gsr_poly_batch::UniformMix, gsr_poly_batch::Fp*, gsr_poly_batch::FpExt, gsr_poly_batch::FpExt, gsr_poly_batch::FpExt, gsr_poly_batch::FpExt, gsr_poly_batch::FpExt, gsr_poly_batch::FpExt, gsr_poly_batch::FpExt*, risc0::Fp const*, risc0::Fp const*, risc0::Fp const*, risc0::Fp const*)",
+        "largest_positive_rsp_subtraction": 163392
+      },
+      {
+        "symbol": "gsr_poly_batch::rv32im_v2_15(unsigned long, unsigned long, gsr_poly_batch::UniformMix, gsr_poly_batch::Fp*, gsr_poly_batch::FpExt, gsr_poly_batch::FpExt, gsr_poly_batch::FpExt, gsr_poly_batch::FpExt, gsr_poly_batch::FpExt, gsr_poly_batch::FpExt, gsr_poly_batch::FpExt*, gsr_poly_batch::FpExt, risc0::Fp const*, risc0::Fp const*, risc0::Fp const*, risc0::Fp const*)",
+        "largest_positive_rsp_subtraction": 185600
+      },
+      {
+        "symbol": "gsr_poly_batch::rv32im_v2_11(unsigned long, unsigned long, gsr_poly_batch::UniformMix, gsr_poly_batch::Fp*, gsr_poly_batch::FpExt, gsr_poly_batch::FpExt*, gsr_poly_batch::FpExt, gsr_poly_batch::FpExt, gsr_poly_batch::FpExt, gsr_poly_batch::FpExt, gsr_poly_batch::FpExt, gsr_poly_batch::FpExt, gsr_poly_batch::FpExt, risc0::Fp const*, risc0::Fp const*, risc0::Fp const*)",
+        "largest_positive_rsp_subtraction": 266112
+      },
+      {
+        "symbol": "gsr_poly_batch::rv32im_v2_7(unsigned long, unsigned long, gsr_poly_batch::UniformMix, gsr_poly_batch::Fp*, gsr_poly_batch::FpExt, gsr_poly_batch::FpExt*, gsr_poly_batch::FpExt, gsr_poly_batch::FpExt, gsr_poly_batch::FpExt, gsr_poly_batch::FpExt, gsr_poly_batch::FpExt, gsr_poly_batch::FpExt, risc0::Fp const*, risc0::Fp const*, risc0::Fp const*)",
+        "largest_positive_rsp_subtraction": 130944
+      },
+      {
+        "symbol": "gsr_poly_batch::rv32im_v2_3(unsigned long, unsigned long, gsr_poly_batch::UniformMix, gsr_poly_batch::Fp*, gsr_poly_batch::FpExt, gsr_poly_batch::FpExt, gsr_poly_batch::FpExt, gsr_poly_batch::FpExt, gsr_poly_batch::FpExt, gsr_poly_batch::FpExt*, risc0::Fp const*, risc0::Fp const*, risc0::Fp const*)",
+        "largest_positive_rsp_subtraction": 178496
+      },
+      {
+        "symbol": "gsr_poly_batch::poly_fp(unsigned long, unsigned long, gsr_poly_batch::UniformMix, risc0::Fp const* const*)",
+        "largest_positive_rsp_subtraction": 168896
+      },
+      {
+        "symbol": "gsr_poly_batch::rv32im_v2_18(unsigned long, unsigned long, gsr_poly_batch::UniformMix, gsr_poly_batch::Fp*, gsr_poly_batch::FpExt, gsr_poly_batch::FpExt, gsr_poly_batch::FpExt, gsr_poly_batch::FpExt*, risc0::Fp const*, risc0::Fp const*, risc0::Fp const*, risc0::Fp const*)",
+        "largest_positive_rsp_subtraction": 133376
+      },
+      {
+        "symbol": "gsr_poly_batch::rv32im_v2_14(unsigned long, unsigned long, gsr_poly_batch::UniformMix, gsr_poly_batch::FpExt, gsr_poly_batch::FpExt, gsr_poly_batch::FpExt, gsr_poly_batch::Fp*, gsr_poly_batch::FpExt, gsr_poly_batch::FpExt, gsr_poly_batch::FpExt, gsr_poly_batch::FpExt, gsr_poly_batch::FpExt*, gsr_poly_batch::FpExt, risc0::Fp const*, risc0::Fp const*, risc0::Fp const*, risc0::Fp const*)",
+        "largest_positive_rsp_subtraction": 262528
+      },
+      {
+        "symbol": "gsr_poly_batch::rv32im_v2_10(unsigned long, unsigned long, gsr_poly_batch::UniformMix, gsr_poly_batch::Fp*, gsr_poly_batch::FpExt, gsr_poly_batch::FpExt*, gsr_poly_batch::FpExt, gsr_poly_batch::FpExt, gsr_poly_batch::FpExt, gsr_poly_batch::FpExt, gsr_poly_batch::FpExt, gsr_poly_batch::FpExt, gsr_poly_batch::FpExt, gsr_poly_batch::FpExt, gsr_poly_batch::FpExt, gsr_poly_batch::FpExt, gsr_poly_batch::FpExt, gsr_poly_batch::FpExt, gsr_poly_batch::FpExt, gsr_poly_batch::FpExt, gsr_poly_batch::FpExt, gsr_poly_batch::FpExt, gsr_poly_batch::FpExt, gsr_poly_batch::FpExt, gsr_poly_batch::FpExt, gsr_poly_batch::FpExt, gsr_poly_batch::FpExt, gsr_poly_batch::FpExt, gsr_poly_batch::FpExt, gsr_poly_batch::FpExt, risc0::Fp const*, risc0::Fp const*, risc0::Fp const*)",
+        "largest_positive_rsp_subtraction": 126272
+      },
+      {
+        "symbol": "gsr_poly_batch::rv32im_v2_6(unsigned long, unsigned long, gsr_poly_batch::UniformMix, gsr_poly_batch::Fp*, gsr_poly_batch::FpExt, gsr_poly_batch::FpExt, gsr_poly_batch::FpExt, gsr_poly_batch::FpExt, gsr_poly_batch::FpExt, gsr_poly_batch::FpExt, gsr_poly_batch::FpExt, gsr_poly_batch::FpExt, gsr_poly_batch::FpExt*, risc0::Fp const*, risc0::Fp const*, risc0::Fp const*)",
+        "largest_positive_rsp_subtraction": 19296
+      },
+      {
+        "symbol": "gsr_poly_batch::rv32im_v2_2(unsigned long, unsigned long, gsr_poly_batch::UniformMix, gsr_poly_batch::FpExt*, gsr_poly_batch::FpExt, gsr_poly_batch::FpExt, risc0::Fp const*, risc0::Fp const*, risc0::Fp const*)",
+        "largest_positive_rsp_subtraction": 148320
+      },
+      {
+        "symbol": "gsr_poly_batch::rv32im_v2_17(unsigned long, unsigned long, gsr_poly_batch::UniformMix, gsr_poly_batch::Fp*, gsr_poly_batch::FpExt, gsr_poly_batch::FpExt, gsr_poly_batch::FpExt, gsr_poly_batch::FpExt, gsr_poly_batch::FpExt, gsr_poly_batch::FpExt, gsr_poly_batch::FpExt*, risc0::Fp const*, risc0::Fp const*, risc0::Fp const*, risc0::Fp const*)",
+        "largest_positive_rsp_subtraction": 131072
+      },
+      {
+        "symbol": "gsr_poly_batch::rv32im_v2_13(unsigned long, unsigned long, gsr_poly_batch::UniformMix, gsr_poly_batch::Fp*, gsr_poly_batch::FpExt, gsr_poly_batch::FpExt, gsr_poly_batch::FpExt, gsr_poly_batch::FpExt, gsr_poly_batch::FpExt, gsr_poly_batch::FpExt*, gsr_poly_batch::FpExt, risc0::Fp const*, risc0::Fp const*, risc0::Fp const*, risc0::Fp const*)",
+        "largest_positive_rsp_subtraction": 217664
+      },
+      {
+        "symbol": "gsr_poly_batch::rv32im_v2_9(unsigned long, unsigned long, gsr_poly_batch::UniformMix, gsr_poly_batch::Fp*, gsr_poly_batch::FpExt, gsr_poly_batch::FpExt*, gsr_poly_batch::FpExt, gsr_poly_batch::FpExt, gsr_poly_batch::FpExt, gsr_poly_batch::FpExt, gsr_poly_batch::FpExt, gsr_poly_batch::FpExt, risc0::Fp const*, risc0::Fp const*, risc0::Fp const*)",
+        "largest_positive_rsp_subtraction": 23808
+      },
+      {
+        "symbol": "gsr_poly_batch::rv32im_v2_5(unsigned long, unsigned long, gsr_poly_batch::UniformMix, gsr_poly_batch::Fp*, gsr_poly_batch::FpExt, gsr_poly_batch::FpExt, gsr_poly_batch::FpExt, gsr_poly_batch::FpExt, gsr_poly_batch::FpExt, gsr_poly_batch::FpExt, gsr_poly_batch::FpExt, gsr_poly_batch::FpExt, gsr_poly_batch::FpExt*, risc0::Fp const*, risc0::Fp const*, risc0::Fp const*)",
+        "largest_positive_rsp_subtraction": 56608
+      },
+      {
+        "symbol": "gsr_poly_batch::rv32im_v2_1(unsigned long, unsigned long, gsr_poly_batch::UniformMix, gsr_poly_batch::FpExt*, gsr_poly_batch::FpExt, gsr_poly_batch::FpExt, gsr_poly_batch::FpExt, risc0::Fp const*, risc0::Fp const*)",
+        "largest_positive_rsp_subtraction": 146528
+      },
+      {
+        "symbol": "gsr_poly_batch::rv32im_v2_16(unsigned long, unsigned long, gsr_poly_batch::UniformMix, gsr_poly_batch::Fp*, gsr_poly_batch::FpExt, gsr_poly_batch::FpExt, gsr_poly_batch::FpExt, gsr_poly_batch::FpExt, gsr_poly_batch::FpExt, gsr_poly_batch::FpExt, gsr_poly_batch::FpExt, gsr_poly_batch::FpExt, gsr_poly_batch::FpExt, gsr_poly_batch::FpExt, gsr_poly_batch::FpExt, gsr_poly_batch::FpExt, gsr_poly_batch::FpExt*, gsr_poly_batch::FpExt, risc0::Fp const*, risc0::Fp const*, risc0::Fp const*, risc0::Fp const*)",
+        "largest_positive_rsp_subtraction": 180096
+      },
+      {
+        "symbol": "gsr_poly_batch::rv32im_v2_12(unsigned long, unsigned long, gsr_poly_batch::UniformMix, gsr_poly_batch::Fp*, gsr_poly_batch::FpExt, gsr_poly_batch::FpExt*, gsr_poly_batch::FpExt, gsr_poly_batch::FpExt, gsr_poly_batch::FpExt, gsr_poly_batch::FpExt, gsr_poly_batch::FpExt, gsr_poly_batch::FpExt, risc0::Fp const*, risc0::Fp const*, risc0::Fp const*, risc0::Fp const*)",
+        "largest_positive_rsp_subtraction": 135680
+      },
+      {
+        "symbol": "gsr_poly_batch::rv32im_v2_8(unsigned long, unsigned long, gsr_poly_batch::UniformMix, gsr_poly_batch::Fp*, gsr_poly_batch::FpExt, gsr_poly_batch::FpExt*, gsr_poly_batch::FpExt, gsr_poly_batch::FpExt, gsr_poly_batch::FpExt, gsr_poly_batch::FpExt, gsr_poly_batch::FpExt, gsr_poly_batch::FpExt, risc0::Fp const*, risc0::Fp const*, risc0::Fp const*)",
+        "largest_positive_rsp_subtraction": 7744
+      },
+      {
+        "symbol": "gsr_poly_batch::rv32im_v2_4(unsigned long, unsigned long, gsr_poly_batch::UniformMix, gsr_poly_batch::Fp*, gsr_poly_batch::FpExt, gsr_poly_batch::FpExt, gsr_poly_batch::FpExt, gsr_poly_batch::FpExt, gsr_poly_batch::FpExt, gsr_poly_batch::FpExt, gsr_poly_batch::FpExt, gsr_poly_batch::FpExt*, risc0::Fp const*, risc0::Fp const*, risc0::Fp const*)",
+        "largest_positive_rsp_subtraction": 153536
+      },
+      {
+        "symbol": "gsr_poly_batch::rv32im_v2_0(unsigned long, unsigned long, gsr_poly_batch::UniformMix, gsr_poly_batch::FpExt*, gsr_poly_batch::FpExt, gsr_poly_batch::FpExt, gsr_poly_batch::FpExt, risc0::Fp const*)",
+        "largest_positive_rsp_subtraction": 179200
+      }
+    ],
+    "sum_fixed_frame_bytes": 3015168
+  },
+  "failed_experiments": {
+    "poly-batch-build": {
+      "resources": {
+        "command": [
+          "python3",
+          "build/feasibility/poly-batch/build.py"
+        ],
+        "exit_code": 1,
+        "stopped_by": null,
+        "seconds": 0.752784905002045,
+        "sampled_peak_group_rss_kib": 131460,
+        "minimum_free_disk_bytes": 1550635008,
+        "sampling_seconds": 0.25,
+        "limits": {
+          "seconds": 600,
+          "rss_mib": 12288,
+          "free_mib": 1024
+        }
+      },
+      "results": []
+    },
+    "poly-batch-build2": {
+      "resources": {
+        "command": [
+          "python3",
+          "build/feasibility/poly-batch/build.py"
+        ],
+        "exit_code": -15,
+        "stopped_by": "wall_time_limit",
+        "seconds": 600.1846776640014,
+        "sampled_peak_group_rss_kib": 2714696,
+        "minimum_free_disk_bytes": 1547112448,
+        "sampling_seconds": 0.25,
+        "limits": {
+          "seconds": 600,
+          "rss_mib": 12288,
+          "free_mib": 1024
+        }
+      },
+      "results": []
+    },
+    "dot32-cpu-poly-prove": {
+      "resources": {
+        "command": [
+          "build/feasibility/cpu-poly-host/proof_chain_bench",
+          "prove",
+          "build/feasibility/dot32-cpu-poly",
+          "0"
+        ],
+        "exit_code": -6,
+        "stopped_by": null,
+        "seconds": 15.849286363001738,
+        "sampled_peak_group_rss_kib": 2202820,
+        "minimum_free_disk_bytes": 1356734464,
+        "sampling_seconds": 0.25,
+        "limits": {
+          "seconds": 300,
+          "rss_mib": 4096,
+          "free_mib": 1024
+        }
+      },
+      "results": []
+    }
+  },
+  "complete_diagnostic": {
+    "capture": {
+      "complete": true,
+      "count": 1,
+      "first": 0,
+      "image_id": "741f23babc19c580d854b6418200c4f1c7eaea5df4502b53d110fe6a01658d37",
+      "paging_cycles": 29729,
+      "reserved_cycles": 124901,
+      "segments": 1,
+      "selected": [
+        {
+          "bytes": 86939,
+          "index": 0,
+          "po2": 18
+        }
+      ],
+      "total_cycles": 262144,
+      "user_cycles": 107514
+    },
+    "profile": {
+      "scope": "Host CPU operation wall times, including Rayon workers; not CPU-time samples",
+      "timer_env": "GSR_PROFILE_CPU=1",
+      "proof_result": {
+        "operation": "prove",
+        "real_local_proof": true,
+        "result": {
+          "index": 0,
+          "integrity_verified": true,
+          "po2": 18,
+          "seal_bytes": 255656
+        },
+        "seconds": 34.468583371
+      },
+      "resources": {
+        "command": [
+          "build/feasibility/cpu-poly-host/proof_chain_bench",
+          "prove",
+          "build/feasibility/dot32-cpu-poly",
+          "0"
+        ],
+        "exit_code": 0,
+        "stopped_by": null,
+        "seconds": 34.66047269900446,
+        "sampled_peak_group_rss_kib": 2406536,
+        "minimum_free_disk_bytes": 1356783616,
+        "sampling_seconds": 0.25,
+        "limits": {
+          "seconds": 300,
+          "rss_mib": 4096,
+          "free_mib": 1024
+        }
+      },
+      "phases": [
+        {
+          "name": "circuit_eval_check",
+          "calls": 1,
+          "seconds": 13.760799539,
+          "largest_call_seconds": 13.760799539,
+          "fraction_of_prover_time": 0.3992273018849272
+        },
+        {
+          "name": "batch_expand_into_evaluate_ntt",
+          "calls": 7,
+          "seconds": 5.793289588,
+          "largest_call_seconds": 3.609538678,
+          "fraction_of_prover_time": 0.16807449049020565
+        },
+        {
+          "name": "hash_rows",
+          "calls": 7,
+          "seconds": 4.426771399,
+          "largest_call_seconds": 2.66025514,
+          "fraction_of_prover_time": 0.12842916552017178
+        },
+        {
+          "name": "batch_evaluate_any",
+          "calls": 4,
+          "seconds": 2.642129994,
+          "largest_call_seconds": 2.186620019,
+          "fraction_of_prover_time": 0.07665328062838071
+        },
+        {
+          "name": "zk_shift",
+          "calls": 3,
+          "seconds": 2.270497547,
+          "largest_call_seconds": 1.508209494,
+          "fraction_of_prover_time": 0.06587150746990877
+        },
+        {
+          "name": "batch_interpolate_ntt",
+          "calls": 4,
+          "seconds": 1.400014749,
+          "largest_call_seconds": 0.913185187,
+          "fraction_of_prover_time": 0.0406171246996445
+        },
+        {
+          "name": "hash_fold",
+          "calls": 116,
+          "seconds": 0.766856814,
+          "largest_call_seconds": 0.126126366,
+          "fraction_of_prover_time": 0.022247993360968582
+        },
+        {
+          "name": "mix_poly_coeffs",
+          "calls": 4,
+          "seconds": 0.725671188,
+          "largest_call_seconds": 0.362117233,
+          "fraction_of_prover_time": 0.021053119015344866
+        },
+        {
+          "name": "alloc_elem",
+          "calls": 19,
+          "seconds": 0.561392133,
+          "largest_call_seconds": 0.235721919,
+          "fraction_of_prover_time": 0.016287067181076115
+        },
+        {
+          "name": "batch_bit_reverse",
+          "calls": 6,
+          "seconds": 0.085730557,
+          "largest_call_seconds": 0.053101554,
+          "fraction_of_prover_time": 0.00248720860028524
+        },
+        {
+          "name": "alloc_digest",
+          "calls": 7,
+          "seconds": 0.074815955,
+          "largest_call_seconds": 0.020620668,
+          "fraction_of_prover_time": 0.00217055497160194
+        },
+        {
+          "name": "fri_fold",
+          "calls": 3,
+          "seconds": 0.026128356,
+          "largest_call_seconds": 0.024500493,
+          "fraction_of_prover_time": 0.0007580339382901063
+        },
+        {
+          "name": "eltwise_copy_elem",
+          "calls": 4,
+          "seconds": 0.01687733,
+          "largest_call_seconds": 0.012395272,
+          "fraction_of_prover_time": 0.0004896438538927501
+        },
+        {
+          "name": "scatter",
+          "calls": 2,
+          "seconds": 0.013898442,
+          "largest_call_seconds": 0.013575647,
+          "fraction_of_prover_time": 0.0004032205748175133
+        },
+        {
+          "name": "eltwise_zeroize_elem",
+          "calls": 4,
+          "seconds": 0.00746908,
+          "largest_call_seconds": 0.004651938,
+          "fraction_of_prover_time": 0.0002166923983967406
+        },
+        {
+          "name": "alloc_extelem",
+          "calls": 5,
+          "seconds": 0.005463424,
+          "largest_call_seconds": 0.005461029,
+          "fraction_of_prover_time": 0.00015850445436630937
+        },
+        {
+          "name": "eltwise_sum_extelem",
+          "calls": 1,
+          "seconds": 0.002226223,
+          "largest_call_seconds": 0.002226223,
+          "fraction_of_prover_time": 6.458701757592461e-05
+        },
+        {
+          "name": "copy_from_u32",
+          "calls": 8,
+          "seconds": 4.225e-06,
+          "largest_call_seconds": 1.061e-06,
+          "fraction_of_prover_time": 1.2257538856542292e-07
+        },
+        {
+          "name": "copy_from_elem",
+          "calls": 2,
+          "seconds": 3.955e-06,
+          "largest_call_seconds": 2.103e-06,
+          "fraction_of_prover_time": 1.1474216846775093e-07
+        },
+        {
+          "name": "copy_from_extelem",
+          "calls": 4,
+          "seconds": 3.585e-06,
+          "largest_call_seconds": 2.013e-06,
+          "fraction_of_prover_time": 1.0400775574131152e-07
+        }
+      ],
+      "profiled_call_seconds": 32.580044083,
+      "hal_call_seconds": 18.819244544
+    },
+    "independent_lift": {
+      "resources": {
+        "command": [
+          "build/aggregation/dot32-iterative-baseline/proof_chain_bench",
+          "lift",
+          "build/feasibility/dot32-cpu-poly",
+          "0"
+        ],
+        "exit_code": 0,
+        "stopped_by": null,
+        "seconds": 43.44288450800377,
+        "sampled_peak_group_rss_kib": 1446512,
+        "minimum_free_disk_bytes": 1356427264,
+        "sampling_seconds": 0.25,
+        "limits": {
+          "seconds": 180,
+          "rss_mib": 4096,
+          "free_mib": 1024
+        }
+      },
+      "results": [
+        {
+          "operation": "lift",
+          "real_local_proof": true,
+          "result": {
+            "index": 0,
+            "integrity_verified": true,
+            "seal_bytes": 222668
+          },
+          "seconds": 43.228289696
+        }
+      ]
+    },
+    "independent_padded": {
+      "resources": {
+        "command": [
+          "build/aggregation/dot32-iterative-baseline/proof_chain_bench",
+          "padded",
+          "build/feasibility/dot32-cpu-poly",
+          "lift-0"
+        ],
+        "exit_code": 0,
+        "stopped_by": null,
+        "seconds": 20.62472072899982,
+        "sampled_peak_group_rss_kib": 1423844,
+        "minimum_free_disk_bytes": 1356132352,
+        "sampling_seconds": 0.25,
+        "limits": {
+          "seconds": 180,
+          "rss_mib": 4096,
+          "free_mib": 1024
+        }
+      },
+      "results": [
+        {
+          "operation": "padded",
+          "real_local_proof": true,
+          "result": {
+            "complete_guest_verified": true,
+            "corrupt_seal_rejected": true,
+            "hashfn": "sha-256-padded",
+            "integrity_verified": true,
+            "seal_bytes": 222668
+          },
+          "seconds": 20.405190312
+        }
+      ]
+    }
+  },
+  "partial_application": {
+    "capture": {
+      "complete": false,
+      "count": 1,
+      "first": 100,
+      "image_id": "fc7c90972cfd366c450cf202c7131fea5d04f81b76f93d6925ce15e33cdd14be",
+      "paging_cycles": 20920642,
+      "reserved_cycles": 6064020,
+      "segments": 208,
+      "selected": [
+        {
+          "bytes": 119191,
+          "index": 100,
+          "po2": 20
+        }
+      ],
+      "total_cycles": 218103808,
+      "user_cycles": 191119146
+    },
+    "profile": {
+      "scope": "Host CPU operation wall times, including Rayon workers; not CPU-time samples",
+      "timer_env": "GSR_PROFILE_CPU=1",
+      "proof_result": {
+        "operation": "prove",
+        "real_local_proof": true,
+        "result": {
+          "index": 100,
+          "integrity_verified": true,
+          "po2": 20,
+          "seal_bytes": 281128
+        },
+        "seconds": 140.442662976
+      },
+      "resources": {
+        "command": [
+          "build/feasibility/cpu-poly-host/proof_chain_bench",
+          "prove",
+          "build/feasibility/optimized191-cpu-poly",
+          "100"
+        ],
+        "exit_code": 0,
+        "stopped_by": null,
+        "seconds": 140.50531554900226,
+        "sampled_peak_group_rss_kib": 9601988,
+        "minimum_free_disk_bytes": 1355821056,
+        "sampling_seconds": 0.25,
+        "limits": {
+          "seconds": 600,
+          "rss_mib": 12288,
+          "free_mib": 1024
+        }
+      },
+      "phases": [
+        {
+          "name": "circuit_eval_check",
+          "calls": 1,
+          "seconds": 56.572334682,
+          "largest_call_seconds": 56.572334682,
+          "fraction_of_prover_time": 0.4028144545483842
+        },
+        {
+          "name": "batch_expand_into_evaluate_ntt",
+          "calls": 7,
+          "seconds": 24.660330863,
+          "largest_call_seconds": 15.512522384,
+          "fraction_of_prover_time": 0.17559002613909533
+        },
+        {
+          "name": "hash_rows",
+          "calls": 7,
+          "seconds": 17.183927252,
+          "largest_call_seconds": 10.303104609,
+          "fraction_of_prover_time": 0.12235546441423238
+        },
+        {
+          "name": "batch_evaluate_any",
+          "calls": 4,
+          "seconds": 10.562003913,
+          "largest_call_seconds": 8.716707165,
+          "fraction_of_prover_time": 0.07520509572511397
+        },
+        {
+          "name": "zk_shift",
+          "calls": 3,
+          "seconds": 10.426370058,
+          "largest_call_seconds": 7.081108987,
+          "fraction_of_prover_time": 0.07423933608964495
+        },
+        {
+          "name": "batch_interpolate_ntt",
+          "calls": 4,
+          "seconds": 5.770175936,
+          "largest_call_seconds": 3.510203948,
+          "fraction_of_prover_time": 0.04108563461934679
+        },
+        {
+          "name": "mix_poly_coeffs",
+          "calls": 4,
+          "seconds": 3.063544384,
+          "largest_call_seconds": 1.534318466,
+          "fraction_of_prover_time": 0.02181348828826696
+        },
+        {
+          "name": "hash_fold",
+          "calls": 130,
+          "seconds": 2.903629304,
+          "largest_call_seconds": 0.385608162,
+          "fraction_of_prover_time": 0.02067483799061967
+        },
+        {
+          "name": "alloc_elem",
+          "calls": 19,
+          "seconds": 2.81528043,
+          "largest_call_seconds": 1.196417644,
+          "fraction_of_prover_time": 0.020045763661438818
+        },
+        {
+          "name": "alloc_digest",
+          "calls": 7,
+          "seconds": 0.645051958,
+          "largest_call_seconds": 0.282103137,
+          "fraction_of_prover_time": 0.00459299150508298
+        },
+        {
+          "name": "batch_bit_reverse",
+          "calls": 6,
+          "seconds": 0.466765007,
+          "largest_call_seconds": 0.290345,
+          "fraction_of_prover_time": 0.003323527175497695
+        },
+        {
+          "name": "fri_fold",
+          "calls": 3,
+          "seconds": 0.102472172,
+          "largest_call_seconds": 0.095844067,
+          "fraction_of_prover_time": 0.0007296370620479568
+        },
+        {
+          "name": "scatter",
+          "calls": 2,
+          "seconds": 0.06053978,
+          "largest_call_seconds": 0.060538759,
+          "fraction_of_prover_time": 0.0004310640279609732
+        },
+        {
+          "name": "alloc_extelem",
+          "calls": 5,
+          "seconds": 0.052097569,
+          "largest_call_seconds": 0.052095385,
+          "fraction_of_prover_time": 0.0003709525858883982
+        },
+        {
+          "name": "eltwise_copy_elem",
+          "calls": 4,
+          "seconds": 0.045274255,
+          "largest_call_seconds": 0.02947795,
+          "fraction_of_prover_time": 0.0003223682465187721
+        },
+        {
+          "name": "eltwise_zeroize_elem",
+          "calls": 4,
+          "seconds": 0.025601973,
+          "largest_call_seconds": 0.018447993,
+          "fraction_of_prover_time": 0.00018229484159222383
+        },
+        {
+          "name": "eltwise_sum_extelem",
+          "calls": 1,
+          "seconds": 0.008401283,
+          "largest_call_seconds": 0.008401283,
+          "fraction_of_prover_time": 5.982002065451921e-05
+        },
+        {
+          "name": "copy_from_elem",
+          "calls": 2,
+          "seconds": 2.2033e-05,
+          "largest_call_seconds": 1.7466e-05,
+          "fraction_of_prover_time": 1.5688252795210227e-07
+        },
+        {
+          "name": "copy_from_u32",
+          "calls": 8,
+          "seconds": 6.291e-06,
+          "largest_call_seconds": 1.653e-06,
+          "fraction_of_prover_time": 4.4794080849029883e-08
+        },
+        {
+          "name": "copy_from_extelem",
+          "calls": 4,
+          "seconds": 2.475e-06,
+          "largest_call_seconds": 1.092e-06,
+          "fraction_of_prover_time": 1.7622850119432357e-08
+        }
+      ],
+      "profiled_call_seconds": 135.363831618,
+      "hal_call_seconds": 78.791496936
+    },
+    "independent_lift": {
+      "resources": {
+        "command": [
+          "build/aggregation/dot32-iterative-baseline/proof_chain_bench",
+          "lift",
+          "build/feasibility/optimized191-cpu-poly",
+          "100"
+        ],
+        "exit_code": 0,
+        "stopped_by": null,
+        "seconds": 44.97634052299691,
+        "sampled_peak_group_rss_kib": 1451972,
+        "minimum_free_disk_bytes": 1355460608,
+        "sampling_seconds": 0.25,
+        "limits": {
+          "seconds": 180,
+          "rss_mib": 4096,
+          "free_mib": 1024
+        }
+      },
+      "results": [
+        {
+          "operation": "lift",
+          "real_local_proof": true,
+          "result": {
+            "index": 100,
+            "integrity_verified": true,
+            "seal_bytes": 222668
+          },
+          "seconds": 44.824502211
+        }
+      ]
+    }
+  },
+  "unchanged_guest_and_saved_native_host": {
+    "apply_batch.bin": "ad7f1a3c326d964c34e9ab55f662bb8831cd781eb77db3f500a1f490edf16e06",
+    "verify_joinsplit.bin": "fce10ea7a2e58f88df57da5b401f5c8fa85e2ed0f2072d7f037c9c99db36aa60",
+    "proof_chain_bench": "57bbae5409ff91e28bf79c72175e1647f39f235fc7b4528940408298980a6442"
+  },
+  "patch_reapplication": {
+    "risc0_sha": "1cc70cf05033a79ebc90f07c679cb4bd1cd301b9",
+    "reapplied_dependency_files": 26,
+    "all_bytes_equal": true,
+    "patches": {
+      "risc0-succinct/risc0-v3.0.6.patch": "4bab9f2a2a12f8e98d82947b7ffdfc71d06648b3ce86786ebaa52ae62809cf1e",
+      "privacy-rollup/patches/risc0-cpu-profile.patch": "089557e11dc33410c46b0519106e8296e7c289c3fd427895bc5db902efcc90e7",
+      "privacy-rollup/patches/risc0-cpu-batch.patch": "3ca7467d40ff860ac22c4989d9be15292c75af3a3c48de7c6c13b21f23c7da91",
+      "privacy-rollup/patches/risc0-cpu-periodic.patch": "1fc6277e36cf1bdca513744d056fe2c55caf2828e3f8515902fa7a30ba1f230a",
+      "privacy-rollup/patches/risc0-cpu-poly-batch.patch": "ce35e156399a87f57ca6cf172656b633360275c405d4350e5282b98ab648a83e"
+    },
+    "files": {
+      "risc0/circuit/recursion/src/prove/hal/cpu.rs": "aacaabc5deabf78a0c3aa5fdcb6eb4dcef939ec0330e781e94ff904c07a40660",
+      "risc0/circuit/rv32im-sys/build.rs": "930dd76c62a3d92752caee43c6f13a1149d4e5b362e8b9cff72176189bdef568",
+      "risc0/circuit/rv32im-sys/kernels/cxx/gsr_batch_stub.cpp": "c6ed01eb4f1cdb5481130014fa16917328370fb3fbf39da2223de7b4be010c59",
+      "risc0/circuit/rv32im-sys/kernels/cxx_batch/ffi.cpp": "a8f0e8bed376d46c64796f682144d1aca76cf2c72371869e518988afbdfb39a4",
+      "risc0/circuit/rv32im-sys/kernels/cxx_batch/generate.py": "70ddc2c65ddf8e08bae3cd1ac1eab30f61546091a4713774a4a23c4d2d2ecde1",
+      "risc0/circuit/rv32im-sys/kernels/cxx_batch/packed_fp.h": "a5afa69c5be1f9652d13efb5f8bfe5b919b2401a110e196c52e192ebbe9a998e",
+      "risc0/circuit/rv32im-sys/src/lib.rs": "86f8e0230014d25de9ea04524152b61c31268b77c48d445f3141efeb14bebba1",
+      "risc0/circuit/rv32im/src/prove/hal/cpu.rs": "f5c799322375a06041f37dc7fdbd3bad99f60cca87288f5b3e438e42f3fc4115",
+      "risc0/core/src/field/baby_bear.rs": "e88fe14c6cda6fe3dcacd7bb1f6ca7b8ac8b0d9b90bec3b7cc46bbc87d454bc3",
+      "risc0/core/src/field/gsr_ops.rs": "043538281b92b6ff765586a0dbaaa8281c6478737a5ce437c2cd1f076bde9d49",
+      "risc0/core/src/field/mod.rs": "faa6136a8ad81478e41ed885f17266a2a752447f99eeb61b7c64f36c149bc445",
+      "risc0/zkp/src/core/hash/mod.rs": "39db50e62a7eecba74e4efcbd200f8d5b167eec5c913587dd19f1f8bc50fb71e",
+      "risc0/zkp/src/core/hash/poseidon2/batched.rs": "3b4870cd494f5177e29e6613de007a390f46af54d946d8590426ebaa978b7d19",
+      "risc0/zkp/src/core/hash/poseidon2/mod.rs": "329093f619eb1c5afc662dead199fd50356bc730b4e1e57ce977db7fab42cf95",
+      "risc0/zkp/src/core/hash/sha/mod.rs": "8cb4faa8e3403767f4f754837bf4e1b37ed69185a49a9266a2103b1856c17c61",
+      "risc0/zkp/src/core/hash/sha/rng.rs": "ee2dcca91907895c2aad185f9818c9a7cf2e6fa0e008edfe211ed39b1499b80c",
+      "risc0/zkp/src/core/hash/sha_padded.rs": "d47bd9aa865df41efcc6238b7974a7dbb59ac313cf9842f8693c9a392ca188fb",
+      "risc0/zkp/src/hal/cpu.rs": "0613e49f816a6e23229b986f6d77730ca6c6a449660ac9aad569762759ff9e88",
+      "risc0/zkp/src/verify/fri.rs": "c8e38b40b93abb43d6e6c6df93e4df8473b2bd72e30aa1cba76e84f0dbceebdd",
+      "risc0/zkp/src/verify/mod.rs": "b1bedc0fc5d10e7bcbb6d8657ee2488db0ca331af952cf9208f427d869503862",
+      "risc0/zkvm/methods/guest/src/bin/gsr_covenant.rs": "1a732e980d764304ca388fdf8e2a3271b58e5823ff4436862db8d4e2f6fea62d",
+      "risc0/zkvm/src/host/recursion/mod.rs": "deb66b7e31188d563fa9389ea609829a3d7ed7f0641f6fc10629bc6175e4f7e1",
+      "risc0/zkvm/src/host/recursion/prove/mod.rs": "a61ed4f036f5c78bb38eb475a8d07e90651c8b89a3becebd088150bf61ab5471",
+      "risc0/zkvm/src/host/recursion/prove/zkr.rs": "c04265e16957fe7bfee209f9d40d187edc60d5fd64a4f20bea25f8f417510a46",
+      "risc0/zkvm/src/host/recursion/tests.rs": "82b4d1fbc85dc1cf90245f72c8eafb6839b8f93609288b56787361cf04d9df5f",
+      "risc0/zkvm/src/receipt.rs": "cfc316a39f9bb4b2ea088454d58dd552f92f7f7285d6efc88ce10ed1a5641eb9"
+    }
+  },
+  "formal_coverage": "No proof of C++ generator, lane indexing, compiler semantics, FFI refinement or polynomial implementation equivalence; existing Lean field bounds are narrower.",
+  "projection": {
+    "measured_full_receipt": false,
+    "assumes_equivalent_segment_cost": true,
+    "segments": 208,
+    "join_count": 207,
+    "leaf_seconds": 140.442662976,
+    "native_lift_seconds_from_previous_hash_batch_experiment": 21.835665019,
+    "native_join_seconds_from_previous_complete_diagnostic": 21.970441345,
+    "standard_padded_seconds_from_previous_complete_diagnostic": 20.707067974,
+    "leaf_hours": 8.114464971946667,
+    "serial_hours": 10.645133513708055,
+    "limitations": "Selected normal segment only; all-leaf cost and complete application binding/aggregation/Script settlement remain unmeasured. Not an architectural lower bound."
+  },
+  "standard_build_restoration": {
+    "resources": {
+      "command": [
+        "bash",
+        "build/feasibility/restore-standard-cpu.sh"
+      ],
+      "exit_code": 0,
+      "stopped_by": null,
+      "seconds": 144.11967553399882,
+      "sampled_peak_group_rss_kib": 2355224,
+      "minimum_free_disk_bytes": 1255796736,
+      "sampling_seconds": 0.25,
+      "limits": {
+        "seconds": 900,
+        "rss_mib": 12288,
+        "free_mib": 1024
+      }
+    },
+    "results": []
+  },
+  "standard_stub_check": {
+    "resources": {
+      "command": [
+        "python3",
+        "privacy-rollup/tools/check_cpu_poly.py",
+        "--sdk",
+        "/workspace/risc0",
+        "--sys-out",
+        "privacy-rollup/prover/target/release/build/risc0-circuit-rv32im-sys-37dbdac48c5c0e92/out",
+        "--out",
+        "build/feasibility/cpu-poly-default",
+        "--expect-disabled"
+      ],
+      "exit_code": 0,
+      "stopped_by": null,
+      "seconds": 0.2510409949973109,
+      "sampled_peak_group_rss_kib": 276,
+      "minimum_free_disk_bytes": 1381851136,
+      "sampling_seconds": 0.25,
+      "limits": {
+        "seconds": 120,
+        "rss_mib": 2048,
+        "free_mib": 1024
+      }
+    },
+    "results": []
+  },
+  "standard_path_real_proof": {
+    "resources": {
+      "command": [
+        "privacy-rollup/prover/target/release/proof_chain_bench",
+        "prove",
+        "build/feasibility/dot32-final-standard",
+        "0"
+      ],
+      "exit_code": 0,
+      "stopped_by": null,
+      "seconds": 102.62653293900075,
+      "sampled_peak_group_rss_kib": 2396392,
+      "minimum_free_disk_bytes": 1381793792,
+      "sampling_seconds": 0.25,
+      "limits": {
+        "seconds": 300,
+        "rss_mib": 4096,
+        "free_mib": 1024
+      }
+    },
+    "results": [
+      {
+        "operation": "prove",
+        "real_local_proof": true,
+        "result": {
+          "index": 0,
+          "integrity_verified": true,
+          "po2": 18,
+          "seal_bytes": 255656
+        },
+        "seconds": 102.596052041
+      }
+    ]
+  },
+  "standard_path_independent_lift": {
+    "resources": {
+      "command": [
+        "build/aggregation/dot32-iterative-baseline/proof_chain_bench",
+        "lift",
+        "build/feasibility/dot32-final-standard",
+        "0"
+      ],
+      "exit_code": 0,
+      "stopped_by": null,
+      "seconds": 42.95802525500039,
+      "sampled_peak_group_rss_kib": 1446060,
+      "minimum_free_disk_bytes": 1381474304,
+      "sampling_seconds": 0.25,
+      "limits": {
+        "seconds": 180,
+        "rss_mib": 4096,
+        "free_mib": 1024
+      }
+    },
+    "results": [
+      {
+        "operation": "lift",
+        "real_local_proof": true,
+        "result": {
+          "index": 0,
+          "integrity_verified": true,
+          "seal_bytes": 222668
+        },
+        "seconds": 42.76482394
+      }
+    ]
+  },
+  "standard_path_independent_padded": {
+    "resources": {
+      "command": [
+        "build/aggregation/dot32-iterative-baseline/proof_chain_bench",
+        "padded",
+        "build/feasibility/dot32-final-standard",
+        "lift-0"
+      ],
+      "exit_code": 0,
+      "stopped_by": null,
+      "seconds": 21.114925565001613,
+      "sampled_peak_group_rss_kib": 1423892,
+      "minimum_free_disk_bytes": 1381191680,
+      "sampling_seconds": 0.25,
+      "limits": {
+        "seconds": 180,
+        "rss_mib": 4096,
+        "free_mib": 1024
+      }
+    },
+    "results": [
+      {
+        "operation": "padded",
+        "real_local_proof": true,
+        "result": {
+          "complete_guest_verified": true,
+          "corrupt_seal_rejected": true,
+          "hashfn": "sha-256-padded",
+          "integrity_verified": true,
+          "seal_bytes": 222668
+        },
+        "seconds": 20.905105722
+      }
+    ]
+  },
+  "standard_guest_binary_equality": {
+    "apply_batch.bin": "ad7f1a3c326d964c34e9ab55f662bb8831cd781eb77db3f500a1f490edf16e06",
+    "verify_joinsplit.bin": "fce10ea7a2e58f88df57da5b401f5c8fa85e2ed0f2072d7f037c9c99db36aa60",
+    "proof_chain_bench": "6bbd088b0debce8ad6cbd6993d0e15793125b18e8d56b953e6d2d706391c83ca"
+  },
+  "artifacts": {
+    "build/feasibility/dot32-cpu-poly/capture.json": {
+      "bytes": 344,
+      "sha256": "602a6b76c0009403170ade39137dbcf3ea3bcb724d55a0b05932208c71de1182"
+    },
+    "build/feasibility/dot32-cpu-poly/journal.bin": {
+      "bytes": 128,
+      "sha256": "a93d19c597f1caf16a2cd3e3d492bb68e7ae0d1726df571b020b6edb8d916696"
+    },
+    "build/feasibility/dot32-cpu-poly/lift-0.pc": {
+      "bytes": 271080,
+      "sha256": "0aff59e0104a5023e1287ec956f56bb3f96b665ab4707ee1db208e7bc8339b5a"
+    },
+    "build/feasibility/dot32-cpu-poly/padded-parameters.pc": {
+      "bytes": 112,
+      "sha256": "819709414c1091a304e8f59de054e98b8bee490a74522136b378a8c76a11d797"
+    },
+    "build/feasibility/dot32-cpu-poly/padded.pc": {
+      "bytes": 273615,
+      "sha256": "e16b1961b12ba8949ac8b02bcd33ce23be9ea8a0cfec66d550d7354c78ae33ed"
+    },
+    "build/feasibility/dot32-cpu-poly/receipt-0.pc": {
+      "bytes": 310739,
+      "sha256": "6d223c0115d8018af0356c287dbfc543cab7b2d7fc04096b389438267999aa4d"
+    },
+    "build/feasibility/dot32-cpu-poly/segment-0.pc": {
+      "bytes": 86939,
+      "sha256": "9cadf4f17145b650be48b5bfd2c6734788ab1c8266ef9d6a75838d246e17d53a"
+    },
+    "build/feasibility/optimized191-cpu-poly/capture.json": {
+      "bytes": 362,
+      "sha256": "f34ae62d9a358bbf7c024e563bb6518bdd9b764255ad86f331d48c66bec61096"
+    },
+    "build/feasibility/optimized191-cpu-poly/journal.bin": {
+      "bytes": 196,
+      "sha256": "4e366d165e21f04fcb31f5cd46b0abfecd9d6503f8d542c3f45399256890b43f"
+    },
+    "build/feasibility/optimized191-cpu-poly/lift-100.pc": {
+      "bytes": 271232,
+      "sha256": "8f85cab01f04076a8aa238737b3f0aac3da6f1197ea68239d4e3576923bf993b"
+    },
+    "build/feasibility/optimized191-cpu-poly/receipt-100.pc": {
+      "bytes": 336827,
+      "sha256": "2f9eba48d0d566569ee30eeb9de63f26e79cc970955fa4b1f43a7a919c5e2d2c"
+    },
+    "build/feasibility/optimized191-cpu-poly/segment-100.pc": {
+      "bytes": 119191,
+      "sha256": "e6e697405b8ad9afcce5deb4b38bbdcf0f7fa8293cdbd2d3d5d2d331b0b702c4"
+    },
+    "build/feasibility/dot32-final-standard/capture.json": {
+      "bytes": 344,
+      "sha256": "602a6b76c0009403170ade39137dbcf3ea3bcb724d55a0b05932208c71de1182"
+    },
+    "build/feasibility/dot32-final-standard/journal.bin": {
+      "bytes": 128,
+      "sha256": "a93d19c597f1caf16a2cd3e3d492bb68e7ae0d1726df571b020b6edb8d916696"
+    },
+    "build/feasibility/dot32-final-standard/lift-0.pc": {
+      "bytes": 271413,
+      "sha256": "c35d517b05ad068b44bb64fd281e09c36f8c1f80020ae9b95237ac8b9d386749"
+    },
+    "build/feasibility/dot32-final-standard/padded-parameters.pc": {
+      "bytes": 112,
+      "sha256": "819709414c1091a304e8f59de054e98b8bee490a74522136b378a8c76a11d797"
+    },
+    "build/feasibility/dot32-final-standard/padded.pc": {
+      "bytes": 273655,
+      "sha256": "9a73f76fc902c01bf5c05442393fe19da1d49d045a22612ff00bab2d65d34f88"
+    },
+    "build/feasibility/dot32-final-standard/receipt-0.pc": {
+      "bytes": 310769,
+      "sha256": "90e06e8b5ec863eb81a4530c48767223894e2cd0c1c5187b147255cbf6bdcd9d"
+    },
+    "build/feasibility/dot32-final-standard/segment-0.pc": {
+      "bytes": 86939,
+      "sha256": "9cadf4f17145b650be48b5bfd2c6734788ab1c8266ef9d6a75838d246e17d53a"
+    }
+  }
+}

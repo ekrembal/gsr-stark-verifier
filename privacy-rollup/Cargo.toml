@@ -47,3 +47,6 @@ anyhow = "1.0"
 
 [profile.release]
 debug = 1
+
+[patch.crates-io]
+provekit-whir = { path = "vendor/provekit-whir" }

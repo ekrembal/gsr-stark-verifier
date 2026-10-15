@@ -44,8 +44,7 @@ pub fn proof_of(tx: &RollupTransaction) -> NoirProof {
 
 /// Native verification of a rollup transaction's proof against its own statement.
 pub fn verify(verifier: &Verifier, tx: &RollupTransaction) -> Result<()> {
-    let mut v = verifier.clone();
-    v.verify(&proof_of(tx)).context("ProveKit verification")
+    verifier.verify_ref(&proof_of(tx)).context("ProveKit verification")
 }
 
 /// Uncompressed postcard encoding of the verifier key, as read by the RISC Zero guest.

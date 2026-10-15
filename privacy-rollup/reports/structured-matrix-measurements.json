@@ -1,0 +1,811 @@
+{
+  "comparison": {
+    "verify": {
+      "structured-base": {
+        "runs": [
+          {
+            "cycles": 726666128,
+            "journal": "0f00000000000000",
+            "proof_bytes": 635142,
+            "runtime_seconds": 25.506431055,
+            "segments": 821,
+            "vk_bytes": 3213548,
+            "phases": {
+              "read": 353884,
+              "deserialize_vk": 78805615,
+              "deserialize_proof": 6994049,
+              "verify": 639245603
+            },
+            "spans": [
+              {
+                "name": "provekit_common::prefix_covector::offset_mle",
+                "inclusive_cycles": 271319,
+                "exclusive_cycles": 271319,
+                "calls": 1
+              },
+              {
+                "name": "provekit_common::prefix_covector::prefix_mle",
+                "inclusive_cycles": 95760329,
+                "exclusive_cycles": 95760329,
+                "calls": 7
+              },
+              {
+                "name": "provekit_common::prefix_covector::sparse_mle",
+                "inclusive_cycles": 8630,
+                "exclusive_cycles": 8630,
+                "calls": 1
+              },
+              {
+                "name": "provekit_common::utils::sumcheck::calculate_evaluations_over_boolean_hypercube_for_eq",
+                "inclusive_cycles": 21425235,
+                "exclusive_cycles": 21425235,
+                "calls": 1
+              },
+              {
+                "name": "provekit_common::utils::sumcheck::calculate_external_row_by_scatter",
+                "inclusive_cycles": 295035330,
+                "exclusive_cycles": 273610095,
+                "calls": 1
+              },
+              {
+                "name": "provekit_verifier::verify_ref",
+                "inclusive_cycles": 639242027,
+                "exclusive_cycles": 7446,
+                "calls": 1
+              },
+              {
+                "name": "provekit_verifier::whir_r1cs::run_sumcheck_verifier",
+                "inclusive_cycles": 991986,
+                "exclusive_cycles": 991986,
+                "calls": 1
+              },
+              {
+                "name": "provekit_verifier::whir_r1cs::verify",
+                "inclusive_cycles": 639234581,
+                "exclusive_cycles": 13131353,
+                "calls": 1
+              },
+              {
+                "name": "whir::algebra::geometric_subgroup::geometric_accumulate_subgroup",
+                "inclusive_cycles": 152360297,
+                "exclusive_cycles": 24270794,
+                "calls": 4
+              },
+              {
+                "name": "whir::algebra::ntt::sparse_prefix::sparse_ntt_prefix",
+                "inclusive_cycles": 128089503,
+                "exclusive_cycles": 128089503,
+                "calls": 4
+              },
+              {
+                "name": "whir::protocols::irs_commit::receive_commitment",
+                "inclusive_cycles": 569964,
+                "exclusive_cycles": 532326,
+                "calls": 18
+              },
+              {
+                "name": "whir::protocols::irs_commit::verify",
+                "inclusive_cycles": 32468009,
+                "exclusive_cycles": 10499580,
+                "calls": 18
+              },
+              {
+                "name": "whir::protocols::matrix_commit::receive_commitment",
+                "inclusive_cycles": 37638,
+                "exclusive_cycles": 37638,
+                "calls": 18
+              },
+              {
+                "name": "whir::protocols::matrix_commit::verify",
+                "inclusive_cycles": 24819008,
+                "exclusive_cycles": 24819008,
+                "calls": 20
+              },
+              {
+                "name": "whir::protocols::sumcheck::verify",
+                "inclusive_cycles": 1816786,
+                "exclusive_cycles": 1816786,
+                "calls": 22
+              },
+              {
+                "name": "whir::protocols::whir::verifier::whir::verify",
+                "inclusive_cycles": 22705687,
+                "exclusive_cycles": 6261254,
+                "calls": 2
+              },
+              {
+                "name": "whir::protocols::whir_zk::utils::build_beq_tables",
+                "inclusive_cycles": 156659030,
+                "exclusive_cycles": 4298733,
+                "calls": 2
+              },
+              {
+                "name": "whir::protocols::whir_zk::verifier::verify",
+                "inclusive_cycles": 329951260,
+                "exclusive_cycles": 33410012,
+                "calls": 2
+              }
+            ],
+            "command": [
+              "/workspace/gsr-stark-verifier/build/aggregation/fused-sha-baseline/exec_joinsplit",
+              "/workspace/gsr-stark-verifier/build/aggregation/inputs/vk.pc",
+              "/workspace/gsr-stark-verifier/build/aggregation/inputs/proof0.pc",
+              "/workspace/gsr-stark-verifier/build/aggregation/fused-sha-baseline/verify_joinsplit.bin"
+            ],
+            "peak_host_rss_kib": 125984
+          },
+          {
+            "cycles": 726666128,
+            "journal": "0f00000000000000",
+            "proof_bytes": 635142,
+            "runtime_seconds": 25.488185029,
+            "segments": 821,
+            "vk_bytes": 3213548,
+            "phases": {
+              "read": 353884,
+              "deserialize_vk": 78805615,
+              "deserialize_proof": 6994049,
+              "verify": 639245603
+            },
+            "spans": [
+              {
+                "name": "provekit_common::prefix_covector::offset_mle",
+                "inclusive_cycles": 271319,
+                "exclusive_cycles": 271319,
+                "calls": 1
+              },
+              {
+                "name": "provekit_common::prefix_covector::prefix_mle",
+                "inclusive_cycles": 95760329,
+                "exclusive_cycles": 95760329,
+                "calls": 7
+              },
+              {
+                "name": "provekit_common::prefix_covector::sparse_mle",
+                "inclusive_cycles": 8630,
+                "exclusive_cycles": 8630,
+                "calls": 1
+              },
+              {
+                "name": "provekit_common::utils::sumcheck::calculate_evaluations_over_boolean_hypercube_for_eq",
+                "inclusive_cycles": 21425235,
+                "exclusive_cycles": 21425235,
+                "calls": 1
+              },
+              {
+                "name": "provekit_common::utils::sumcheck::calculate_external_row_by_scatter",
+                "inclusive_cycles": 295035330,
+                "exclusive_cycles": 273610095,
+                "calls": 1
+              },
+              {
+                "name": "provekit_verifier::verify_ref",
+                "inclusive_cycles": 639242027,
+                "exclusive_cycles": 7446,
+                "calls": 1
+              },
+              {
+                "name": "provekit_verifier::whir_r1cs::run_sumcheck_verifier",
+                "inclusive_cycles": 991986,
+                "exclusive_cycles": 991986,
+                "calls": 1
+              },
+              {
+                "name": "provekit_verifier::whir_r1cs::verify",
+                "inclusive_cycles": 639234581,
+                "exclusive_cycles": 13131353,
+                "calls": 1
+              },
+              {
+                "name": "whir::algebra::geometric_subgroup::geometric_accumulate_subgroup",
+                "inclusive_cycles": 152360297,
+                "exclusive_cycles": 24270794,
+                "calls": 4
+              },
+              {
+                "name": "whir::algebra::ntt::sparse_prefix::sparse_ntt_prefix",
+                "inclusive_cycles": 128089503,
+                "exclusive_cycles": 128089503,
+                "calls": 4
+              },
+              {
+                "name": "whir::protocols::irs_commit::receive_commitment",
+                "inclusive_cycles": 569964,
+                "exclusive_cycles": 532326,
+                "calls": 18
+              },
+              {
+                "name": "whir::protocols::irs_commit::verify",
+                "inclusive_cycles": 32468009,
+                "exclusive_cycles": 10499580,
+                "calls": 18
+              },
+              {
+                "name": "whir::protocols::matrix_commit::receive_commitment",
+                "inclusive_cycles": 37638,
+                "exclusive_cycles": 37638,
+                "calls": 18
+              },
+              {
+                "name": "whir::protocols::matrix_commit::verify",
+                "inclusive_cycles": 24819008,
+                "exclusive_cycles": 24819008,
+                "calls": 20
+              },
+              {
+                "name": "whir::protocols::sumcheck::verify",
+                "inclusive_cycles": 1816786,
+                "exclusive_cycles": 1816786,
+                "calls": 22
+              },
+              {
+                "name": "whir::protocols::whir::verifier::whir::verify",
+                "inclusive_cycles": 22705687,
+                "exclusive_cycles": 6261254,
+                "calls": 2
+              },
+              {
+                "name": "whir::protocols::whir_zk::utils::build_beq_tables",
+                "inclusive_cycles": 156659030,
+                "exclusive_cycles": 4298733,
+                "calls": 2
+              },
+              {
+                "name": "whir::protocols::whir_zk::verifier::verify",
+                "inclusive_cycles": 329951260,
+                "exclusive_cycles": 33410012,
+                "calls": 2
+              }
+            ],
+            "command": [
+              "/workspace/gsr-stark-verifier/build/aggregation/fused-sha-baseline/exec_joinsplit",
+              "/workspace/gsr-stark-verifier/build/aggregation/inputs/vk.pc",
+              "/workspace/gsr-stark-verifier/build/aggregation/inputs/proof0.pc",
+              "/workspace/gsr-stark-verifier/build/aggregation/fused-sha-baseline/verify_joinsplit.bin"
+            ],
+            "peak_host_rss_kib": 125980
+          }
+        ],
+        "median_seconds": 25.497308042,
+        "peak_host_rss_kib": 125984
+      },
+      "structured-reverse": {
+        "runs": [
+          {
+            "cycles": 506728232,
+            "journal": "0f00000000000000",
+            "proof_bytes": 635142,
+            "runtime_seconds": 20.916456314,
+            "segments": 594,
+            "vk_bytes": 3213548,
+            "phases": {
+              "read": 353884,
+              "deserialize_vk": 82427724,
+              "deserialize_proof": 6994337,
+              "verify": 415675458
+            },
+            "spans": [
+              {
+                "name": "provekit_common::prefix_covector::offset_mle",
+                "inclusive_cycles": 271319,
+                "exclusive_cycles": 271319,
+                "calls": 1
+              },
+              {
+                "name": "provekit_common::prefix_covector::prefix_mle",
+                "inclusive_cycles": 95760329,
+                "exclusive_cycles": 95760329,
+                "calls": 7
+              },
+              {
+                "name": "provekit_common::prefix_covector::sparse_mle",
+                "inclusive_cycles": 8630,
+                "exclusive_cycles": 8630,
+                "calls": 1
+              },
+              {
+                "name": "provekit_common::utils::structured_matrix::evaluate",
+                "inclusive_cycles": 71477042,
+                "exclusive_cycles": 50051804,
+                "calls": 1
+              },
+              {
+                "name": "provekit_common::utils::sumcheck::calculate_evaluations_over_boolean_hypercube_for_eq",
+                "inclusive_cycles": 21425238,
+                "exclusive_cycles": 21425238,
+                "calls": 1
+              },
+              {
+                "name": "provekit_verifier::verify_ref",
+                "inclusive_cycles": 415671888,
+                "exclusive_cycles": 7435,
+                "calls": 1
+              },
+              {
+                "name": "provekit_verifier::whir_r1cs::run_sumcheck_verifier",
+                "inclusive_cycles": 988428,
+                "exclusive_cycles": 988428,
+                "calls": 1
+              },
+              {
+                "name": "provekit_verifier::whir_r1cs::verify_with_matrix",
+                "inclusive_cycles": 415664453,
+                "exclusive_cycles": 13127177,
+                "calls": 1
+              },
+              {
+                "name": "whir::algebra::geometric_subgroup::geometric_accumulate_subgroup",
+                "inclusive_cycles": 152353605,
+                "exclusive_cycles": 24264102,
+                "calls": 4
+              },
+              {
+                "name": "whir::algebra::ntt::sparse_prefix::sparse_ntt_prefix",
+                "inclusive_cycles": 128089503,
+                "exclusive_cycles": 128089503,
+                "calls": 4
+              },
+              {
+                "name": "whir::protocols::irs_commit::receive_commitment",
+                "inclusive_cycles": 567447,
+                "exclusive_cycles": 529797,
+                "calls": 18
+              },
+              {
+                "name": "whir::protocols::irs_commit::verify",
+                "inclusive_cycles": 32455638,
+                "exclusive_cycles": 10485960,
+                "calls": 18
+              },
+              {
+                "name": "whir::protocols::matrix_commit::receive_commitment",
+                "inclusive_cycles": 37650,
+                "exclusive_cycles": 37650,
+                "calls": 18
+              },
+              {
+                "name": "whir::protocols::matrix_commit::verify",
+                "inclusive_cycles": 24820853,
+                "exclusive_cycles": 24820853,
+                "calls": 20
+              },
+              {
+                "name": "whir::protocols::sumcheck::verify",
+                "inclusive_cycles": 1808666,
+                "exclusive_cycles": 1808666,
+                "calls": 22
+              },
+              {
+                "name": "whir::protocols::whir::verifier::whir::verify",
+                "inclusive_cycles": 22663886,
+                "exclusive_cycles": 6230630,
+                "calls": 2
+              },
+              {
+                "name": "whir::protocols::whir_zk::utils::build_beq_tables",
+                "inclusive_cycles": 156649777,
+                "exclusive_cycles": 4296172,
+                "calls": 2
+              },
+              {
+                "name": "whir::protocols::whir_zk::verifier::verify",
+                "inclusive_cycles": 329947722,
+                "exclusive_cycles": 33468195,
+                "calls": 2
+              }
+            ],
+            "command": [
+              "/workspace/gsr-stark-verifier/privacy-rollup/prover/target/release/exec_joinsplit",
+              "/workspace/gsr-stark-verifier/build/aggregation/inputs/vk.pc",
+              "/workspace/gsr-stark-verifier/build/aggregation/inputs/proof0.pc"
+            ],
+            "peak_host_rss_kib": 129912
+          },
+          {
+            "cycles": 506728257,
+            "journal": "0f00000000000000",
+            "proof_bytes": 635142,
+            "runtime_seconds": 21.110235537,
+            "segments": 594,
+            "vk_bytes": 3213548,
+            "phases": {
+              "read": 353884,
+              "deserialize_vk": 82427724,
+              "deserialize_proof": 6994337,
+              "verify": 415675483
+            },
+            "spans": [
+              {
+                "name": "provekit_common::prefix_covector::offset_mle",
+                "inclusive_cycles": 271319,
+                "exclusive_cycles": 271319,
+                "calls": 1
+              },
+              {
+                "name": "provekit_common::prefix_covector::prefix_mle",
+                "inclusive_cycles": 95760329,
+                "exclusive_cycles": 95760329,
+                "calls": 7
+              },
+              {
+                "name": "provekit_common::prefix_covector::sparse_mle",
+                "inclusive_cycles": 8630,
+                "exclusive_cycles": 8630,
+                "calls": 1
+              },
+              {
+                "name": "provekit_common::utils::structured_matrix::evaluate",
+                "inclusive_cycles": 71477042,
+                "exclusive_cycles": 50051804,
+                "calls": 1
+              },
+              {
+                "name": "provekit_common::utils::sumcheck::calculate_evaluations_over_boolean_hypercube_for_eq",
+                "inclusive_cycles": 21425238,
+                "exclusive_cycles": 21425238,
+                "calls": 1
+              },
+              {
+                "name": "provekit_verifier::verify_ref",
+                "inclusive_cycles": 415671913,
+                "exclusive_cycles": 7460,
+                "calls": 1
+              },
+              {
+                "name": "provekit_verifier::whir_r1cs::run_sumcheck_verifier",
+                "inclusive_cycles": 988428,
+                "exclusive_cycles": 988428,
+                "calls": 1
+              },
+              {
+                "name": "provekit_verifier::whir_r1cs::verify_with_matrix",
+                "inclusive_cycles": 415664453,
+                "exclusive_cycles": 13127177,
+                "calls": 1
+              },
+              {
+                "name": "whir::algebra::geometric_subgroup::geometric_accumulate_subgroup",
+                "inclusive_cycles": 152353605,
+                "exclusive_cycles": 24264102,
+                "calls": 4
+              },
+              {
+                "name": "whir::algebra::ntt::sparse_prefix::sparse_ntt_prefix",
+                "inclusive_cycles": 128089503,
+                "exclusive_cycles": 128089503,
+                "calls": 4
+              },
+              {
+                "name": "whir::protocols::irs_commit::receive_commitment",
+                "inclusive_cycles": 567447,
+                "exclusive_cycles": 529797,
+                "calls": 18
+              },
+              {
+                "name": "whir::protocols::irs_commit::verify",
+                "inclusive_cycles": 32455638,
+                "exclusive_cycles": 10485960,
+                "calls": 18
+              },
+              {
+                "name": "whir::protocols::matrix_commit::receive_commitment",
+                "inclusive_cycles": 37650,
+                "exclusive_cycles": 37650,
+                "calls": 18
+              },
+              {
+                "name": "whir::protocols::matrix_commit::verify",
+                "inclusive_cycles": 24820853,
+                "exclusive_cycles": 24820853,
+                "calls": 20
+              },
+              {
+                "name": "whir::protocols::sumcheck::verify",
+                "inclusive_cycles": 1808666,
+                "exclusive_cycles": 1808666,
+                "calls": 22
+              },
+              {
+                "name": "whir::protocols::whir::verifier::whir::verify",
+                "inclusive_cycles": 22663886,
+                "exclusive_cycles": 6230630,
+                "calls": 2
+              },
+              {
+                "name": "whir::protocols::whir_zk::utils::build_beq_tables",
+                "inclusive_cycles": 156649777,
+                "exclusive_cycles": 4296172,
+                "calls": 2
+              },
+              {
+                "name": "whir::protocols::whir_zk::verifier::verify",
+                "inclusive_cycles": 329947722,
+                "exclusive_cycles": 33468195,
+                "calls": 2
+              }
+            ],
+            "command": [
+              "/workspace/gsr-stark-verifier/privacy-rollup/prover/target/release/exec_joinsplit",
+              "/workspace/gsr-stark-verifier/build/aggregation/inputs/vk.pc",
+              "/workspace/gsr-stark-verifier/build/aggregation/inputs/proof0.pc"
+            ],
+            "peak_host_rss_kib": 130020
+          }
+        ],
+        "median_seconds": 21.0133459255,
+        "peak_host_rss_kib": 130020
+      },
+      "cycle_reduction_percent": 30.266703651831694,
+      "median_runtime_reduction_percent": 17.58602166594948
+    },
+    "batch": {
+      "structured-base": {
+        "runs": [
+          {
+            "cycles": 746732029,
+            "segments": 842,
+            "runtime_seconds": 26.29573967,
+            "image_id": "68b777e4fc034cdead1da74323bd255a89731447cf45c2663aad19537e93f6c6",
+            "journal_sha256": "4e366d165e21f04fcb31f5cd46b0abfecd9d6503f8d542c3f45399256890b43f",
+            "command": [
+              "/workspace/gsr-stark-verifier/build/aggregation/fused-sha-baseline/settle",
+              "exec",
+              "/workspace/gsr-stark-verifier/build/aggregation/inputs/witness.json",
+              "/workspace/gsr-stark-verifier/build/aggregation/structured-base-0-batch-0-journal",
+              "/workspace/gsr-stark-verifier/build/aggregation/inputs/vk.pc",
+              "/workspace/gsr-stark-verifier/build/aggregation/inputs/proof0.pc"
+            ],
+            "peak_host_rss_kib": 143448
+          },
+          {
+            "cycles": 746732029,
+            "segments": 842,
+            "runtime_seconds": 26.491266999,
+            "image_id": "68b777e4fc034cdead1da74323bd255a89731447cf45c2663aad19537e93f6c6",
+            "journal_sha256": "4e366d165e21f04fcb31f5cd46b0abfecd9d6503f8d542c3f45399256890b43f",
+            "command": [
+              "/workspace/gsr-stark-verifier/build/aggregation/fused-sha-baseline/settle",
+              "exec",
+              "/workspace/gsr-stark-verifier/build/aggregation/inputs/witness.json",
+              "/workspace/gsr-stark-verifier/build/aggregation/structured-base-1-batch-0-journal",
+              "/workspace/gsr-stark-verifier/build/aggregation/inputs/vk.pc",
+              "/workspace/gsr-stark-verifier/build/aggregation/inputs/proof0.pc"
+            ],
+            "peak_host_rss_kib": 143480
+          }
+        ],
+        "median_seconds": 26.3935033345,
+        "peak_host_rss_kib": 143480
+      },
+      "structured-reverse": {
+        "runs": [
+          {
+            "cycles": 523884080,
+            "segments": 610,
+            "runtime_seconds": 21.683867739,
+            "image_id": "0defcdf93eae149a872b8df04ca6b66f24f5b3b216ea721e0e6a2a897f948779",
+            "journal_sha256": "4e366d165e21f04fcb31f5cd46b0abfecd9d6503f8d542c3f45399256890b43f",
+            "command": [
+              "/workspace/gsr-stark-verifier/privacy-rollup/prover/target/release/settle",
+              "exec",
+              "/workspace/gsr-stark-verifier/build/aggregation/inputs/witness.json",
+              "/workspace/gsr-stark-verifier/build/aggregation/structured-reverse-0-batch-0-journal",
+              "/workspace/gsr-stark-verifier/build/aggregation/inputs/vk.pc",
+              "/workspace/gsr-stark-verifier/build/aggregation/inputs/proof0.pc"
+            ],
+            "peak_host_rss_kib": 128564
+          },
+          {
+            "cycles": 523884080,
+            "segments": 610,
+            "runtime_seconds": 21.589077878,
+            "image_id": "0defcdf93eae149a872b8df04ca6b66f24f5b3b216ea721e0e6a2a897f948779",
+            "journal_sha256": "4e366d165e21f04fcb31f5cd46b0abfecd9d6503f8d542c3f45399256890b43f",
+            "command": [
+              "/workspace/gsr-stark-verifier/privacy-rollup/prover/target/release/settle",
+              "exec",
+              "/workspace/gsr-stark-verifier/build/aggregation/inputs/witness.json",
+              "/workspace/gsr-stark-verifier/build/aggregation/structured-reverse-1-batch-0-journal",
+              "/workspace/gsr-stark-verifier/build/aggregation/inputs/vk.pc",
+              "/workspace/gsr-stark-verifier/build/aggregation/inputs/proof0.pc"
+            ],
+            "peak_host_rss_kib": 128568
+          }
+        ],
+        "median_seconds": 21.636472808500002,
+        "peak_host_rss_kib": 128568
+      },
+      "cycle_reduction_percent": 29.84309502545792,
+      "median_runtime_reduction_percent": 18.02349034802778
+    }
+  },
+  "execution_only": true,
+  "guest_rejections": {
+    "execution_only": true,
+    "cases": [
+      {
+        "kind": "verify",
+        "name": "public-input",
+        "returncode": 1,
+        "command": [
+          "build/aggregation/structured-reverse-baseline/exec_joinsplit",
+          "build/aggregation/inputs/vk.pc",
+          "build/aggregation/cases/public-input.pc",
+          "build/aggregation/structured-reverse-baseline/verify_joinsplit.bin"
+        ],
+        "log_sha256": "cd556e46abdf82f767675c21bb771f3899f5c11bc1a93bdda247a774b7ce79a6"
+      },
+      {
+        "kind": "verify",
+        "name": "narg-first",
+        "returncode": 1,
+        "command": [
+          "build/aggregation/structured-reverse-baseline/exec_joinsplit",
+          "build/aggregation/inputs/vk.pc",
+          "build/aggregation/cases/narg-first.pc",
+          "build/aggregation/structured-reverse-baseline/verify_joinsplit.bin"
+        ],
+        "log_sha256": "cd556e46abdf82f767675c21bb771f3899f5c11bc1a93bdda247a774b7ce79a6"
+      },
+      {
+        "kind": "verify",
+        "name": "hint-middle",
+        "returncode": 1,
+        "command": [
+          "build/aggregation/structured-reverse-baseline/exec_joinsplit",
+          "build/aggregation/inputs/vk.pc",
+          "build/aggregation/cases/hint-middle.pc",
+          "build/aggregation/structured-reverse-baseline/verify_joinsplit.bin"
+        ],
+        "log_sha256": "1bcfb66cfd62156d6ccd2ddfbce7b46760e524ee01235606d37d2d30d66f32e9"
+      },
+      {
+        "kind": "verify",
+        "name": "narg-extra",
+        "returncode": 1,
+        "command": [
+          "build/aggregation/structured-reverse-baseline/exec_joinsplit",
+          "build/aggregation/inputs/vk.pc",
+          "build/aggregation/cases/narg-extra.pc",
+          "build/aggregation/structured-reverse-baseline/verify_joinsplit.bin"
+        ],
+        "log_sha256": "368e0b1d0bc3bbbe614dda7653335e54bcf1b837adebbb094143511073e54ca3"
+      },
+      {
+        "kind": "batch",
+        "name": "public-input",
+        "returncode": 1,
+        "command": [
+          "build/aggregation/structured-reverse-baseline/settle",
+          "exec",
+          "build/aggregation/inputs/witness.json",
+          "build/aggregation/rejections-structured-reverse/public-input",
+          "build/aggregation/inputs/vk.pc",
+          "build/aggregation/cases/public-input.pc"
+        ],
+        "log_sha256": "406b81d999f15e74e0a58c64919b63053dce4be46f59a1cf252eb9b31504e45d"
+      },
+      {
+        "kind": "batch",
+        "name": "narg-first",
+        "returncode": 1,
+        "command": [
+          "build/aggregation/structured-reverse-baseline/settle",
+          "exec",
+          "build/aggregation/inputs/witness.json",
+          "build/aggregation/rejections-structured-reverse/narg-first",
+          "build/aggregation/inputs/vk.pc",
+          "build/aggregation/cases/narg-first.pc"
+        ],
+        "log_sha256": "3baeb10a9bacb5adbd599e5afbca55eef2ded7d6bdcbbc2a6adbfbc63a38a0b5"
+      },
+      {
+        "kind": "batch",
+        "name": "hint-middle",
+        "returncode": 1,
+        "command": [
+          "build/aggregation/structured-reverse-baseline/settle",
+          "exec",
+          "build/aggregation/inputs/witness.json",
+          "build/aggregation/rejections-structured-reverse/hint-middle",
+          "build/aggregation/inputs/vk.pc",
+          "build/aggregation/cases/hint-middle.pc"
+        ],
+        "log_sha256": "3b94c575cb20955bb8b20633bd6191e4c854f5faf0be4a8a229a59188c6895fa"
+      },
+      {
+        "kind": "batch",
+        "name": "narg-extra",
+        "returncode": 1,
+        "command": [
+          "build/aggregation/structured-reverse-baseline/settle",
+          "exec",
+          "build/aggregation/inputs/witness.json",
+          "build/aggregation/rejections-structured-reverse/narg-extra",
+          "build/aggregation/inputs/vk.pc",
+          "build/aggregation/cases/narg-extra.pc"
+        ],
+        "log_sha256": "6fae1ae7d2238fa6760fdd3789b038e4faeaeb97f9998ad11744b513463675d8"
+      },
+      {
+        "kind": "batch",
+        "name": "wrong-key",
+        "returncode": 1,
+        "command": [
+          "build/aggregation/structured-reverse-baseline/settle",
+          "exec",
+          "build/aggregation/inputs/witness.json",
+          "build/aggregation/rejections-structured-reverse/wrong-key",
+          "build/aggregation/rejections-structured-reverse/wrong-vk.pc",
+          "build/aggregation/inputs/proof0.pc"
+        ],
+        "log_sha256": "b6fc36300b3c65fccd20a0f66956e8f307e4f87d31ea53c46e29d0fee3c9f1c9"
+      }
+    ]
+  },
+  "native_tests_passed": 37,
+  "symbolic_plan": {
+    "vk_sha256": "bc1384089b1dc1654e61561089523ae521d2cf9b664589ec1e965108b4e2a183",
+    "checked_rows": 38056,
+    "checked_matrix_rows": 114168,
+    "blocks": 142,
+    "bytes": 300963,
+    "plan_sha256": "851a773762c0a8d9a72ccac277bf9c624a9981d4e79f765c098fadb1db5d9826"
+  },
+  "fresh_operator": {
+    "reject_forged_statement": "Error: rejected: Proof",
+    "reject_corrupt_proof": "Error: rejected: Proof",
+    "submit_seconds": 0.1,
+    "reject_resubmission": "Error: rejected: NullifierReserved",
+    "reject_missing_funding": "Error: rejected: Rule(FundingInput)",
+    "witness_equals_reference": true,
+    "guest_exec_seconds": 21.9,
+    "guest_log": [
+      "image id 0defcdf93eae149a872b8df04ca6b66f24f5b3b216ea721e0e6a2a897f948779",
+      "executed: 524816739 cycles, 611 segments, 21.865248477s"
+    ],
+    "guest_journal_equals_native": true,
+    "reject_after_settlement": "Error: rejected: NullifierSpent",
+    "accept_and_rollback": {
+      "before": {
+        "backing_sats": 10000,
+        "batch_number": 0,
+        "commitment_count": 0,
+        "nullifier_next_index": 1,
+        "pending": 1,
+        "rollup_id": "181e83faa3916307d316fd28fd792439464ed60145a313fa3b9b5f88354d2779",
+        "state_root": "1c69a5fc8c51392072295f4cdee7bb19d29e3748e0e8666ff4fe55683369e3d3",
+        "utxo": [
+          "0101010101010101010101010101010101010101010101010101010101010101",
+          0
+        ]
+      },
+      "after": {
+        "backing_sats": 29300,
+        "batch_number": 1,
+        "commitment_count": 2,
+        "nullifier_next_index": 3,
+        "pending": 0,
+        "rollup_id": "181e83faa3916307d316fd28fd792439464ed60145a313fa3b9b5f88354d2779",
+        "state_root": "83edba614c3a161971b86fdb19a7cffbb06ad33d24523cad4c07e9c7f680ec68",
+        "utxo": [
+          "0202020202020202020202020202020202020202020202020202020202020202",
+          0
+        ]
+      },
+      "restored": {
+        "backing_sats": 10000,
+        "batch_number": 0,
+        "commitment_count": 0,
+        "nullifier_next_index": 1,
+        "pending": 0,
+        "rollup_id": "181e83faa3916307d316fd28fd792439464ed60145a313fa3b9b5f88354d2779",
+        "state_root": "1c69a5fc8c51392072295f4cdee7bb19d29e3748e0e8666ff4fe55683369e3d3",
+        "utxo": [
+          "0101010101010101010101010101010101010101010101010101010101010101",
+          0
+        ]
+      }
+    }
+  }
+}

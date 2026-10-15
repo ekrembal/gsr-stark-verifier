@@ -1,0 +1,293 @@
+{
+  "same_saved_trace": "dot32-complete/segment-0.pc",
+  "guest_changed": false,
+  "security_parameters_changed": false,
+  "samples_per_configuration": 1,
+  "adopted": false,
+  "results": {
+    "standard": {
+      "proof_result": {
+        "operation": "prove",
+        "real_local_proof": true,
+        "result": {
+          "index": 0,
+          "integrity_verified": true,
+          "po2": 18,
+          "seal_bytes": 255656
+        },
+        "seconds": 100.222082746
+      },
+      "resources": {
+        "command": [
+          "privacy-rollup/prover/target/release/proof_chain_bench",
+          "prove",
+          "build/feasibility/dot32-complete",
+          "0"
+        ],
+        "exit_code": 0,
+        "stopped_by": null,
+        "seconds": 100.30529968100018,
+        "sampled_peak_group_rss_kib": 2397628,
+        "minimum_free_disk_bytes": 2822443008,
+        "sampling_seconds": 0.25,
+        "limits": {
+          "seconds": 900,
+          "rss_mib": 12288,
+          "free_mib": 1024
+        }
+      }
+    },
+    "cpp-native": {
+      "proof_result": {
+        "operation": "prove",
+        "real_local_proof": true,
+        "result": {
+          "index": 0,
+          "integrity_verified": true,
+          "po2": 18,
+          "seal_bytes": 255656
+        },
+        "seconds": 100.528427153
+      },
+      "resources": {
+        "command": [
+          "privacy-rollup/prover/target/release/proof_chain_bench",
+          "prove",
+          "build/feasibility/dot32-cpp-native",
+          "0"
+        ],
+        "exit_code": 0,
+        "stopped_by": null,
+        "seconds": 100.58490227599759,
+        "sampled_peak_group_rss_kib": 2396448,
+        "minimum_free_disk_bytes": 2516774912,
+        "sampling_seconds": 0.25,
+        "limits": {
+          "seconds": 900,
+          "rss_mib": 12288,
+          "free_mib": 1024
+        }
+      }
+    },
+    "cpp-and-rust-native": {
+      "proof_result": {
+        "operation": "prove",
+        "real_local_proof": true,
+        "result": {
+          "index": 0,
+          "integrity_verified": true,
+          "po2": 18,
+          "seal_bytes": 255656
+        },
+        "seconds": 105.817380539
+      },
+      "resources": {
+        "command": [
+          "privacy-rollup/prover/target/release/proof_chain_bench",
+          "prove",
+          "build/feasibility/dot32-rust-native",
+          "0"
+        ],
+        "exit_code": 0,
+        "stopped_by": null,
+        "seconds": 105.88641874600216,
+        "sampled_peak_group_rss_kib": 2397188,
+        "minimum_free_disk_bytes": 3076722688,
+        "sampling_seconds": 0.25,
+        "limits": {
+          "seconds": 900,
+          "rss_mib": 12288,
+          "free_mib": 1024
+        }
+      }
+    }
+  },
+  "rust_wrapper_components": [
+    {
+      "crate": "risc0_core",
+      "target": null,
+      "added_flags": [
+        "-C",
+        "target-cpu=native",
+        "-C",
+        "codegen-units=1"
+      ]
+    },
+    {
+      "crate": "risc0_core",
+      "target": null,
+      "added_flags": [
+        "-C",
+        "target-cpu=native",
+        "-C",
+        "codegen-units=1"
+      ]
+    },
+    {
+      "crate": "risc0_zkp",
+      "target": null,
+      "added_flags": [
+        "-C",
+        "target-cpu=native",
+        "-C",
+        "codegen-units=1"
+      ]
+    },
+    {
+      "crate": "risc0_zkp",
+      "target": null,
+      "added_flags": [
+        "-C",
+        "target-cpu=native",
+        "-C",
+        "codegen-units=1"
+      ]
+    },
+    {
+      "crate": "risc0_circuit_recursion",
+      "target": null,
+      "added_flags": [
+        "-C",
+        "target-cpu=native",
+        "-C",
+        "codegen-units=1"
+      ]
+    },
+    {
+      "crate": "risc0_circuit_keccak",
+      "target": null,
+      "added_flags": [
+        "-C",
+        "target-cpu=native",
+        "-C",
+        "codegen-units=1"
+      ]
+    },
+    {
+      "crate": "risc0_circuit_rv32im",
+      "target": null,
+      "added_flags": [
+        "-C",
+        "target-cpu=native",
+        "-C",
+        "codegen-units=1"
+      ]
+    },
+    {
+      "crate": "risc0_zkvm",
+      "target": null,
+      "added_flags": [
+        "-C",
+        "target-cpu=native",
+        "-C",
+        "codegen-units=1"
+      ]
+    },
+    {
+      "crate": "proof_chain_bench",
+      "target": null,
+      "added_flags": [
+        "-C",
+        "target-cpu=native",
+        "-C",
+        "codegen-units=1"
+      ]
+    }
+  ],
+  "build_resources": {
+    "cpp": {
+      "command": [
+        "cargo",
+        "build",
+        "--locked",
+        "--release",
+        "--bin",
+        "proof_chain_bench"
+      ],
+      "exit_code": 0,
+      "stopped_by": null,
+      "seconds": 372.2956649560001,
+      "sampled_peak_group_rss_kib": 3249352,
+      "minimum_free_disk_bytes": 2604900352,
+      "sampling_seconds": 0.25,
+      "limits": {
+        "seconds": 900,
+        "rss_mib": 12288,
+        "free_mib": 1024
+      }
+    },
+    "rust": {
+      "command": [
+        "cargo",
+        "build",
+        "--locked",
+        "--release",
+        "--bin",
+        "proof_chain_bench"
+      ],
+      "exit_code": 0,
+      "stopped_by": null,
+      "seconds": 84.78272802599895,
+      "sampled_peak_group_rss_kib": 1786464,
+      "minimum_free_disk_bytes": 3045642240,
+      "sampling_seconds": 0.25,
+      "limits": {
+        "seconds": 900,
+        "rss_mib": 12288,
+        "free_mib": 1024
+      }
+    }
+  },
+  "independent_standard_lift": {
+    "proof_result": {
+      "operation": "lift",
+      "real_local_proof": true,
+      "result": {
+        "index": 0,
+        "integrity_verified": true,
+        "seal_bytes": 222668
+      },
+      "seconds": 42.463351905
+    },
+    "resources": {
+      "command": [
+        "build/aggregation/dot32-iterative-baseline/proof_chain_bench",
+        "lift",
+        "build/feasibility/dot32-rust-native",
+        "0"
+      ],
+      "exit_code": 0,
+      "stopped_by": null,
+      "seconds": 42.67374368200035,
+      "sampled_peak_group_rss_kib": 1447324,
+      "minimum_free_disk_bytes": 3076403200,
+      "sampling_seconds": 0.25,
+      "limits": {
+        "seconds": 900,
+        "rss_mib": 12288,
+        "free_mib": 1024
+      }
+    }
+  },
+  "standard_compiler_restored": true,
+  "restoration_build": {
+    "command": [
+      "cargo",
+      "build",
+      "--locked",
+      "--release"
+    ],
+    "exit_code": 0,
+    "stopped_by": null,
+    "seconds": 466.8163167579987,
+    "sampled_peak_group_rss_kib": 2914408,
+    "minimum_free_disk_bytes": 2825781248,
+    "sampling_seconds": 0.25,
+    "limits": {
+      "seconds": 900,
+      "rss_mib": 12288,
+      "free_mib": 1024
+    }
+  },
+  "risc0_source_matches_original_patch_after_compiler_experiments": true
+}

@@ -1,0 +1,511 @@
+diff --git a/risc0/core/src/field/gsr_ops.rs b/risc0/core/src/field/gsr_ops.rs
+index 91c7425d..d2447b99 100644
+--- a/risc0/core/src/field/gsr_ops.rs
++++ b/risc0/core/src/field/gsr_ops.rs
+@@ -92,6 +92,12 @@ pub fn bump(op: usize) {
+     }
+ }
+ 
++/// Whether scalar field-operation counting is enabled.
++#[cfg(not(target_os = "zkvm"))]
++pub fn is_enabled() -> bool {
++    ENABLED.load(Ordering::Relaxed)
++}
++
+ /// Turn counting on or off.
+ #[cfg(not(target_os = "zkvm"))]
+ pub fn enable(on: bool) {
+diff --git a/risc0/zkp/src/core/hash/mod.rs b/risc0/zkp/src/core/hash/mod.rs
+index ed59a387..d7f79d74 100644
+--- a/risc0/zkp/src/core/hash/mod.rs
++++ b/risc0/zkp/src/core/hash/mod.rs
+@@ -68,6 +68,28 @@ pub trait HashFn<F: Field>: Send + Sync {
+     /// unpadded so this is only safe to used when the size is known.
+     fn hash_ext_elem_slice(&self, slice: &[F::ExtElem]) -> Box<Digest>;
+ 
++    /// Hash up to eight strided rows. The default preserves the scalar path.
++    #[cfg(feature = "prove")]
++    fn hash_rows_batch(&self, output: &mut [Digest], matrix: &[F::Elem], rows: usize, start: usize) {
++        assert!(rows > 0 && matrix.len() % rows == 0);
++        assert!(start <= rows && output.len() <= rows - start);
++        assert!(output.len() <= 8);
++        for (lane, digest) in output.iter_mut().enumerate() {
++            let column: alloc::vec::Vec<_> = matrix.chunks_exact(rows).map(|col| col[start + lane]).collect();
++            *digest = *self.hash_elem_slice(&column);
++        }
++    }
++
++    /// Hash up to eight adjacent digest pairs, with the scalar validation rules.
++    #[cfg(feature = "prove")]
++    fn hash_pairs_batch(&self, output: &mut [Digest], input: &[Digest]) {
++        assert_eq!(input.len(), 2 * output.len());
++        assert!(output.len() <= 8);
++        for (digest, pair) in output.iter_mut().zip(input.chunks_exact(2)) {
++            *digest = *self.hash_pair(&pair[0], &pair[1]);
++        }
++    }
++
+     /// Checks whether the given [Digest] is valid for this hash function.
+     ///
+     /// Poseidon2 considers a Digest invalid is any of the words in the digest are not reduced Baby
+diff --git a/risc0/zkp/src/core/hash/poseidon2/batched.rs b/risc0/zkp/src/core/hash/poseidon2/batched.rs
+new file mode 100644
+index 00000000..80ec646f
+--- /dev/null
++++ b/risc0/zkp/src/core/hash/poseidon2/batched.rs
+@@ -0,0 +1,340 @@
++// Copyright 2026 RISC Zero, Inc.
++// Licensed under the Apache License, Version 2.0 (the "License");
++// you may not use this file except in compliance with the License.
++// You may obtain a copy at http://www.apache.org/licenses/LICENSE-2.0
++// Unless required by applicable law or agreed to in writing, software distributed
++// under the License is distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR
++// CONDITIONS OF ANY KIND, either express or implied. See the License for details.
++
++//! Optional host-only eight-lane evaluation of the unchanged Poseidon2 hash.
++//! Arithmetic accepts canonical Montgomery words only. Unreduced row inputs and
++//! enabled scalar operation instrumentation use the original implementation.
++//! No unsafe code, architecture intrinsics, new hash suite, or new parameters.
++use super::*;
++use core::ops::{Add, Mul};
++use risc0_core::field::{baby_bear::P, gsr_ops};
++
++const LANES: usize = 8;
++
++#[derive(Clone, Copy)]
++struct Packed([u32; LANES]);
++
++impl Packed {
++    const ZERO: Self = Self([0; LANES]);
++    fn splat(value: BabyBearElem) -> Self {
++        Self([value.as_u32_montgomery(); LANES])
++    }
++}
++
++impl Add for Packed {
++    type Output = Self;
++    #[inline(always)]
++    fn add(self, rhs: Self) -> Self {
++        Self(core::array::from_fn(|i| {
++            // Both operands are below P < 2^31; addition cannot overflow.
++            let sum = self.0[i] + rhs.0[i];
++            if sum >= P {
++                sum - P
++            } else {
++                sum
++            }
++        }))
++    }
++}
++
++impl Mul for Packed {
++    type Output = Self;
++    #[inline(always)]
++    fn mul(self, rhs: Self) -> Self {
++        Self(core::array::from_fn(|i| {
++            // Same Montgomery reduction as baby_bear::mul. For a,b < P,
++            // a*b + red*P <= (P-1)^2 + (2^32-1)*P < 2^64.
++            let product = u64::from(self.0[i]) * u64::from(rhs.0[i]);
++            let red = 0x88000001u32.wrapping_mul(0u32.wrapping_sub(product as u32));
++            let reduced = ((product + u64::from(red) * u64::from(P)) >> 32) as u32;
++            if reduced >= P {
++                reduced - P
++            } else {
++                reduced
++            }
++        }))
++    }
++}
++
++fn sbox(x: Packed) -> Packed {
++    let x2 = x * x;
++    let x4 = x2 * x2;
++    let x6 = x4 * x2;
++    x6 * x
++}
++
++fn external(cells: &mut [Packed; CELLS]) {
++    let mut sums = [Packed::ZERO; 4];
++    for chunk in cells.chunks_exact_mut(4) {
++        let t0 = chunk[0] + chunk[1];
++        let t1 = chunk[2] + chunk[3];
++        let t2 = (chunk[1] + chunk[1]) + t1;
++        let t3 = (chunk[3] + chunk[3]) + t0;
++        let t4 = ((t1 + t1) + (t1 + t1)) + t3;
++        let t5 = ((t0 + t0) + (t0 + t0)) + t2;
++        let out = [t3 + t5, t5, t2 + t4, t4];
++        for i in 0..4 {
++            chunk[i] = out[i];
++            sums[i] = sums[i] + out[i];
++        }
++    }
++    for i in 0..CELLS {
++        cells[i] = cells[i] + sums[i % 4];
++    }
++}
++
++fn internal(cells: &mut [Packed; CELLS]) {
++    let sum = cells.iter().fold(Packed::ZERO, |sum, x| sum + *x);
++    for i in 0..CELLS {
++        cells[i] = sum + Packed::splat(M_INT_DIAG_HZN[i]) * cells[i];
++    }
++}
++
++fn mix(cells: &mut [Packed; CELLS], lanes: usize) {
++    super::super::gsr_counters::bump(&super::super::gsr_counters::P2_PERMUTE, lanes as u64);
++    external(cells);
++    for round in 0..(2 * ROUNDS_HALF_FULL + ROUNDS_PARTIAL) {
++        if round < ROUNDS_HALF_FULL || round >= ROUNDS_HALF_FULL + ROUNDS_PARTIAL {
++            for i in 0..CELLS {
++                cells[i] = sbox(cells[i] + Packed::splat(ROUND_CONSTANTS[round * CELLS + i]));
++            }
++            external(cells);
++        } else {
++            cells[0] = sbox(cells[0] + Packed::splat(ROUND_CONSTANTS[round * CELLS]));
++            internal(cells);
++        }
++    }
++}
++
++fn finish(output: &mut [Digest], cells: &[Packed; CELLS]) {
++    for (lane, digest) in output.iter_mut().enumerate() {
++        *digest = Digest::from(core::array::from_fn::<_, DIGEST_WORDS, _>(|i| {
++            cells[i].0[lane]
++        }));
++    }
++}
++
++pub(super) fn hash_rows(output: &mut [Digest], matrix: &[BabyBearElem], rows: usize, start: usize) {
++    assert!(rows > 0 && matrix.len() % rows == 0);
++    assert!(start <= rows && output.len() <= rows - start);
++    assert!(output.len() <= LANES);
++    let columns = matrix.len() / rows;
++    let canonical = matrix.chunks_exact(rows).all(|col| {
++        col[start..start + output.len()]
++            .iter()
++            .all(Elem::is_reduced)
++    });
++    if gsr_ops::is_enabled() || !canonical {
++        for (lane, digest) in output.iter_mut().enumerate() {
++            *digest = *to_digest(unpadded_hash(
++                matrix.chunks_exact(rows).map(|col| &col[start + lane]),
++            ));
++        }
++        return;
++    }
++    if output.is_empty() {
++        return;
++    }
++    let mut cells = [Packed::ZERO; CELLS];
++    for block in 0..columns.div_ceil(CELLS_RATE).max(1) {
++        for i in 0..CELLS_RATE {
++            cells[i] = Packed::ZERO;
++            let column = block * CELLS_RATE + i;
++            if column < columns {
++                for lane in 0..output.len() {
++                    cells[i].0[lane] = matrix[column * rows + start + lane].as_u32_montgomery();
++                }
++            }
++        }
++        mix(&mut cells, output.len());
++    }
++    finish(output, &cells);
++}
++
++pub(super) fn hash_pairs(output: &mut [Digest], input: &[Digest]) {
++    assert_eq!(input.len(), 2 * output.len());
++    assert!(output.len() <= LANES);
++    // Retain the original hash_pair requirement, including INVALID and >=P.
++    assert!(input
++        .iter()
++        .flat_map(Digest::as_words)
++        .all(|word| *word < P));
++    if gsr_ops::is_enabled() {
++        let scalar = Poseidon2HashFn;
++        for (digest, pair) in output.iter_mut().zip(input.chunks_exact(2)) {
++            *digest = *scalar.hash_pair(&pair[0], &pair[1]);
++        }
++        return;
++    }
++    if output.is_empty() {
++        return;
++    }
++    let mut cells = [Packed::ZERO; CELLS];
++    for (lane, pair) in input.chunks_exact(2).enumerate() {
++        for (i, word) in pair[0]
++            .as_words()
++            .iter()
++            .chain(pair[1].as_words())
++            .enumerate()
++        {
++            cells[i].0[lane] = *word;
++        }
++    }
++    mix(&mut cells, output.len());
++    finish(output, &cells);
++}
++
++#[cfg(test)]
++mod tests {
++    use super::*;
++
++    #[test]
++    fn batched_counter_fallback_matches_scalar() {
++        struct Disable;
++        impl Drop for Disable {
++            fn drop(&mut self) {
++                gsr_ops::enable(false);
++            }
++        }
++        gsr_ops::enable(true);
++        let _disable = Disable;
++        let scalar = Poseidon2HashFn;
++        let matrix: Vec<_> = (0..51).map(|i| BabyBearElem::new(i * 1234567)).collect();
++        let before = gsr_ops::snapshot();
++        let mut out = [Digest::ZERO; 3];
++        hash_rows(&mut out, &matrix, 3, 0);
++        let middle = gsr_ops::snapshot();
++        for i in 0..3 {
++            let row: Vec<_> = matrix.chunks_exact(3).map(|col| col[i]).collect();
++            assert_eq!(out[i], *scalar.hash_elem_slice(&row));
++        }
++        let after = gsr_ops::snapshot();
++        for i in 0..before.len() {
++            assert_eq!(middle[i] - before[i], after[i] - middle[i]);
++        }
++        let pairs = [out[0], out[1], out[1], out[2]];
++        let before = gsr_ops::snapshot();
++        let mut output = [Digest::ZERO; 2];
++        hash_pairs(&mut output, &pairs);
++        let middle = gsr_ops::snapshot();
++        for i in 0..2 {
++            assert_eq!(
++                output[i],
++                *scalar.hash_pair(&pairs[2 * i], &pairs[2 * i + 1])
++            );
++        }
++        let after = gsr_ops::snapshot();
++        for i in 0..before.len() {
++            assert_eq!(middle[i] - before[i], after[i] - middle[i]);
++        }
++    }
++
++    #[test]
++    fn batched_field_matches_scalar() {
++        let mut state = 0x123456789abcdef0u64;
++        let boundary = [0, 1, 2, P / 2, P - 2, P - 1, 0, P - 1];
++        for round in 0..1024 {
++            let a = if round == 0 {
++                boundary
++            } else {
++                core::array::from_fn(|_| {
++                    state ^= state << 13;
++                    state ^= state >> 7;
++                    state ^= state << 17;
++                    (state % u64::from(P)) as u32
++                })
++            };
++            let b = core::array::from_fn(|i| {
++                if round == 0 {
++                    boundary[7 - i]
++                } else if round % 2 == 0 {
++                    boundary[i]
++                } else {
++                    state ^= state << 13;
++                    state ^= state >> 7;
++                    state ^= state << 17;
++                    (state % u64::from(P)) as u32
++                }
++            });
++            let sum = Packed(a) + Packed(b);
++            let product = Packed(a) * Packed(b);
++            for i in 0..LANES {
++                let aa = BabyBearElem::new_raw(a[i]);
++                let bb = BabyBearElem::new_raw(b[i]);
++                assert_eq!(sum.0[i], (aa + bb).as_u32_montgomery());
++                assert_eq!(product.0[i], (aa * bb).as_u32_montgomery());
++            }
++        }
++    }
++
++    #[test]
++    fn batched_rows_match_scalar_boundaries() {
++        let scalar = Poseidon2HashFn;
++        for rows in [1, 3, 8, 9, 17] {
++            for columns in [0, 1, 7, 15, 16, 17, 31, 32, 33, 128] {
++                let matrix: Vec<_> = (0..rows * columns)
++                    .map(|i| {
++                        BabyBearElem::new_raw(
++                            [
++                                0,
++                                1,
++                                P - 1,
++                                P / 2,
++                                ((i as u64 * 987654321) % u64::from(P)) as u32,
++                            ][i % 5],
++                        )
++                    })
++                    .collect();
++                for start in 0..=rows {
++                    let count = (rows - start).min(LANES);
++                    let mut out = vec![Digest::ZERO; count];
++                    hash_rows(&mut out, &matrix, rows, start);
++                    for lane in 0..count {
++                        let column: Vec<_> = matrix
++                            .chunks_exact(rows)
++                            .map(|col| col[start + lane])
++                            .collect();
++                        assert_eq!(out[lane], *scalar.hash_elem_slice(&column));
++                    }
++                }
++            }
++        }
++        // Unreduced row encodings retain the scalar behavior instead of entering
++        // arithmetic whose no-overflow contract requires canonical operands.
++        let matrix = [BabyBearElem::new_raw(P), BabyBearElem::new_raw(P + 1)];
++        let mut out = [Digest::ZERO; 2];
++        hash_rows(&mut out, &matrix, 2, 0);
++        for i in 0..2 {
++            assert_eq!(out[i], *scalar.hash_elem_slice(&matrix[i..i + 1]));
++        }
++    }
++
++    #[test]
++    fn batched_pairs_match_scalar_and_reject_unreduced() {
++        let scalar = Poseidon2HashFn;
++        for count in 0..=LANES {
++            let input: Vec<_> = (0..2 * count)
++                .map(|i| {
++                    Digest::from(core::array::from_fn::<_, DIGEST_WORDS, _>(|j| {
++                        [0, P - 1, 1, ((i * 10000 + j * 13) as u32) % P][(i + j) % 4]
++                    }))
++                })
++                .collect();
++            let mut out = vec![Digest::ZERO; count];
++            hash_pairs(&mut out, &input);
++            for i in 0..count {
++                assert_eq!(out[i], *scalar.hash_pair(&input[2 * i], &input[2 * i + 1]));
++            }
++        }
++        for bad in [P, P + 1, u32::MAX] {
++            let input = [Digest::from([bad; DIGEST_WORDS]), Digest::ZERO];
++            assert!(std::panic::catch_unwind(|| hash_pairs(&mut [Digest::ZERO], &input)).is_err());
++            assert!(std::panic::catch_unwind(|| scalar.hash_pair(&input[0], &input[1])).is_err());
++        }
++    }
++}
+diff --git a/risc0/zkp/src/core/hash/poseidon2/mod.rs b/risc0/zkp/src/core/hash/poseidon2/mod.rs
+index f9298296..c686cd44 100644
+--- a/risc0/zkp/src/core/hash/poseidon2/mod.rs
++++ b/risc0/zkp/src/core/hash/poseidon2/mod.rs
+@@ -18,6 +18,8 @@
+ 
+ pub(crate) mod consts;
+ mod rng;
++#[cfg(feature = "prove")]
++mod batched;
+ 
+ use alloc::{boxed::Box, rc::Rc, vec::Vec};
+ 
+@@ -69,6 +71,16 @@ impl HashFn<BabyBear> for Poseidon2HashFn {
+         ))
+     }
+ 
++    #[cfg(feature = "prove")]
++    fn hash_rows_batch(&self, output: &mut [Digest], matrix: &[BabyBearElem], rows: usize, start: usize) {
++        batched::hash_rows(output, matrix, rows, start);
++    }
++
++    #[cfg(feature = "prove")]
++    fn hash_pairs_batch(&self, output: &mut [Digest], input: &[Digest]) {
++        batched::hash_pairs(output, input);
++    }
++
+     /// Checks if all words in the digest are less than the Baby Bear modulus.
+     fn is_digest_valid(&self, digest: &Digest) -> bool {
+         digest
+diff --git a/risc0/zkp/src/hal/cpu.rs b/risc0/zkp/src/hal/cpu.rs
+index dbcb8ef8..d1ff16de 100644
+--- a/risc0/zkp/src/hal/cpu.rs
++++ b/risc0/zkp/src/hal/cpu.rs
+@@ -65,6 +65,11 @@ use crate::{
+     FRI_FOLD,
+ };
+ 
++fn batch_hash_enabled() -> bool {
++    static ENABLED: OnceLock<bool> = OnceLock::new();
++    *ENABLED.get_or_init(|| std::env::var("GSR_BATCH_CPU").as_deref() == Ok("1"))
++}
++
+ pub struct CpuHal<F: Field> {
+     suite: HashSuite<F>,
+ }
+@@ -610,6 +615,12 @@ impl<F: Field> Hal for CpuHal<F> {
+         let mut output = output.as_slice_mut();
+         let matrix = &*matrix.as_slice();
+         let hashfn = self.suite.hashfn.as_ref();
++        if batch_hash_enabled() {
++            output.par_chunks_mut(8).enumerate().for_each(|(group, output)| {
++                hashfn.hash_rows_batch(output, matrix, row_size, group * 8);
++            });
++            return;
++        }
+         output.par_iter_mut().enumerate().for_each(|(idx, output)| {
+             let column: Vec<Self::Elem> =
+                 (0..col_size).map(|i| matrix[i * row_size + idx]).collect();
+@@ -621,6 +632,17 @@ impl<F: Field> Hal for CpuHal<F> {
+         let _profile = CpuOpTimer::new("hash_fold");
+         assert!(io.size() >= 2 * input_size);
+         assert_eq!(input_size, 2 * output_size);
++        if batch_hash_enabled() {
++            let mut io = io.as_slice_mut();
++            let (before, after) = io.split_at_mut(input_size);
++            let output = &mut before[output_size..input_size];
++            let input = &after[..input_size];
++            let hashfn = self.suite.hashfn.as_ref();
++            output.par_chunks_mut(8).zip(input.par_chunks(16)).for_each(|(output, input)| {
++                hashfn.hash_pairs_batch(output, input);
++            });
++            return;
++        }
+         let io = io.as_slice_sync();
+         let output = io.slice(output_size, output_size);
+         let input = io.slice(input_size, input_size);
+@@ -714,6 +736,37 @@ mod tests {
+     use super::*;
+     use crate::core::hash::sha::Sha256HashSuite;
+ 
++    #[test]
++    fn cpu_hash_rows_and_fold_match_scalar() {
++        use crate::core::hash::poseidon2::Poseidon2HashSuite;
++        for suite in [Sha256HashSuite::new_suite(), Poseidon2HashSuite::new_suite()] {
++            let hal: CpuHal<BabyBear> = CpuHal::new(suite);
++            for rows in [1, 3, 8, 9, 17, 32] {
++                for columns in [0, 1, 15, 16, 17, 33] {
++                    let values: Vec<_> = (0..rows*columns).map(|i| <BabyBear as Field>::Elem::from_u64(i as u64 * 987654321)).collect();
++                    let matrix = hal.copy_from_elem("matrix", &values);
++                    let out = hal.alloc_digest("digest", rows);
++                    hal.hash_rows(&out, &matrix);
++                    for row in 0..rows {
++                        let column: Vec<_> = values.chunks_exact(rows).map(|col| col[row]).collect();
++                        assert_eq!(out.as_slice()[row], *hal.suite.hashfn.hash_elem_slice(&column));
++                    }
++                }
++                let input: Vec<_> = (0..2*rows).map(|i| *hal.suite.hashfn.hash_elem_slice(&[<BabyBear as Field>::Elem::from_u64(i as u64)])).collect();
++                let mut values = vec![Digest::ZERO; 2*rows];
++                values.extend_from_slice(&input);
++                let io = hal.copy_from_digest("tree", &values);
++                hal.hash_fold(&io, 2*rows, rows);
++                let result = io.as_slice();
++                assert_eq!(&result[..rows], &values[..rows]);
++                assert_eq!(&result[2*rows..], &input);
++                for i in 0..rows {
++                    assert_eq!(result[rows+i], *hal.suite.hashfn.hash_pair(&input[2*i], &input[2*i+1]));
++                }
++            }
++        }
++    }
++
+     #[test]
+     #[should_panic]
+     fn check_req() {

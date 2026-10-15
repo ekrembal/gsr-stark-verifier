@@ -23,8 +23,7 @@ def main():
     checks={
         'standard_weight':execution['transaction_weight']<=400000,
         'varops':execution['varops']<=execution['budget'],
-        'invoked_body_bytes':execution['invoked_body_bytes']<=4000000,
-        'function_ids':len(bundle['functions'])<=256,
+        'unrolled_bytes':execution['unrolled_bytes']<=4000000,
         'stack_entries':execution['peak_entries']<=32768,
         'live_payload':execution['peak_payload_bytes']<=8000000,
         'single_element':execution['peak_element_bytes']<=4000000,
@@ -33,7 +32,7 @@ def main():
     result={'profile_id':'bws-recursion-v1','script_sha256':bundle['script_sha256'],'script_bytes':len(bytes.fromhex(bundle['script'])),
         'witness_payload_bytes':sum(len(bytes.fromhex(w))for w in bundle['witness']),
         'witness_sections':bundle['sections'],'transaction_weight':execution['transaction_weight'],
-        'eligible_weight':execution['budget']//10000,'execution':execution,
+        'eligible_weight':(execution['budget']+500_000)//10000,'execution':execution,
         'semantic_field_operations':fields,'equivalent_base_field_operations':equivalent,
         'limits':checks,'limits_pass':all(checks.values()),
         'measurement_scope':'Complete 1-input, 1-output transaction; NUMS internal key; leaf 0xc2. Core independently derives weight and varops budget.'}

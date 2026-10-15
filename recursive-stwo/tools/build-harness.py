@@ -2,34 +2,36 @@
 """Build observational instrumentation against the pinned Core interpreter."""
 import subprocess
 from paths import VERIFIER_ROOT as root, BITCOIN_SOURCE, BITCOIN_BUILD
-assert subprocess.check_output(['git','-C',str(BITCOIN_SOURCE),'rev-parse','HEAD'],text=True).strip()=='d2799052604eb138c5a79acf88514a0c8b07f4ef', 'Wrong Core revision'
+assert subprocess.check_output(['git','-C',str(BITCOIN_SOURCE),'rev-parse','HEAD'],text=True).strip()=='ad6c16ff0214014023ff2a81504048a8850a1c1c', 'Wrong Core revision'
 build=root/'build/harness';build.mkdir(parents=True,exist_ok=True)
 s=(BITCOIN_SOURCE/'src/script/interpreter.cpp').read_text()
-start=s.index('static bool EvalTapscriptV2Impl(')
-# The forward declaration occurs earlier; instrument only the definition containing the local state.
-start=s.index('static bool EvalTapscriptV2Impl(',start+1) if s.find('static bool EvalTapscriptV2Impl(',start+1)>=0 else start
+# Instrument only the Tapleaf 0xC2 loop, which executes the unrolled script: positions are unrolled offsets.
+start=s.index('static bool EvalTapleaf0xC2Impl(')
 head,body=s[:start],s[start:]
-needle='            const bool executes_opcode{fExec || (OP_IF <= opcode && opcode <= OP_ENDIF)};'
+needle='            if (!executing && !(OP_IF <= opcode && opcode <= OP_ENDIF)) continue;'
 assert body.count(needle)==1
 body=body.replace(needle,needle+'''
-            measurements.pc=pc-script.begin();
-            if(!in_function) measurements.main_pc=measurements.pc;
-            if(executes_opcode) {
-                ++measurements.opcodes[static_cast<unsigned char>(opcode)];
-                if(opcode==OP_SHA256 && stack.size()) measurements.sha256_bytes+=stack.back().size();
-            }
+            measurements.pc=op_begin-unrolled.begin();
+            ++measurements.opcodes[static_cast<unsigned char>(opcode)];
+            if(opcode==OP_SHA256 && stack.size()) measurements.sha256_bytes+=stack.Top().size();
 ''')
-needle='            // Size limits\n            const size_t stack_entries{stack.size() + altstack.size()};'
+needle='            // Size limits\n            if (stack.size() + altstack.size() > MAX_TAPLEAF_0XC2_STACK_SIZE) {'
 assert body.count(needle)==1
 body=body.replace(needle,'''
-            measurements.peak_entries=std::max<uint64_t>(measurements.peak_entries,stack.size()+altstack.size()+function_state.definition_count);
-            measurements.peak_payload=std::max<uint64_t>(measurements.peak_payload,stack.GetTotalSize()+altstack.GetTotalSize()+function_state.stored_body_bytes);
+            measurements.peak_entries=std::max<uint64_t>(measurements.peak_entries,stack.size()+altstack.size());
+            measurements.peak_payload=std::max<uint64_t>(measurements.peak_payload,stack.GetTotalSize()+altstack.GetTotalSize());
             measurements.peak_element=std::max<uint64_t>(measurements.peak_element,std::max(stack.GetMaxElementSize(),altstack.GetMaxElementSize()));
-            measurements.invoked_bytes=function_state.invoked_body_bytes;
 '''+needle)
-needle='            if (!varops_budget.Spend(varcost)) return set_error(serror, SCRIPT_ERR_VAROP_COUNT);'
+# The script's charges accumulate in `meter` and are deducted when it ends; a snapshot deducts them from a copy.
+needle='            if (!meter.Fits()) return set_error(serror, SCRIPT_ERR_VAROP_COUNT);\n        }\n    } catch (...) {'
 assert body.count(needle)==1
-body=body.replace(needle,needle+"\n            if(!in_function) while(stage_snapshots.size()<stage_ends.size() && static_cast<uint64_t>(pc-script.begin())>=stage_ends[stage_snapshots.size()]) stage_snapshots.emplace_back(measurements, *varops_budget.Remaining());")
+body=body.replace(needle,needle.split('\n')[0]+'''
+            while(stage_snapshots.size()<stage_ends.size() && static_cast<uint64_t>(pc-unrolled.begin())>=stage_ends[stage_snapshots.size()]) {
+                varops::Budget remaining{varops_budget.Remaining()};
+                (void)meter.Spend(remaining);
+                stage_snapshots.emplace_back(measurements, remaining.Remaining());
+            }
+'''+'\n'.join(needle.split('\n')[1:]))
 (build/'interpreter-instrumented.cpp').write_text(head+body)
 cmd=['c++','-std=c++20','-O2','-g',str(root/'harness/meter.cpp'),'-o',str(build/'gsr-meter')]
 for p in [build,BITCOIN_BUILD/'src',BITCOIN_SOURCE/'src',BITCOIN_SOURCE/'src/univalue/include',BITCOIN_SOURCE/'src/secp256k1/include']:cmd+=['-I'+str(p)]

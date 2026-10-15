@@ -15,12 +15,12 @@ OPS = {
     "RIGHT": 0x81, "SIZE": 0x82, "AND": 0x84, "OR": 0x85, "XOR": 0x86, "EQUAL": 0x87, "EQUALVERIFY": 0x88,
     "1ADD": 0x8B, "1SUB": 0x8C, "2MUL": 0x8D, "2DIV": 0x8E, "ADD": 0x93, "SUB": 0x94, "MUL": 0x95,
     "DIV": 0x96, "MOD": 0x97, "LSHIFT": 0x98, "RSHIFT": 0x99, "NUMEQUAL": 0x9C, "NUMEQUALVERIFY": 0x9D,
-    "LESSTHAN": 0x9F, "SHA256": 0xA8, "DEFINE": 0xBB, "INVOKE": 0xBC, "TX": 0xBD, "MULTI": 0xBF,
+    "LESSTHAN": 0x9F, "SHA256": 0xA8, "TX": 0xBF, "MACRO": 0xD0, "CALLMACRO": 0xD1,
     "CHECKSEQUENCEVERIFY": 0xB2, "TWEAKADD": 0xBE,
 }
 
 
-V2_KEPT = {0xBB, 0xBC, 0xBD, 0xBE, 0xBF, 0xCC, 0xCF}
+V2_KEPT = {0xBE, 0xBF, 0xCC, 0xCF, 0xD0, 0xD1}
 
 
 def is_op_success(op: int) -> bool:
@@ -37,12 +37,57 @@ def op_success_offsets(code: bytes) -> list[int]:
         if is_op_success(op):
             found.append(i)
         i += 1
-        if 1 <= op <= 75:
+        if op in (0xD0, 0xD1):  # declaration length or reference index; a body's instructions follow inline
+            i = read_compact(code, i)[1]
+        elif 1 <= op <= 75:
             i += op
         elif op in (0x4C, 0x4D, 0x4E):
             width = {0x4C: 1, 0x4D: 2, 0x4E: 4}[op]
             i += width + int.from_bytes(code[i:i + width], "little")
     return found
+
+
+def compact(n: int) -> bytes:
+    """Canonical CompactSize."""
+    if n < 253:
+        return bytes([n])
+    if n <= 0xFFFF:
+        return b"\xfd" + n.to_bytes(2, "little")
+    if n <= 0xFFFFFFFF:
+        return b"\xfe" + n.to_bytes(4, "little")
+    return b"\xff" + n.to_bytes(8, "little")
+
+
+def read_compact(code: bytes, i: int) -> tuple[int, int]:
+    prefix = code[i]
+    if prefix < 253:
+        return prefix, i + 1
+    width = {253: 2, 254: 4, 255: 8}[prefix]
+    return int.from_bytes(code[i + 1:i + 1 + width], "little"), i + 1 + width
+
+
+def instruction_length(code: bytes, i: int) -> int:
+    op = code[i]
+    if op == OPS["CALLMACRO"]:
+        return read_compact(code, i + 1)[1] - i
+    if 1 <= op <= 75:
+        return 1 + op
+    if op in (0x4C, 0x4D, 0x4E):
+        width = {0x4C: 1, 0x4D: 2, 0x4E: 4}[op]
+        return 1 + width + int.from_bytes(code[i + 1:i + 1 + width], "little")
+    return 1
+
+
+def renumber_calls(code: bytes, index: dict[int, int]) -> bytes:
+    """Rewrite every `OP_CALLMACRO <id>` (emitted with the function id) to `OP_CALLMACRO <index[id]>`. Ids and indexes
+    are below 253, so every reference keeps its length."""
+    out, i = bytearray(code), 0
+    while i < len(code):
+        if code[i] == OPS["CALLMACRO"]:
+            assert code[i + 1] < 253 and index[code[i + 1]] < 253
+            out[i + 1] = index[code[i + 1]]
+        i += instruction_length(code, i)
+    return bytes(out)
 
 
 def num(n: int) -> bytes:
@@ -92,6 +137,26 @@ class Script:
             self.code.append(0x50 + n)
         else:
             self.data(num(n))
+        return self
+
+    def macro(self, body: bytes) -> "Script":
+        """A declaration: OP_MACRO CompactSize(len) body. Declarations must precede everything else."""
+        self.code += bytes([OPS["MACRO"]]) + compact(len(body)) + body
+        return self
+
+    def callmacro(self, index: int) -> "Script":
+        self.code += bytes([OPS["CALLMACRO"]]) + compact(index)
+        return self
+
+    def drop_n(self, n: int) -> "Script":
+        """Drop the top n values."""
+        self.code += bytes([OPS["2DROP"]]) * (n // 2) + bytes([OPS["DROP"]]) * (n % 2)
+        return self
+
+    def add_n(self, n: int) -> "Script":
+        """Sum of the top n values."""
+        assert n >= 1
+        self.code += bytes([OPS["ADD"]]) * (n - 1)
         return self
 
     def extend(self, other: "Script") -> "Script":
@@ -220,7 +285,7 @@ class Asm:
             self.op("DROP", 1)
 
     def call(self, fid: int, pops: int, *pushes: V) -> "Asm":
-        self.s.int(fid).op("INVOKE")
+        self.s.callmacro(fid)  # the function id; `renumber_calls` turns it into the declaration index
         if pops:
             del self.st[-pops:]
         self.st.extend(pushes)
@@ -228,7 +293,7 @@ class Asm:
 
 
 def evalscript(script: Script, stack: list[bytes]) -> dict:
-    request = {"protocol": 1, "sigversion": "tapscript_v2", "script": script.code.hex(),
+    request = {"protocol": 1, "sigversion": "tapleaf_0xc2", "script": script.code.hex(),
                "stack": [item.hex() for item in stack], "varops_budget": EVAL_BUDGET}
     out = subprocess.run([str(BITCOIN_UTIL), "evalscript"], input=json.dumps(request), capture_output=True,
                          text=True, check=True).stdout

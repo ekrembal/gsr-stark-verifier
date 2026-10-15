@@ -2,11 +2,22 @@
 use std::path::Path;
 
 use anyhow::{ensure, Context, Result};
-use pr_crypto::{to_fe, to_fr};
-use pr_protocol_types::JoinSplitPublic;
+use ark_bn254::Fr;
+use ark_ff::{BigInteger, PrimeField};
+use pr_protocol_types::{Fe, JoinSplitPublic};
 use provekit_common::{file::read, Format, NoirProof, Prover, PublicInputs, Verifier, WhirR1CSProof};
 use provekit_prover::Prove;
 use provekit_verifier::Verify;
+
+fn to_fr(f: &Fe) -> Fr {
+    Fr::from_be_bytes_mod_order(&f.0)
+}
+
+fn to_fe(f: &Fr) -> Fe {
+    let mut b = [0u8; 32];
+    b.copy_from_slice(&f.into_bigint().to_bytes_be());
+    Fe(b)
+}
 
 pub fn load_prover(pkp: &Path) -> Result<Prover> {
     read(pkp).context("reading ProveKit prover key")

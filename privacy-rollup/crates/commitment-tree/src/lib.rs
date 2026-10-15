@@ -1,4 +1,4 @@
-//! Depth-32 append-only Poseidon2 note-commitment tree (empty leaf = 0).
+//! Depth-32 append-only note-commitment tree over `pr_crypto::merkle_node` (empty leaf = 0).
 //!
 //! [`Frontier`] is the O(depth) state the batch guest needs: it is authenticated against the
 //! committed `(root, count)` and then extended by appending. [`Tree`] keeps every node and serves

@@ -25,7 +25,8 @@ RollupState { rollup_id, protocol_version, batch_number, commitment_root, commit
 state_root = tagged("gsr-privacy-rollup/state", encode(state))
 ```
 
-* commitment tree: depth-32 append-only Poseidon2 Merkle tree of note commitments (`pr-commitment-tree`);
+* commitment tree: depth-32 append-only Merkle tree of note commitments, node
+  `H(TAG_NOTE_NODE, left, right)` (`pr-commitment-tree`);
 * nullifier tree: depth-32 indexed (linked-list) Merkle tree over SHA-256 (`pr-indexed-nullifier-tree`);
   insertion is authenticated by the low leaf whose interval brackets the new value, Aztec style;
 * anchor history: the last 64 `(batch_number, commitment_root, commitment_count)` entries;
@@ -35,10 +36,13 @@ state_root = tagged("gsr-privacy-rollup/state", encode(state))
 
 ## Notes and keys
 
-`note = (value, authority, randomness)`, `commitment = H(TAG_NOTE, H(TAG_NOTE_INNER, rollup_id, value,
-authority), randomness, 0)`; `authority = H(TAG_OWNER, secret)`, `nk = H(TAG_NK, secret)`;
-`nullifier = H(TAG_NULLIFIER, nk, commitment, leaf_index)`. `H` is Poseidon2 over BN254 (t = 4, rate 3, tag
-in the capacity lane), identical in `pr-crypto` and the Noir circuit. Note plaintexts are encrypted to the
+`note = (value, authority, randomness)`, `commitment = H(TAG_NOTE, rollup_id, value, authority,
+randomness)`; `authority = H(TAG_OWNER, secret)`, `nk = H(TAG_NULLIFIER_KEY, secret)`;
+`nullifier = H(TAG_NULLIFIER, nk, commitment, leaf_index)`. `H(tag, …)` is the tagged SHA-256 of the
+concatenated parts (`value` as 8 and `leaf_index` as 4 little-endian bytes, every field element as its 32
+bytes) with the top three bits of the digest cleared, so every result is a canonical field element
+(`Fe::from_digest`, `pr-crypto`). The tags are `gsr-privacy-rollup/{owner, nullifier-key, note, nullifier,
+note-node}`. A Script can recompute any of them with `OP_SHA256` (`tools/exit_hash_cost.py`). Note plaintexts are encrypted to the
 recipient with ML-KEM-768 + XChaCha20-Poly1305 (`pr-wallet-core::encryption`), associated data
 `rollup_id || commitment`, 1,232-byte ciphertexts.
 

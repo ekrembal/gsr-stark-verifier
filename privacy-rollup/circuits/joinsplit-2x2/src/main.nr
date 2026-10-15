@@ -1,7 +1,7 @@
 // 2-input / 2-output BTC join-split for the GSR privacy rollup (see spec/joinsplit.md).
 //
-// Hashing is Poseidon2 (BN254, t = 4) in rate-3 mode with the domain tag in the capacity lane,
-// matching `pr-crypto` bit for bit.
+// Hashing is Poseidon2 (BN254, t = 4) in rate-3 mode with the domain tag in the capacity lane. Stale:
+// `pr-crypto` now uses tagged SHA-256, so this reference circuit no longer matches it.
 
 global DEPTH: u32 = 32;
 global MAX_MONEY: u64 = 2100000000000000;

@@ -1,5 +1,4 @@
-//! Domain-separated SHA-256 (BIP-340 style tagged hashes) used for everything outside the
-//! join-split circuit.
+//! Domain-separated SHA-256 (BIP-340 style tagged hashes) used for every protocol hash.
 use sha2::{Digest, Sha256};
 
 pub fn sha256(data: &[u8]) -> [u8; 32] {
@@ -32,4 +31,9 @@ pub mod tags {
     pub const NULLIFIER_NODE: &str = "gsr-privacy-rollup/nullifier-node";
     pub const ROLLUP_ID: &str = "gsr-privacy-rollup/rollup-id";
     pub const NOTE_KEY: &str = "gsr-privacy-rollup/note-key";
+    pub const OWNER: &str = "gsr-privacy-rollup/owner";
+    pub const NULLIFIER_KEY: &str = "gsr-privacy-rollup/nullifier-key";
+    pub const NOTE: &str = "gsr-privacy-rollup/note";
+    pub const NULLIFIER: &str = "gsr-privacy-rollup/nullifier";
+    pub const NOTE_NODE: &str = "gsr-privacy-rollup/note-node";
 }

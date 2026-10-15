@@ -1,5 +1,10 @@
 # Join-split circuit (`circuits/joinsplit-2x2`)
 
+> **Stale.** The statement is now `JoinSplitWitness::check` (`crates/joinsplit`), proven by the `joinsplit`
+> RISC Zero guest, and note hashing is tagged SHA-256 ([protocol](protocol.md)). This Noir circuit still uses
+> the former Poseidon2 hashes, so its commitments and nullifiers no longer match `pr-crypto`; the constraints
+> below are otherwise the ones the guest checks.
+
 Noir program proven with ProveKit (WHIR over BN254 R1CS, hash-only, no trusted setup). The proof is verified
 natively by mempools and inside the RISC Zero guest; ProveKit's Groth16/gnark export is not used.
 

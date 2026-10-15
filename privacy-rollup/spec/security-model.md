@@ -12,7 +12,8 @@
   the allowed control root. The zero-knowledge argument is a proof sketch
   ([zero-knowledge.md](zero-knowledge.md)), statistical in the random-oracle model. It has not been
   reviewed, and neither the ZK mode nor `resolve_zk.zkr` is upstream or audited.
-* **Poseidon2 (BN254)** for notes, nullifiers and the commitment tree; **SHA-256** everywhere else;
+* **SHA-256** (tagged, BIP-340 style) for every hash, including notes, nullifiers and both trees; note
+  hashes are truncated to 253 bits so they stay canonical BN254 field elements (~126-bit collision resistance);
   **ML-KEM-768 + XChaCha20-Poly1305** for note confidentiality.
 * **GSR** consensus rules at the pinned commit, including `OP_TX` semantics as implemented there.
 

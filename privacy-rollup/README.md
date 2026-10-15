@@ -23,7 +23,7 @@ user: joinsplit guest (private witness) -> zero-knowledge receipt (`identity_zk`
 |---|---|
 | Protocol, encodings, trees, accounting, annex, native transition | Implemented, tested (`cargo test --workspace`) |
 | Wallet (keys, ML-KEM-768 + XChaCha20-Poly1305 notes, join-split witnesses), scanner, mempool, operator CLI | Implemented, tested |
-| Join-split statement | `crates/joinsplit` (`JoinSplitWitness::check`), proven by the `joinsplit` RISC Zero guest; the Noir/ProveKit circuit is kept for reference |
+| Join-split statement | `crates/joinsplit` (`JoinSplitWitness::check`), proven by the `joinsplit` RISC Zero guest; the Noir/ProveKit circuit is kept for reference but still uses the former Poseidon2 hashes |
 | Zero-knowledge user receipts | `identity_zk` seals from a ZK mode added to `risc0-zkp` ([argument](spec/zero-knowledge.md), proof sketch, not reviewed) |
 | `apply_batch` guest | Implemented; `env::verify` per transaction; journal equals the native transition byte for byte |
 | `resolve_zk.zkr` | Built with patched Zirgen and added to the allowed control root (`5edc9538…5b01`) |
@@ -77,14 +77,14 @@ Settlement weight does not depend on batch contents beyond the annex (one nullif
 | Path | |
 |---|---|
 | `crates/protocol-types` | constants, fixed-width types, strict codec (minimal CompactSize, no trailing bytes), journal and annex |
-| `crates/crypto` | Poseidon2 (BN254) commitments, nullifiers, key derivation |
+| `crates/crypto` | tagged SHA-256 commitments, nullifiers, key derivation and commitment-tree nodes |
 | `crates/commitment-tree`, `crates/indexed-nullifier-tree` | depth-32 incremental and indexed trees with insertion/absence witnesses |
 | `crates/state-transition` | `apply_batch`: shared by the native node, the operator and the guest |
 | `crates/bitcoin-adapter` | settlement transaction, `OP_TX` preimages, successor leaf |
 | `crates/joinsplit` | join-split witness and constraint check, shared by the wallet and the guest |
 | `crates/provekit-adapter` | ProveKit proving/verification (reference path); `joinsplit-batch`, `provekit-export` |
 | `crates/wallet-core`, `crates/scanner`, `crates/mempool`, `operator` | wallet, replay/rollback, admission, `pr-operator` CLI |
-| `circuits/joinsplit-2x2` | Noir circuit |
+| `circuits/joinsplit-2x2` | Noir circuit (Poseidon2, stale reference) |
 | `methods/guest`, `prover` | `joinsplit` and `apply_batch` guests; `joinsplit prove|verify|id` and `settle prove|exec <witness> <dir> <receipts…>` hosts |
 | `tools/rollup_covenant.py`, `tools/regtest_demo.py`, `tools/operator_joinsplit.py` | covenant generator, regtest demo, real-proof operator check |
 | `tests` | scenario and differential tests |

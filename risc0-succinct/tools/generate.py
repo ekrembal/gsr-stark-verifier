@@ -80,6 +80,23 @@ class Statement:
             if self.claim_for(bytes.fromhex(receipt["journal"])) != self.claim_digest:
                 raise ValueError("claim digest does not match the claim fields and journal")
 
+    # Covenant extension points: `head()` is emitted before the function definitions and leaves the values named
+    # `head_names` on the stack; `extra_items` are witness items above the setup items; `prologue` runs first in
+    # the main body and `journal_digest` yields SHA256(journal) for the claim.
+    extra_items: tuple[str, ...] = ()
+    head_names: tuple[str, ...] = ()
+
+    def head(self) -> Script:
+        return Script()
+
+    def prologue(self, m: Asm, items: dict[str, V], heads: list[V]) -> None:
+        pass
+
+    def journal_digest(self, m: Asm) -> V:
+        m.push(OUTPUTS_SELECTOR)
+        m.op("TX", 1, V("journal"))
+        return m.op("SHA256", 1, V("jd")).top()
+
     def claim_for(self, journal: bytes) -> bytes:
         """RISC Zero's ReceiptClaim digest for this image with `journal` (tagged_struct hashing)."""
         output = hashlib.sha256(self.output_head + hashlib.sha256(journal).digest() + self.output_tail).digest()
@@ -528,9 +545,7 @@ class Gen:
         """Return the claim digest, with the spending transaction's serialized outputs as journal, as packed
         output-global words."""
         st = self.stmt
-        m.push(OUTPUTS_SELECTOR)
-        m.op("TX", 1, V("journal"))
-        jd = m.op("SHA256", 1, V("jd")).top()
+        jd = st.journal_digest(m)
 
         m.push(st.output_head)
         m.roll(jd)
@@ -569,8 +584,11 @@ class Gen:
         q_items = [[V(f"q{q}.{n}") for n in QUERY_ITEMS] for q in range(ref.QUERIES)]
         s_items = {n: V(n) for n in SETUP_ITEMS}
         base = [v for q in reversed(range(ref.QUERIES)) for v in reversed(q_items[q])]
-        m = Asm(base + [s_items[n] for n in reversed(SETUP_ITEMS)], plan)
+        x_items = {n: V(n) for n in self.stmt.extra_items}
+        heads = [V(n) for n in self.stmt.head_names]
+        m = Asm(base + [s_items[n] for n in reversed(SETUP_ITEMS)] + list(x_items.values()) + heads, plan)
         f = Field(m, inline=False, used=self.used, pool=pool)
+        self.stmt.prologue(m, x_items, heads)
 
         # range-check masks
         masks = {}
@@ -856,7 +874,7 @@ class Gen:
             code = body_ops if isinstance(body_ops, Script) else assemble(body_ops)
             prologue.data(bytes(code.code)).int(fid).op("DEFINE")
             sizes[fid] = len(code.code)
-        script = prologue.extend(m.s)
+        script = self.stmt.head().extend(prologue).extend(m.s)
         info = {"functions": {fid: sizes[fid] for fid in self.used},
                 "query_body_bytes": len(body.code), "persist": len(persist), "accesses": m.accesses,
                 "pool": f.pool_candidates()}

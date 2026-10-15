@@ -1,0 +1,49 @@
+[workspace]
+resolver = "2"
+members = [
+    "crates/protocol-types",
+    "crates/crypto",
+    "crates/commitment-tree",
+    "crates/indexed-nullifier-tree",
+    "crates/bitcoin-adapter",
+    "crates/state-transition",
+    "crates/provekit-adapter",
+    "crates/wallet-core",
+    "crates/mempool",
+    "crates/scanner",
+    "operator",
+    "tests",
+]
+exclude = ["methods"]
+
+[workspace.package]
+edition = "2021"
+license = "MIT"
+version = "0.1.0"
+
+[workspace.dependencies]
+pr-protocol-types = { path = "crates/protocol-types" }
+pr-crypto = { path = "crates/crypto" }
+pr-commitment-tree = { path = "crates/commitment-tree" }
+pr-indexed-nullifier-tree = { path = "crates/indexed-nullifier-tree" }
+pr-bitcoin-adapter = { path = "crates/bitcoin-adapter" }
+pr-state-transition = { path = "crates/state-transition" }
+pr-provekit-adapter = { path = "crates/provekit-adapter" }
+pr-wallet-core = { path = "crates/wallet-core" }
+pr-mempool = { path = "crates/mempool" }
+pr-scanner = { path = "crates/scanner" }
+
+ark-bn254 = { version = "0.6.0", default-features = false, features = ["scalar_field"] }
+ark-ff = { version = "0.6.0", default-features = false }
+ark-serialize = { version = "0.6.0", default-features = false, features = ["derive"] }
+ark-std = { version = "0.6.0", default-features = false }
+serde = { version = "1.0", default-features = false, features = ["derive", "alloc"] }
+serde_json = "1.0"
+postcard = { version = "1.1.3", default-features = false, features = ["alloc"] }
+sha2 = { version = "0.10.9", default-features = false }
+sha3 = { version = "0.10", default-features = false }
+hex = { version = "0.4.3", default-features = false, features = ["alloc"] }
+anyhow = "1.0"
+
+[profile.release]
+debug = 1

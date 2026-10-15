@@ -9,6 +9,7 @@ Implementations of zero-knowledge proof-system verifiers for Bitcoin's Great Scr
 ## Implemented verifiers
 
 - **[RISC Zero succinct receipt](risc0-succinct/README.md)** — verifies a RISC Zero v3.0.6 succinct (recursion-circuit) receipt, proven under a padded SHA-256 hash suite, in one standard Taproot spend: 388,398 WU and 2,083,395,104 of 3,883,980,000 varops, mined on activated regtest. It is checked against RISC Zero's native verifier on the valid receipt and 34 negative cases. A [covenant demo](risc0-succinct/README.md#covenant-demo-a-utxo-only-a-stark-proof-can-spend) locks a UTXO so that only a receipt of a demo guest can spend it, and only to the outputs in the guest's journal (388,641 WU, mined on regtest); the Script reads the outputs with `OP_TX`.
+- **[Privacy rollup](privacy-rollup/README.md)** — a private join-split rollup settled by the RISC Zero verifier: ProveKit (WHIR, hash-only) join-split proofs are verified inside a RISC Zero `apply_batch` guest, whose 196-byte journal the rollup covenant binds to the settlement's inputs, outputs and annex with `OP_TX` and to a successor leaf carrying the new state root. Empty batches are proven and settled consecutively on activated regtest (389,240 WU, ~2.10B varops); batches with join-splits are executed in the guest and match the native transition, but are not yet proven (~100 h on the CPU used). Settlements carry an annex, so they are consensus-valid but nonstandard under the pinned node's policy.
 - **[Recursive Stwo](recursive-stwo/README.md)** — a GSR port built on [Bitcoin Wildlife Sanctuary's recursive-stwo-bitcoin](https://github.com/Bitcoin-Wildlife-Sanctuary/recursive-stwo-bitcoin). It verifies the existing recursive proof bundle, including its delegated obligations, in one standard Taproot spend. The upstream project supplies the recursive proof pipeline and Bitcoin verifier; this implementation adapts its arithmetic, witness handling, and Script compilation to GSR.
 
 ## Current results and limits
@@ -42,6 +43,16 @@ Measured proof systems that do not have a verifier here, for comparison:
 |---|---:|---|---|
 | OpenVM v2.0.2, 35 segments, aggregated | 315,319 | 14,737 Poseidon2 permutations (~40× a spend) | Needs a SHA-256 outer layer |
 | RISC Zero v3.0.6 succinct, stock Poseidon2 | 222,668 | 5,693 Poseidon2 permutations (~15× a spend) | Re-prove the outer layer under SHA-256 (as above) |
+
+Privacy rollup (empty batch settlement, mined with `generateblock` because annex spends are nonstandard; see [privacy-rollup](privacy-rollup/README.md#measurements)):
+
+| Metric | Value | Limit |
+|---|---:|---|
+| Transaction weight | 389,240 WU | ≤ 400,000 WU |
+| Varops | ~2,095,500,000 (53.8%) | ≤ 3,892,400,000 |
+| Rollup leaf script | 159,229 bytes | Included in weight |
+| Join-split circuit | 38,819 R1CS constraints | |
+| Guest cycles, one join-split (executed, not proven) | 1,215,383,914 (1,276 segments) | |
 
 For Recursive Stwo, the current milestone uses the original `hybrid_hash.bin` and `bitcoin_proof.bin` fixtures and retains Poseidon in the offchain recursion pipeline. New application proofs, other proof shapes, and SHA-256 throughout recursion remain follow-up work. Research notes elsewhere in this repository do not represent additional implemented verifiers.
 

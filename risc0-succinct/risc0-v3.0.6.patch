@@ -825,6 +825,66 @@ index 00000000..b8e7dbbd
 +
 +    env::commit_slice(&outputs);
 +}
+diff --git a/risc0/zkvm/src/host/recursion/mod.rs b/risc0/zkvm/src/host/recursion/mod.rs
+index c0b77bcb..ff75474e 100644
+--- a/risc0/zkvm/src/host/recursion/mod.rs
++++ b/risc0/zkvm/src/host/recursion/mod.rs
+@@ -35,6 +35,8 @@ pub use risc0_circuit_recursion::control_id::{ALLOWED_CONTROL_IDS, ALLOWED_CONTR
+ #[cfg(feature = "prove")]
+ pub use self::prove::test_zkr;
+ #[cfg(feature = "prove")]
+-pub use self::prove::{identity_p254, join, lift, resolve, Prover, RECURSION_PO2};
++pub use self::prove::{
++    identity_p254, identity_sha256_padded, join, lift, resolve, Prover, RECURSION_PO2,
++};
+ #[cfg(feature = "prove")]
+ pub use risc0_circuit_recursion::prove::Program;
+diff --git a/risc0/zkvm/src/host/recursion/prove/mod.rs b/risc0/zkvm/src/host/recursion/prove/mod.rs
+index 00be164a..c5f82729 100644
+--- a/risc0/zkvm/src/host/recursion/prove/mod.rs
++++ b/risc0/zkvm/src/host/recursion/prove/mod.rs
+@@ -389,6 +389,41 @@ pub fn identity_p254(
+     })
+ }
+ 
++/// Prove the verification of a recursion receipt with the padded (FIPS 180-4) SHA-256 suite.
++///
++/// The resulting receipt's Merkle and transcript digests are standard SHA-256 digests, so it can be
++/// verified by Bitcoin Script (GSR). Returns the receipt and the verifier parameters it targets.
++pub fn identity_sha256_padded(
++    inner: &SuccinctReceipt<ReceiptClaim>,
++) -> Result<(SuccinctReceipt<ReceiptClaim>, SuccinctReceiptVerifierParameters)> {
++    let (_, control_id) = zkr::identity("sha-256-padded")?;
++    let opts = ProverOpts::succinct()
++        .with_hashfn("sha-256-padded".to_string())
++        .with_control_ids(vec![control_id]);
++    let mut prover = Prover::new_identity(inner, opts)?;
++    let receipt = prover.prover.run()?;
++    let claim =
++        MaybePruned::Value(ReceiptClaim::decode(&mut receipt.out_stream())?).merge(&inner.claim)?;
++    let hashfn = prover.opts.hash_suite()?.hashfn;
++    let control_inclusion_proof = prover.control_inclusion_proof()?;
++    let control_root = control_inclusion_proof.root(&prover.control_id, hashfn.as_ref());
++    let params = SuccinctReceiptVerifierParameters {
++        control_root,
++        inner_control_root: Some(inner.control_root()?),
++        proof_system_info: PROOF_SYSTEM_INFO,
++        circuit_info: CircuitImpl::CIRCUIT_INFO,
++    };
++    let receipt = SuccinctReceipt {
++        seal: receipt.seal,
++        hashfn: prover.opts.hashfn.clone(),
++        control_id: prover.control_id,
++        control_inclusion_proof,
++        claim,
++        verifier_parameters: params.digest(),
++    };
++    Ok((receipt, params))
++}
++
+ /// Prove the specified program identified by the `control_id` using the specified `input`.
+ pub fn prove_zkr(
+     program: Program,
 diff --git a/risc0/zkvm/src/host/recursion/prove/zkr.rs b/risc0/zkvm/src/host/recursion/prove/zkr.rs
 index 00a0bc9d..eff5bc63 100644
 --- a/risc0/zkvm/src/host/recursion/prove/zkr.rs

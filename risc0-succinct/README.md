@@ -46,7 +46,7 @@ BabyBear extension elements are held as one integer with four 96-bit lanes. Exte
 
 ## Reproduce
 
-Needs Python 3, Rust (RISC Zero's toolchain), CMake and a C++20 compiler. Build the shared pinned node and meter as in [recursive-stwo](../recursive-stwo/README.md) (`bash recursive-stwo/tools/build.sh`, which builds `build/bitcoin` and `recursive-stwo/build/harness/gsr-meter`). Then, for the native side, check out RISC Zero v3.0.6 (`1cc70cf05033a79ebc90f07c679cb4bd1cd301b9`) at `~/risc0` (or set `RISC0_DIR`) and apply [risc0-v3.0.6.patch](risc0-v3.0.6.patch), which adds the `sha-256-padded` suite, the `GSR_TRACE` instrumentation, the `gsr_verify_file` test used as the native oracle, and the `gsr_covenant` demo guest with its `gsr_covenant_prove` test.
+Needs Python 3, Rust (RISC Zero's toolchain), CMake and a C++20 compiler. Build the shared pinned node and meter as in [recursive-stwo](../recursive-stwo/README.md) (`bash recursive-stwo/tools/build.sh`, which builds `build/bitcoin` and `recursive-stwo/build/harness/gsr-meter`). Then, for the native side, check out RISC Zero v3.0.6 (`1cc70cf05033a79ebc90f07c679cb4bd1cd301b9`) at `~/risc0` (or set `RISC0_DIR`) and apply [risc0-v3.0.6.patch](risc0-v3.0.6.patch), which adds the `sha-256-padded` suite, the `GSR_TRACE` instrumentation, the `gsr_verify_file` test used as the native oracle, the `gsr_covenant` demo guest with its `gsr_covenant_prove` test, and `recursion::identity_sha256_padded`, the host API the [privacy rollup](../privacy-rollup/README.md) prover uses to re-prove a succinct receipt under the padded suite.
 
 ```sh
 cd risc0-succinct/tools

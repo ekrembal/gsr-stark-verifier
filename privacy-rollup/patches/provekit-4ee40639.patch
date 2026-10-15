@@ -1,0 +1,154 @@
+diff --git a/provekit/common/Cargo.toml b/provekit/common/Cargo.toml
+index 7fa86220..563bbf2d 100644
+--- a/provekit/common/Cargo.toml
++++ b/provekit/common/Cargo.toml
+@@ -44,7 +44,7 @@ tracing.workspace = true
+ zerocopy.workspace = true
+ 
+ # Target-specific dependencies: only on non-WASM targets
+-[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
++[target.'cfg(not(any(target_arch = "wasm32", target_os = "zkvm")))'.dependencies]
+ xz2.workspace = true
+ zstd.workspace = true
+ 
+diff --git a/provekit/common/src/interner.rs b/provekit/common/src/interner.rs
+index 822a6a7d..e24de2c3 100644
+--- a/provekit/common/src/interner.rs
++++ b/provekit/common/src/interner.rs
+@@ -12,6 +12,12 @@ pub struct Interner {
+ #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+ pub struct InternedFieldElement(usize);
+ 
++impl InternedFieldElement {
++    pub const fn index(self) -> usize {
++        self.0
++    }
++}
++
+ impl Default for Interner {
+     fn default() -> Self {
+         Self::new()
+@@ -36,6 +42,10 @@ impl Interner {
+         InternedFieldElement(index)
+     }
+ 
++    pub fn values(&self) -> &[FieldElement] {
++        &self.values
++    }
++
+     pub fn get(&self, el: InternedFieldElement) -> Option<FieldElement> {
+         self.values.get(el.0).copied()
+     }
+diff --git a/provekit/common/src/lib.rs b/provekit/common/src/lib.rs
+index 14174405..602a2fea 100644
+--- a/provekit/common/src/lib.rs
++++ b/provekit/common/src/lib.rs
+@@ -1,4 +1,4 @@
+-#[cfg(not(target_arch = "wasm32"))]
++#[cfg(not(any(target_arch = "wasm32", target_os = "zkvm")))]
+ pub mod file;
+ mod interner;
+ mod noir_proof_scheme;
+diff --git a/provekit/common/src/utils/sumcheck.rs b/provekit/common/src/utils/sumcheck.rs
+index 17a7c429..64856021 100644
+--- a/provekit/common/src/utils/sumcheck.rs
++++ b/provekit/common/src/utils/sumcheck.rs
+@@ -242,3 +242,44 @@ pub fn calculate_external_row_of_r1cs_matrices(
+     let (at, bt, ct) = transpose_r1cs_matrices(r1cs);
+     multiply_transposed_by_eq_alpha(&at, &bt, &ct, alpha, r1cs)
+ }
++
++/// Computes `eq(alpha, ·) * [A, B, C]` by a sequential row-major scatter, without
++/// transposing. Unit coefficients `±1` are applied as additions.
++#[instrument(skip_all)]
++pub fn calculate_external_row_by_scatter(
++    alpha: &[FieldElement],
++    r1cs: &R1CS,
++) -> [Vec<FieldElement>; 3] {
++    let eq_alpha =
++        calculate_evaluations_over_boolean_hypercube_for_eq(alpha, r1cs.num_constraints());
++    let values = r1cs.interner.values();
++    let one = FieldElement::one();
++    let minus_one = -one;
++    let kind: Vec<u8> = values
++        .iter()
++        .map(|v| {
++            if *v == one {
++                1
++            } else if *v == minus_one {
++                2
++            } else {
++                0
++            }
++        })
++        .collect();
++    let scatter = |m: &SparseMatrix| {
++        let mut out = vec![FieldElement::zero(); m.num_cols];
++        for (row, e) in eq_alpha.iter().enumerate().take(m.num_rows) {
++            for (col, v) in m.iter_row(row) {
++                let i = v.index();
++                match kind[i] {
++                    1 => out[col] += e,
++                    2 => out[col] -= e,
++                    _ => out[col] += values[i] * e,
++                }
++            }
++        }
++        out
++    };
++    [scatter(&r1cs.a), scatter(&r1cs.b), scatter(&r1cs.c)]
++}
+diff --git a/provekit/verifier/src/whir_r1cs.rs b/provekit/verifier/src/whir_r1cs.rs
+index 744117b6..7ee01583 100644
+--- a/provekit/verifier/src/whir_r1cs.rs
++++ b/provekit/verifier/src/whir_r1cs.rs
+@@ -7,7 +7,7 @@ use {
+             OffsetCovector,
+         },
+         utils::sumcheck::{
+-            calculate_eq, eval_cubic_poly, multiply_transposed_by_eq_alpha, transpose_r1cs_matrices,
++            calculate_eq, eval_cubic_poly,
+         },
+         FieldElement, PublicInputs, TranscriptSponge, WhirR1CSProof, WhirR1CSScheme, R1CS,
+     },
+@@ -72,12 +72,14 @@ impl WhirR1CSVerifier for WhirR1CSScheme {
+             (None, Vec::new())
+         };
+ 
++        #[cfg(not(target_os = "zkvm"))]
+         let (transposed, sumcheck_result) = rayon::join(
+-            || transpose_r1cs_matrices(r1cs),
++            || provekit_common::utils::sumcheck::transpose_r1cs_matrices(r1cs),
+             || run_sumcheck_verifier(&mut arthur, self.m_0),
+         );
++        #[cfg(target_os = "zkvm")]
++        let sumcheck_result = run_sumcheck_verifier(&mut arthur, self.m_0);
+         let data_from_sumcheck_verifier = sumcheck_result.context("while verifying sumcheck")?;
+-        let (at, bt, ct) = transposed;
+ 
+         let public_inputs_hash_buf: FieldElement = arthur
+             .prover_message()
+@@ -91,10 +93,19 @@ impl WhirR1CSVerifier for WhirR1CSScheme {
+         );
+         let x: FieldElement = arthur.verifier_message();
+ 
+-        let alphas = multiply_transposed_by_eq_alpha(
+-            &at,
+-            &bt,
+-            &ct,
++        #[cfg(not(target_os = "zkvm"))]
++        let alphas = {
++            let (at, bt, ct) = transposed;
++            provekit_common::utils::sumcheck::multiply_transposed_by_eq_alpha(
++                &at,
++                &bt,
++                &ct,
++                &data_from_sumcheck_verifier.alpha,
++                r1cs,
++            )
++        };
++        #[cfg(target_os = "zkvm")]
++        let alphas = provekit_common::utils::sumcheck::calculate_external_row_by_scatter(
+             &data_from_sumcheck_verifier.alpha,
+             r1cs,
+         );

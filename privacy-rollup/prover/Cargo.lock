@@ -2622,6 +2622,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "pr-joinsplit"
+version = "0.1.0"
+dependencies = [
+ "pr-commitment-tree",
+ "pr-crypto",
+ "pr-protocol-types",
+ "serde",
+]
+
+[[package]]
 name = "pr-methods"
 version = "0.1.0"
 dependencies = [
@@ -2644,11 +2654,13 @@ dependencies = [
  "bytemuck",
  "hex",
  "postcard",
+ "pr-joinsplit",
  "pr-methods",
  "pr-protocol-types",
  "pr-state-transition",
  "risc0-zkvm",
  "serde_json",
+ "tracing",
 ]
 
 [[package]]
@@ -3189,6 +3201,7 @@ dependencies = [
 name = "risc0-circuit-recursion-sys"
 version = "4.0.3"
 dependencies = [
+ "cc",
  "glob",
  "risc0-build-kernel",
  "risc0-core",

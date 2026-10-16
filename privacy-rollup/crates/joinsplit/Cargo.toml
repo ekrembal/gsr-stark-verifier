@@ -1,0 +1,11 @@
+[package]
+name = "pr-joinsplit"
+edition.workspace = true
+license.workspace = true
+version.workspace = true
+
+[dependencies]
+pr-protocol-types.workspace = true
+pr-crypto.workspace = true
+pr-commitment-tree.workspace = true
+serde.workspace = true

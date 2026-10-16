@@ -10,7 +10,8 @@ pr-bitcoin-adapter.workspace = true
 pr-state-transition.workspace = true
 pr-scanner.workspace = true
 pr-mempool.workspace = true
-pr-provekit-adapter.workspace = true
+risc0-zkvm = { path = "../../../risc0/risc0/zkvm", default-features = false, features = ["std"] }
+postcard = { workspace = true, features = ["use-std"] }
 serde = { workspace = true, features = ["std"] }
 serde_json.workspace = true
 hex = { workspace = true, features = ["std"] }

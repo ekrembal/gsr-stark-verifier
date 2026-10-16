@@ -16,6 +16,7 @@ import subprocess
 import sys
 from pathlib import Path
 
+import compress
 import differential as d
 import generate as g
 import measure
@@ -43,13 +44,16 @@ def parse_outputs(journal: bytes) -> list:
 
 
 class Covenant:
-    def __init__(self, receipt: dict, seal: bytes) -> None:
+    def __init__(self, receipt: dict, seal: bytes, compressed: bool = False) -> None:
         self.receipt, self.seal = receipt, seal
         self.journal = bytes.fromhex(receipt["journal"])
         self.gen = g.Gen(g.Statement(receipt, covenant=True), ref.load_circuit())
         first = self.gen.generate()[1]
         script, info = self.gen.generate(first["accesses"], first["pool"])
         self.script = bytes(script.code)
+        self.compression = None
+        if compressed:
+            self.script, self.compression = compress.compress(self.script)
         self.functions = info["functions"]
         self.taproot = taproot_construct(NUMS, [("verifier", CScript(self.script), LEAF)])
         self.hints = g.prover_hints(self.gen, receipt, seal)
@@ -120,13 +124,13 @@ def regtest(cov: Covenant) -> dict:
     subprocess.run(["rm", "-rf", str(datadir)], check=True)
     datadir.mkdir(parents=True)
     subprocess.run([str(BITCOIN_BUILD / "bin/bitcoind"), "-regtest", f"-datadir={datadir}", "-daemonwait", "-server",
-                    "-listen=0", "-rpcport=19472", "-port=19473", "-vbparams=script_restoration:0:3999999999"],
+                    "-listen=0", "-rpcport=19472", "-port=19473", "-vbparams=tapleaf_0xc2:0:3999999999"],
                    check=True)
     try:
         address = output_key_to_p2tr(cov.taproot.output_pubkey)
         funding_block = rpc(datadir, "generatetoaddress", 1, address)[0]
         rpc(datadir, "generatetoaddress", 100, address)
-        while rpc(datadir, "getdeploymentinfo")["deployments"]["script_restoration"]["bip9"]["status"] != "active":
+        while rpc(datadir, "getdeploymentinfo")["deployments"]["tapleaf_0xc2"]["bip9"]["status"] != "active":
             rpc(datadir, "generatetoaddress", 144, address)
         funding = rpc(datadir, "getblock", funding_block, 2)["tx"][0]
         index = next(i for i, o in enumerate(funding["vout"])
@@ -179,8 +183,8 @@ def main() -> None:
     ok, e = run(cov, bundle, tx)
     if not ok:
         failures.append("valid")
-    keys = ("ok", "error", "transaction_weight", "budget", "varops", "sha256_calls", "function_calls",
-            "invoked_body_bytes", "peak_entries", "peak_payload_bytes", "peak_element_bytes")
+    keys = ("ok", "error", "transaction_weight", "budget", "varops", "sha256_calls", "macro_references",
+            "unrolled_bytes", "peak_entries", "peak_payload_bytes", "peak_element_bytes")
     report: dict = {"image_id": cov.gen.stmt.image_id.hex(), "journal": cov.journal.hex(),
                     "claim_digest": receipt["claim_digest"], "native": native, "reference": reference,
                     "native_other_journal": native_rewritten, "script_bytes": len(cov.script),

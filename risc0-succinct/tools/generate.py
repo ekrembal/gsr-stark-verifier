@@ -17,12 +17,13 @@ import struct
 from pathlib import Path
 
 import babybear as bb
+import compress
 import packed as pk
 import reference as ref
 import witness as wit
 from babybear import P
 from field import FN_SPREAD, Field, norm
-from gsr import Asm, Script, V, assemble
+from gsr import Asm, Script, V, assemble, renumber_calls
 
 ROOT = Path(__file__).resolve().parents[1]
 FN_QUERY = 200
@@ -535,8 +536,7 @@ class Gen:
             assert not a.has(items[name]), name
         above = len(a.st) - len(persist)
         assert a.st[:len(persist)] == persist
-        a.push(above)
-        a.s.op("MULTI", "DROP")
+        a.s.drop_n(above)
         a.st = list(persist)
         return a.s, persist
 
@@ -589,6 +589,7 @@ class Gen:
         m = Asm(base + [s_items[n] for n in reversed(SETUP_ITEMS)] + list(x_items.values()) + heads, plan)
         f = Field(m, inline=False, used=self.used, pool=pool)
         self.stmt.prologue(m, x_items, heads)
+        prologue_len = len(m.s.code)
 
         # range-check masks
         masks = {}
@@ -836,8 +837,7 @@ class Gen:
             m.pick(v)
             m.op("TOALTSTACK", 1)
         region = len(m.st) - len(base)
-        m.push(region)
-        m.s.op("MULTI", "DROP")
+        m.s.drop_n(region)
         m.st = list(base)
         copies = []
         for v in keep:
@@ -863,19 +863,25 @@ class Gen:
             assert all(v in block for v in m.st[nb - len(block):nb])
             del m.st[nb - len(block):nb]
         assert m.st == persist
-        m.push(len(persist))
-        m.s.op("MULTI", "DROP")
+        m.s.drop_n(len(persist))
         m.s.int(1)
 
-        prologue = Script()
+        index = {fid: i for i, fid in enumerate(sorted(self.used))}
+        decls = Script()
         sizes = {}
         for fid in sorted(self.used):
             body_ops = self.used[fid]
             code = body_ops if isinstance(body_ops, Script) else assemble(body_ops)
-            prologue.data(bytes(code.code)).int(fid).op("DEFINE")
+            decls.macro(renumber_calls(bytes(code.code), index))
             sizes[fid] = len(code.code)
-        script = self.stmt.head().extend(prologue).extend(m.s)
-        info = {"functions": {fid: sizes[fid] for fid in self.used},
+        # Macro declarations must open the script; the statement's head follows them.
+        head = self.stmt.head()
+        main = Script()
+        main.code = bytearray(renumber_calls(bytes(head.code + m.s.code), index))
+        script = Script().extend(decls).extend(main)
+        info = {"functions": {fid: sizes[fid] for fid in self.used}, "decl_len": len(decls.code),
+                # main-script byte range holding the head and the statement prologue (see compress.protect)
+                "head_prologue": (0, len(head.code) + prologue_len),
                 "query_body_bytes": len(body.code), "persist": len(persist), "accesses": m.accesses,
                 "pool": f.pool_candidates()}
         return script, info
@@ -918,12 +924,17 @@ def main() -> None:
     ap.add_argument("--receipt", default=str(ROOT / "fixtures/receipt.json"))
     ap.add_argument("--seal", default=str(ROOT / "fixtures/seal.bin"))
     ap.add_argument("--out", default=str(ROOT / "build/bundle.json"))
+    ap.add_argument("--compress", action="store_true", help="extract repeated sequences into macros")
     args = ap.parse_args()
     receipt = json.loads(Path(args.receipt).read_text())
     seal = Path(args.seal).read_bytes()
     gen = Gen(Statement(receipt), ref.load_circuit())
     first = gen.generate()[1]
     script, info = gen.generate(first["accesses"], first["pool"])
+    if args.compress:
+        code, info["compression"] = compress.compress(bytes(script.code))
+        script = Script()
+        script.code = bytearray(code)
     info["pooled"] = len(info.pop("pool"))
     del info["accesses"]
     stack = build_witness(gen, receipt, seal)

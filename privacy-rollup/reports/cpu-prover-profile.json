@@ -1,0 +1,170 @@
+{
+  "scope": "Host CPU HAL call wall times, including Rayon workers; not CPU-time samples",
+  "timer_env": "GSR_PROFILE_CPU=1",
+  "proof_result": {
+    "operation": "prove",
+    "real_local_proof": true,
+    "result": {
+      "index": 0,
+      "integrity_verified": true,
+      "po2": 18,
+      "seal_bytes": 255656
+    },
+    "seconds": 100.33831929
+  },
+  "resources": {
+    "command": [
+      "privacy-rollup/prover/target/release/proof_chain_bench",
+      "prove",
+      "build/feasibility/dot32-cpu-profile",
+      "0"
+    ],
+    "exit_code": 0,
+    "stopped_by": null,
+    "seconds": 100.5722861739996,
+    "sampled_peak_group_rss_kib": 2396616,
+    "minimum_free_disk_bytes": 2510696448,
+    "sampling_seconds": 0.25,
+    "limits": {
+      "seconds": 300,
+      "rss_mib": 4096,
+      "free_mib": 1024
+    }
+  },
+  "phases": [
+    {
+      "name": "hash_rows",
+      "calls": 7,
+      "seconds": 34.243747669,
+      "largest_call_seconds": 21.011504828,
+      "fraction_of_prover_time": 0.3412828509717008
+    },
+    {
+      "name": "hash_fold",
+      "calls": 116,
+      "seconds": 5.872235323,
+      "largest_call_seconds": 0.74605851,
+      "fraction_of_prover_time": 0.05852435405089791
+    },
+    {
+      "name": "batch_expand_into_evaluate_ntt",
+      "calls": 7,
+      "seconds": 5.544976954,
+      "largest_call_seconds": 3.400920237,
+      "fraction_of_prover_time": 0.055262804811128906
+    },
+    {
+      "name": "batch_evaluate_any",
+      "calls": 4,
+      "seconds": 2.655362197,
+      "largest_call_seconds": 2.220917574,
+      "fraction_of_prover_time": 0.02646408885248929
+    },
+    {
+      "name": "zk_shift",
+      "calls": 3,
+      "seconds": 2.259591884,
+      "largest_call_seconds": 1.510400934,
+      "fraction_of_prover_time": 0.022519730248513316
+    },
+    {
+      "name": "batch_interpolate_ntt",
+      "calls": 4,
+      "seconds": 1.39105693,
+      "largest_call_seconds": 0.812942539,
+      "fraction_of_prover_time": 0.013863665844148105
+    },
+    {
+      "name": "mix_poly_coeffs",
+      "calls": 4,
+      "seconds": 0.756752834,
+      "largest_call_seconds": 0.382889186,
+      "fraction_of_prover_time": 0.0075420122576781105
+    },
+    {
+      "name": "alloc_elem",
+      "calls": 19,
+      "seconds": 0.567885525,
+      "largest_call_seconds": 0.236333826,
+      "fraction_of_prover_time": 0.005659707368215775
+    },
+    {
+      "name": "batch_bit_reverse",
+      "calls": 6,
+      "seconds": 0.089892818,
+      "largest_call_seconds": 0.057030692,
+      "fraction_of_prover_time": 0.000895897186997819
+    },
+    {
+      "name": "alloc_digest",
+      "calls": 7,
+      "seconds": 0.072449268,
+      "largest_call_seconds": 0.018610622,
+      "fraction_of_prover_time": 0.0007220498460872714
+    },
+    {
+      "name": "fri_fold",
+      "calls": 3,
+      "seconds": 0.025459287,
+      "largest_call_seconds": 0.023796672,
+      "fraction_of_prover_time": 0.00025373443745272447
+    },
+    {
+      "name": "scatter",
+      "calls": 2,
+      "seconds": 0.015024833,
+      "largest_call_seconds": 0.014701598,
+      "fraction_of_prover_time": 0.00014974172485962117
+    },
+    {
+      "name": "eltwise_copy_elem",
+      "calls": 4,
+      "seconds": 0.011546964,
+      "largest_call_seconds": 0.007074289,
+      "fraction_of_prover_time": 0.00011508030114224569
+    },
+    {
+      "name": "eltwise_zeroize_elem",
+      "calls": 4,
+      "seconds": 0.008419966,
+      "largest_call_seconds": 0.005083822,
+      "fraction_of_prover_time": 8.391575680737116e-05
+    },
+    {
+      "name": "alloc_extelem",
+      "calls": 5,
+      "seconds": 0.00535453,
+      "largest_call_seconds": 0.005351377,
+      "fraction_of_prover_time": 5.336475673390761e-05
+    },
+    {
+      "name": "eltwise_sum_extelem",
+      "calls": 1,
+      "seconds": 0.001863069,
+      "largest_call_seconds": 0.001863069,
+      "fraction_of_prover_time": 1.856787130961719e-05
+    },
+    {
+      "name": "copy_from_elem",
+      "calls": 2,
+      "seconds": 4.947e-06,
+      "largest_call_seconds": 3.084e-06,
+      "fraction_of_prover_time": 4.9303197771352666e-08
+    },
+    {
+      "name": "copy_from_u32",
+      "calls": 8,
+      "seconds": 4.556e-06,
+      "largest_call_seconds": 8.51e-07,
+      "fraction_of_prover_time": 4.540638145265469e-08
+    },
+    {
+      "name": "copy_from_extelem",
+      "calls": 4,
+      "seconds": 1.543e-06,
+      "largest_call_seconds": 6.31e-07,
+      "fraction_of_prover_time": 1.5377973349746748e-08
+    }
+  ],
+  "hal_call_seconds": 53.521631097000004
+}

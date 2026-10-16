@@ -19,9 +19,9 @@ def main():
     try:rpc('getblockcount')
     except RuntimeError:
         data=root/'build/regtest';data.mkdir(parents=True,exist_ok=True)
-        subprocess.run([str(BITCOIN_BUILD/'bin/bitcoind'),'-regtest','-datadir='+str(data),'-daemonwait','-server','-listen=0','-rpcport=19452','-port=19453','-vbparams=script_restoration:0:3999999999'],check=True)
-    deployment=rpc('getdeploymentinfo')['deployments']['script_restoration']
-    assert deployment['bip9']['start_time']==0,'Regtest must explicitly enable script_restoration.'
+        subprocess.run([str(BITCOIN_BUILD/'bin/bitcoind'),'-regtest','-datadir='+str(data),'-daemonwait','-server','-listen=0','-rpcport=19452','-port=19453','-vbparams=tapleaf_0xc2:0:3999999999'],check=True)
+    deployment=rpc('getdeploymentinfo')['deployments']['tapleaf_0xc2']
+    assert deployment['bip9']['start_time']==0,'Regtest must explicitly enable tapleaf_0xc2.'
     path=Path(sys.argv[1] if len(sys.argv)>1 else root/'build/verifier.json')
     bundle=json.loads(path.read_text());script=bytes.fromhex(bundle['script'])
     internal=bytes.fromhex('50929b74c1a04954b78b4b6035e97a5e078a5a0f28ec96d547bfee9ace803ac0')
@@ -30,7 +30,7 @@ def main():
     # Mine a dedicated funding coinbase. No wallet or external funds are used.
     funding_block=rpc('generatetoaddress',1,address)[0]
     rpc('generatetoaddress',100,address)
-    while rpc('getdeploymentinfo')['deployments']['script_restoration']['bip9']['status']!='active':
+    while rpc('getdeploymentinfo')['deployments']['tapleaf_0xc2']['bip9']['status']!='active':
         rpc('generatetoaddress',144,address)
     funding=rpc('getblock',funding_block,2)['tx'][0]
     index=next(i for i,out in enumerate(funding['vout']) if out['scriptPubKey']['hex']==taproot.scriptPubKey.hex())
@@ -40,7 +40,7 @@ def main():
     measurement=meter_request(bundle,tx,value)
     (root/'build/transaction-meter-input.json').write_text(json.dumps(measurement))
     (root/'build/spend.hex').write_text(raw+'\n')
-    result={'script_sha256':bundle['script_sha256'],'node_commit':subprocess.check_output(['git','-C',str(BITCOIN_SOURCE),'rev-parse','HEAD'],text=True).strip(),'node_version':rpc('getnetworkinfo')['subversion'],'weight':weight,'eligible_weight':weight,'varops_budget':weight*10000,'internal_key':internal.hex(),'leaf_version':194,'control_block':control.hex(),'funding_txid':funding['txid'],'activation':rpc('getdeploymentinfo')['deployments']['script_restoration']}
+    result={'script_sha256':bundle['script_sha256'],'node_commit':subprocess.check_output(['git','-C',str(BITCOIN_SOURCE),'rev-parse','HEAD'],text=True).strip(),'node_version':rpc('getnetworkinfo')['subversion'],'weight':weight,'eligible_weight':weight,'varops_budget':weight*10000-500_000,'internal_key':internal.hex(),'leaf_version':194,'control_block':control.hex(),'funding_txid':funding['txid'],'activation':rpc('getdeploymentinfo')['deployments']['tapleaf_0xc2']}
     acceptance=rpc('testmempoolaccept',[raw]);result['mempool_acceptance']=acceptance
     if weight<=400000 and acceptance[0]['allowed']:
         txid=rpc('sendrawtransaction',raw);block=rpc('generatetoaddress',1,address)[0]

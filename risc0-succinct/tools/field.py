@@ -123,9 +123,8 @@ class Field:
             return items[0]
         b = sum(v.bound for v in items)
         assert b < 1 << 78, b.bit_length()
-        self.a.push(n)
-        self.a.s.op("MULTI", "ADD")
-        del self.a.st[-(n + 1):]
+        self.a.s.add_n(n)
+        del self.a.st[-n:]
         out = V("sum", b, any(v.ext for v in items))
         self.a.st.append(out)
         return out

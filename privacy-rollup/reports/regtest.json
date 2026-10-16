@@ -1,30 +1,42 @@
 {
   "genesis": {
-    "txid": "fb971a90e9cae5ed20034776585db998ab7d164117e980a5d4a9041e40fdcbf3",
-    "rollup_id": "042680bf00fde523b942212848975a3ca911b7f634494249a3ce08b75f634e82",
-    "state_root": "c1bb7c06de79790ca50c83b80adbc8ba735f90ec157cbaedc691db09f985dea4",
+    "txid": "bb1a8703ff94b5ed8152537b6f7ceda7686f766521f91bd7f602bcec8d4ca4da",
+    "rollup_id": "1ec75c6b6a97e459fb6f7666bf5908579cf16d3863cac9fc17754535b03b3122",
+    "state_root": "6d889d540452d03677c7660fb0d1218cc737f489b5e39b149808128dcaf11cfe",
     "covenant_script_bytes": 159229,
     "nonce_spent": "187647f837e1aff453d2b6b14e32adcab73943ef4185e73d6a29d3a2afb8ba2c"
+  },
+  "user_joinsplit": {
+    "claim": "73426590dd468918bb40ffbcf3327ca60697cf1b93678fb3f4e4a38169a92e3b",
+    "cycles_total": 3145728,
+    "cycles_user": 2877102,
+    "identity_zk_seconds": 11.184498991,
+    "receipt_bytes": 276262,
+    "seal_words": 56683,
+    "segments": 3,
+    "succinct_seconds": 320.795189614,
+    "wall_seconds": 332.0,
+    "tx_json_bytes": 1010140
   },
   "consensus_negatives_of_settlement_1": {
     "rollup_input_at_index_1": {
       "rejected": true,
-      "error": "error code: -25\nerror message:\nTestBlockValidity failed: block-script-verify-flag-failed (Script failed an OP_EQUALVERIFY operation), input 1 of ffbea1d4cac581143da80e4eadab6625592892fc8cb8e4c4d5e9e3c004d2f587 (wtxid 3fad1c5c423e303d871c2b6bce2a90e8425699a98b1d029fae6d3a10307aa33f), spending fb971a90e9cae5ed20034776585db998ab7d164117e980a5d4a9041e40fdcbf3:0"
+      "error": "error code: -25\nerror message:\nTestBlockValidity failed: block-script-verify-flag-failed (Script failed an OP_EQUALVERIFY operation), input 1 of 0fa67b140512506407c9ca9fad8be6730dfb67d28aa0aa4009dfa3a5e37fcc45 (wtxid 0fe98115d2b773967a2647649bf2d8c0e76f498c16772094596e5a7374d5116e), spending bb1a8703ff94b5ed8152537b6f7ceda7686f766521f91bd7f602bcec8d4ca4da:0"
     },
     "extra_funding_input": {
       "rejected": true,
-      "error": "error code: -25\nerror message:\nTestBlockValidity failed: block-script-verify-flag-failed (Script failed an OP_VERIFY operation), input 0 of 3f99c728f30412ad393bdc39f0cb3b557684344b7594473bc2989eda5d9f5208 (wtxid bfa7ed75b20db08afe1dab39fdd13c6c6b31907cfd24062b0b08ff79e67d1c53), spending fb971a90e9cae5ed20034776585db998ab7d164117e980a5d4a9041e40fdcbf3:0"
+      "error": "error code: -25\nerror message:\nTestBlockValidity failed: block-script-verify-flag-failed (Script failed an OP_VERIFY operation), input 0 of 3230660124fbb1869934551693ac38ea49688b2e495e0caa1817e9d29fc9c600 (wtxid 01fdbc6029f0add97c2ea49eb195132e43ba9c31392ba5e5b65d66f3fba0b22a), spending bb1a8703ff94b5ed8152537b6f7ceda7686f766521f91bd7f602bcec8d4ca4da:0"
     },
     "control_block_internal_key": {
       "rejected": true,
-      "error": "error code: -25\nerror message:\nTestBlockValidity failed: block-script-verify-flag-failed (Witness program hash mismatch), input 0 of f9c88244eac9cea6976a12ff1fa67819b28cfcd6759cf675fd90d86570f37d9c (wtxid 7c512af9f8903fcafa0231c5c707bb6870ad0d060cf33fa2558eb5fcc6f8e67b), spending fb971a90e9cae5ed20034776585db998ab7d164117e980a5d4a9041e40fdcbf3:0"
+      "error": "error code: -25\nerror message:\nTestBlockValidity failed: block-script-verify-flag-failed (Witness program hash mismatch), input 0 of 3b8ce9aa4eb1553af41a443a3848efba8db5bbef18024aa26d2fdfc09fc4c588 (wtxid b3dc23c1d738575feced739d6e40259213b11cda9fbf87a01bd9d330b5f89497), spending bb1a8703ff94b5ed8152537b6f7ceda7686f766521f91bd7f602bcec8d4ca4da:0"
     },
     "control_block_parity": {
       "rejected": true,
-      "error": "error code: -25\nerror message:\nTestBlockValidity failed: block-script-verify-flag-failed (Witness program hash mismatch), input 0 of f9c88244eac9cea6976a12ff1fa67819b28cfcd6759cf675fd90d86570f37d9c (wtxid 0ab5ce7a484f6f1ebd3503cdf7bcbdad3670f45ce00165f2db47d722ca2248a3), spending fb971a90e9cae5ed20034776585db998ab7d164117e980a5d4a9041e40fdcbf3:0"
+      "error": "error code: -25\nerror message:\nTestBlockValidity failed: block-script-verify-flag-failed (Witness program hash mismatch), input 0 of 3b8ce9aa4eb1553af41a443a3848efba8db5bbef18024aa26d2fdfc09fc4c588 (wtxid 1c9e2203408599d9e532b7925c7e6b37709daced0d5b04ba7871acbbe5351ef4), spending bb1a8703ff94b5ed8152537b6f7ceda7686f766521f91bd7f602bcec8d4ca4da:0"
     }
   },
-  "same_block_settlements": "rejected: error code: -25\nerror message:\nTestBlockValidity failed: bad-txns-nonfinal, contains a non-BIP68-final transaction a5940bab42ff92065d4b025c04ee6adea03aaba6fcb5392f5a3dd369b8ff53e5",
+  "same_block_settlements": "rejected: error code: -25\nerror message:\nTestBlockValidity failed: bad-txns-nonfinal, contains a non-BIP68-final transaction be521a6deca64af2ee23d34ce82bed4c6c3754580fac291facaae6e77064f960",
   "negative_spends_of_settlement_1": {
     "redirected_successor": {
       "rejected": true,
@@ -76,36 +88,53 @@
     }
   },
   "final_status": {
-    "backing_sats": 100000,
-    "batch_number": 10,
-    "commitment_count": 0,
-    "nullifier_next_index": 1,
+    "anchor": {
+      "batch_number": 2,
+      "commitment_count": 2,
+      "root": "0d00b1f5c729ed5e796cffdd49828aca64cd20cdbc2da84776bb6ee28c7577cf"
+    },
+    "backing_sats": 119300,
+    "batch_number": 2,
+    "commitment_count": 2,
+    "nullifier_next_index": 3,
     "pending": 0,
-    "rollup_id": "042680bf00fde523b942212848975a3ca911b7f634494249a3ce08b75f634e82",
-    "state_root": "4a7a8f49efef8596a8efcb1da1f8071774ad092529e5b132e71b29da3b1ddc6e",
+    "rollup_id": "1ec75c6b6a97e459fb6f7666bf5908579cf16d3863cac9fc17754535b03b3122",
+    "state_root": "0e375a7090ac53d6892606f9a5360ac2f083b36e5bb89b6cfd08b5c1939a3c38",
     "utxo": [
-      "ca177556244490e0ffcc226ae273b802da2a5f7e30933ec0adb05a4f377c49eb",
+      "60f96470e7e6aaac1f29ac0f5854376c4ced2be84cd323eef24aa6ec6d1a52be",
       0
     ]
   },
   "rollup_utxo_on_chain": {
-    "value": 0.001,
-    "script_pubkey": "5120a1936879e71d8dc625be360ec51602003f1ddf44ccf2fa44a0bffe34e28db444",
+    "value": 0.001193,
+    "script_pubkey": "51203cf2459848e4f3e9e35d39ca0f9587b34f0db3bd55e37ec9356b911e2496191e",
     "matches_covenant": true
   },
   "reorg": {
-    "rolled_back_to": 9,
-    "restored_to": 10
+    "rolled_back_to": 1,
+    "restored_to": 2
   },
   "replay_matches": true,
   "settlements": [
     {
       "batch_number": 1,
-      "txid": "f9c88244eac9cea6976a12ff1fa67819b28cfcd6759cf675fd90d86570f37d9c",
-      "weight": 389240,
-      "annex_bytes": 151,
-      "varops": 2095513495,
-      "budget": 3892400000,
+      "transactions": 1,
+      "prove": {
+        "cycles_total": 14942208,
+        "cycles_user": 14055695,
+        "identity_sha256_padded_seconds": 6.766728721,
+        "lift_join_seconds": 282.162704003,
+        "resolve_zk_seconds": 9.586452604,
+        "seal_words": 55667,
+        "segment_proving_seconds": 1188.190288054,
+        "segments": 15,
+        "transactions": 1
+      },
+      "txid": "3b8ce9aa4eb1553af41a443a3848efba8db5bbef18024aa26d2fdfc09fc4c588",
+      "weight": 392001,
+      "annex_bytes": 2743,
+      "varops": 2095600656,
+      "budget": 3918340000,
       "invoked_body_bytes": 3231577,
       "peak_entries": 2666,
       "limits": {
@@ -119,8 +148,8 @@
         "verifier": true
       },
       "standard_policy": {
-        "txid": "f9c88244eac9cea6976a12ff1fa67819b28cfcd6759cf675fd90d86570f37d9c",
-        "wtxid": "667e68a3814dc99dcd0489203be4faa1f26b038af0bf4c6680058c4bd5d2a6c7",
+        "txid": "3b8ce9aa4eb1553af41a443a3848efba8db5bbef18024aa26d2fdfc09fc4c588",
+        "wtxid": "26ca8d324c3873f23499c1447117579e05de89d664fc4eb804d8edfc47a3490f",
         "allowed": false,
         "reject-reason": "bad-witness-nonstandard",
         "reject-details": "bad-witness-nonstandard"
@@ -128,10 +157,22 @@
     },
     {
       "batch_number": 2,
-      "txid": "a5940bab42ff92065d4b025c04ee6adea03aaba6fcb5392f5a3dd369b8ff53e5",
+      "transactions": 0,
+      "prove": {
+        "cycles_total": 131072,
+        "cycles_user": 40396,
+        "identity_sha256_padded_seconds": 6.272119917,
+        "lift_join_seconds": 9.275731465,
+        "resolve_zk_seconds": 6.1e-08,
+        "seal_words": 55667,
+        "segment_proving_seconds": 10.524925742,
+        "segments": 1,
+        "transactions": 0
+      },
+      "txid": "be521a6deca64af2ee23d34ce82bed4c6c3754580fac291facaae6e77064f960",
       "weight": 389240,
       "annex_bytes": 151,
-      "varops": 2095508894,
+      "varops": 2095433301,
       "budget": 3892400000,
       "invoked_body_bytes": 3231577,
       "peak_entries": 2666,
@@ -146,226 +187,10 @@
         "verifier": true
       },
       "standard_policy": {
-        "txid": "a5940bab42ff92065d4b025c04ee6adea03aaba6fcb5392f5a3dd369b8ff53e5",
-        "wtxid": "20a86e9c9813a66fb3311890a6d215b638fa9029bef6946320a073364ae06ed4",
+        "txid": "be521a6deca64af2ee23d34ce82bed4c6c3754580fac291facaae6e77064f960",
+        "wtxid": "645570279bfb669278a25cd7f136f2d4a62aacca5ff40c1221abb0f5c669c390",
         "allowed": false,
         "reject-reason": "missing-inputs"
-      }
-    },
-    {
-      "batch_number": 3,
-      "txid": "734ea8978d738662b69cf7269fa9ff9da0db87f3513a8566575a12d473df6cd3",
-      "weight": 389240,
-      "annex_bytes": 151,
-      "varops": 2095510594,
-      "budget": 3892400000,
-      "invoked_body_bytes": 3231577,
-      "peak_entries": 2666,
-      "limits": {
-        "standard_weight": true,
-        "varops": true,
-        "invoked_body_bytes": true,
-        "function_ids": true,
-        "stack_entries": true,
-        "live_payload": true,
-        "single_element": true,
-        "verifier": true
-      },
-      "standard_policy": {
-        "txid": "734ea8978d738662b69cf7269fa9ff9da0db87f3513a8566575a12d473df6cd3",
-        "wtxid": "9bd70573fe8f904fdf1de828abd315b1f835c58781ad31b712dfe0270eae07e1",
-        "allowed": false,
-        "reject-reason": "bad-witness-nonstandard",
-        "reject-details": "bad-witness-nonstandard"
-      }
-    },
-    {
-      "batch_number": 4,
-      "txid": "4467f8fbd496fe8da69183f9aa96a43bf8352e10b0cce50c281792a1245c1ec4",
-      "weight": 389240,
-      "annex_bytes": 151,
-      "varops": 2095531036,
-      "budget": 3892400000,
-      "invoked_body_bytes": 3231577,
-      "peak_entries": 2666,
-      "limits": {
-        "standard_weight": true,
-        "varops": true,
-        "invoked_body_bytes": true,
-        "function_ids": true,
-        "stack_entries": true,
-        "live_payload": true,
-        "single_element": true,
-        "verifier": true
-      },
-      "standard_policy": {
-        "txid": "4467f8fbd496fe8da69183f9aa96a43bf8352e10b0cce50c281792a1245c1ec4",
-        "wtxid": "e80ed95e454b3668936ef8ba3047982e018a7fa8f3eb1ec691ae7f2b0f54aa3a",
-        "allowed": false,
-        "reject-reason": "bad-witness-nonstandard",
-        "reject-details": "bad-witness-nonstandard"
-      }
-    },
-    {
-      "batch_number": 5,
-      "txid": "999ddacaff34757f7b1bfc0b8fc7c1eedccb7d474642c7f19611ae4239f279ed",
-      "weight": 389240,
-      "annex_bytes": 151,
-      "varops": 2095601259,
-      "budget": 3892400000,
-      "invoked_body_bytes": 3231577,
-      "peak_entries": 2666,
-      "limits": {
-        "standard_weight": true,
-        "varops": true,
-        "invoked_body_bytes": true,
-        "function_ids": true,
-        "stack_entries": true,
-        "live_payload": true,
-        "single_element": true,
-        "verifier": true
-      },
-      "standard_policy": {
-        "txid": "999ddacaff34757f7b1bfc0b8fc7c1eedccb7d474642c7f19611ae4239f279ed",
-        "wtxid": "54fbd589d4766fce75c7d8bb48de5d288cbfe9c130d845119f9420c8b10e66af",
-        "allowed": false,
-        "reject-reason": "bad-witness-nonstandard",
-        "reject-details": "bad-witness-nonstandard"
-      }
-    },
-    {
-      "batch_number": 6,
-      "txid": "ab7a050702fab8af5374fd7b4417848a7a64eefc67793b32ce0a0bee513b8bce",
-      "weight": 389240,
-      "annex_bytes": 151,
-      "varops": 2095349807,
-      "budget": 3892400000,
-      "invoked_body_bytes": 3231577,
-      "peak_entries": 2666,
-      "limits": {
-        "standard_weight": true,
-        "varops": true,
-        "invoked_body_bytes": true,
-        "function_ids": true,
-        "stack_entries": true,
-        "live_payload": true,
-        "single_element": true,
-        "verifier": true
-      },
-      "standard_policy": {
-        "txid": "ab7a050702fab8af5374fd7b4417848a7a64eefc67793b32ce0a0bee513b8bce",
-        "wtxid": "9974799cf20b4c965338b6439c513d16dcc745b34ea8b4d9652bc54af2d67a5e",
-        "allowed": false,
-        "reject-reason": "bad-witness-nonstandard",
-        "reject-details": "bad-witness-nonstandard"
-      }
-    },
-    {
-      "batch_number": 7,
-      "txid": "fdf1ce1ee2d924351040326d2176d27a304d261d8e9c9a797b5bae5356b075e5",
-      "weight": 389240,
-      "annex_bytes": 151,
-      "varops": 2095494617,
-      "budget": 3892400000,
-      "invoked_body_bytes": 3231577,
-      "peak_entries": 2666,
-      "limits": {
-        "standard_weight": true,
-        "varops": true,
-        "invoked_body_bytes": true,
-        "function_ids": true,
-        "stack_entries": true,
-        "live_payload": true,
-        "single_element": true,
-        "verifier": true
-      },
-      "standard_policy": {
-        "txid": "fdf1ce1ee2d924351040326d2176d27a304d261d8e9c9a797b5bae5356b075e5",
-        "wtxid": "077dd9003fbf19fe715d604516546265ce450131b9d8d7179cef597f6fea95cb",
-        "allowed": false,
-        "reject-reason": "bad-witness-nonstandard",
-        "reject-details": "bad-witness-nonstandard"
-      }
-    },
-    {
-      "batch_number": 8,
-      "txid": "3360a70e9a732696553f189f109127c258947e9f99634a9257360ee44c4d7afe",
-      "weight": 389240,
-      "annex_bytes": 151,
-      "varops": 2095450791,
-      "budget": 3892400000,
-      "invoked_body_bytes": 3231577,
-      "peak_entries": 2666,
-      "limits": {
-        "standard_weight": true,
-        "varops": true,
-        "invoked_body_bytes": true,
-        "function_ids": true,
-        "stack_entries": true,
-        "live_payload": true,
-        "single_element": true,
-        "verifier": true
-      },
-      "standard_policy": {
-        "txid": "3360a70e9a732696553f189f109127c258947e9f99634a9257360ee44c4d7afe",
-        "wtxid": "b1e02646aa3ff75cfd1a1320256b48348b5b78c12b05a6541d089adc69d2f579",
-        "allowed": false,
-        "reject-reason": "bad-witness-nonstandard",
-        "reject-details": "bad-witness-nonstandard"
-      }
-    },
-    {
-      "batch_number": 9,
-      "txid": "d6162d3decf4acb215a6b63682063df55764cb743db7a7bc0a87c85fe4a38432",
-      "weight": 389240,
-      "annex_bytes": 151,
-      "varops": 2095500501,
-      "budget": 3892400000,
-      "invoked_body_bytes": 3231577,
-      "peak_entries": 2666,
-      "limits": {
-        "standard_weight": true,
-        "varops": true,
-        "invoked_body_bytes": true,
-        "function_ids": true,
-        "stack_entries": true,
-        "live_payload": true,
-        "single_element": true,
-        "verifier": true
-      },
-      "standard_policy": {
-        "txid": "d6162d3decf4acb215a6b63682063df55764cb743db7a7bc0a87c85fe4a38432",
-        "wtxid": "6901a3c8934fd7fe7a5ad59f5efe56a63bb9d0f83637c1596e7dca110d431895",
-        "allowed": false,
-        "reject-reason": "bad-witness-nonstandard",
-        "reject-details": "bad-witness-nonstandard"
-      }
-    },
-    {
-      "batch_number": 10,
-      "txid": "eb497c374f5ab0adc03e93307e5f2ada02b873e26a22ccffe0904424567517ca",
-      "weight": 389240,
-      "annex_bytes": 151,
-      "varops": 2095479175,
-      "budget": 3892400000,
-      "invoked_body_bytes": 3231577,
-      "peak_entries": 2666,
-      "limits": {
-        "standard_weight": true,
-        "varops": true,
-        "invoked_body_bytes": true,
-        "function_ids": true,
-        "stack_entries": true,
-        "live_payload": true,
-        "single_element": true,
-        "verifier": true
-      },
-      "standard_policy": {
-        "txid": "eb497c374f5ab0adc03e93307e5f2ada02b873e26a22ccffe0904424567517ca",
-        "wtxid": "b3f07493e1d1d3509c67c22a6c1a04fccc5a3b25aab2cf754b9a962c9561fa6e",
-        "allowed": false,
-        "reject-reason": "bad-witness-nonstandard",
-        "reject-details": "bad-witness-nonstandard"
       }
     }
   ]

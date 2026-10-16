@@ -57,6 +57,9 @@ compile_commands.json
 # Rust
 target/
 
+# Generated aggregation proof fixture is kept locally and in the private review archive.
+privacy-rollup/fixtures/aggregation/proof0.pc.gz
+
 # Python
 __pycache__/
 *.py[cod]

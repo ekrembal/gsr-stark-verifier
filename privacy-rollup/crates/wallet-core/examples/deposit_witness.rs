@@ -1,7 +1,7 @@
 //! Writes a Prover.toml for a deposit join-split into an empty tree (argv[1]).
 use pr_commitment_tree::Tree;
 use pr_protocol_types::{DepositDeclaration, Fe, Outpoint};
-use pr_wallet_core::{JoinSplitBuilder, Keys, OutputSpec, SpendInput};
+use pr_wallet_core::{JoinSplitBuilder, Keys, OutputSpec, ProverToml, SpendInput};
 
 fn main() {
     let mut rng = rand_core::OsRng;

@@ -1,30 +1,21 @@
-//! The settlement guest: verifies every join-split proof in a batch, applies the state transition,
-//! and commits the 196-byte `BatchJournal` that the GSR covenant rebuilds from `OP_TX`.
+//! The settlement guest: checks every join-split of a batch, applies the state transition, and
+//! commits the 196-byte `BatchJournal` that the GSR covenant rebuilds from `OP_TX`.
 //!
-//! Input frames: `postcard(BatchWitness)`, then, iff the batch is non-empty, the postcard ProveKit
-//! verifier key followed by one postcard `NoirProof` per transaction (in batch order). The verifier
-//! key is pinned by its SHA-256, so the image ID fixes the join-split circuit.
+//! Input frame: `postcard(BatchWitness)`. Each transaction's join-split is not re-proven here: the
+//! user proved it with the `joinsplit` guest, and this guest requires that receipt as an assumption
+//! (`env::verify` on the statement's canonical encoding). The operator supplies the receipts with
+//! `ExecutorEnv::add_assumption`, and recursion (`resolve_zk`) discharges them, so the final receipt
+//! is unconditional. The join-split image ID is compiled in, so `APPLY_BATCH_ID` fixes the circuit.
 use pr_protocol_types::Canonical;
 use pr_state_transition::{apply_batch, BatchWitness};
-use provekit_common::{NoirProof, Verifier};
-use provekit_verifier::Verify;
 use risc0_zkvm::guest::env;
-use risc0_zkvm::sha::{Impl, Sha256};
 
-const VERIFIER_KEY_SHA256: [u8; 32] = *include_bytes!("../../../../fixtures/joinsplit/verifier-key.sha256");
+const JOINSPLIT_ID: [u32; 8] = include!("../joinsplit_id.rs");
 
 fn main() {
     let witness: BatchWitness = postcard::from_bytes(&env::read_frame()).expect("batch witness");
-    if !witness.transactions.is_empty() {
-        let vk = env::read_frame();
-        assert_eq!(Impl::hash_bytes(&vk).as_bytes(), &VERIFIER_KEY_SHA256, "join-split verifier key");
-        let verifier: Verifier = postcard::from_bytes(&vk).expect("verifier key");
-        for t in &witness.transactions {
-            let proof: NoirProof = postcard::from_bytes(&env::read_frame()).expect("proof");
-            let statement: Vec<_> = t.public.public_inputs().iter().map(pr_crypto::to_fr).collect();
-            assert!(proof.public_inputs.0 == statement, "proof public inputs differ from the statement");
-            verifier.clone().verify(&proof).expect("join-split proof");
-        }
+    for t in &witness.transactions {
+        env::verify(JOINSPLIT_ID, &t.public.encode()).expect("join-split receipt");
     }
     let effects = apply_batch(&witness).expect("state transition");
     env::commit_slice(&effects.journal.encode());

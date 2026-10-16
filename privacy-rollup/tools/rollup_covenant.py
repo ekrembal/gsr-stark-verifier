@@ -1,5 +1,7 @@
 #!/usr/bin/env python3
-"""The privacy-rollup settlement covenant: one Taproot leaf per state, `<old_root> 1 CSV DROP || suffix`.
+"""The privacy-rollup settlement covenant: one Taproot leaf per state, `decls || <old_root> 1 CSV DROP || suffix`.
+
+The macro declarations must open the script, so the root sits at offset `decl_len`.
 
 The suffix is fixed for the rollup (it embeds the rollup id and the `apply_batch` image through the claim). It
   * requires that it runs as input 0 of a coin whose only leaf is itself under the NUMS internal key;
@@ -22,6 +24,7 @@ from pathlib import Path
 REPO = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(REPO / "risc0-succinct/tools"))
 sys.path.insert(0, str(REPO / "recursive-stwo/tools"))
+import compress  # noqa: E402
 import generate as g  # noqa: E402
 import reference as ref  # noqa: E402
 from gsr import Asm, Script, V, assemble, op_success_offsets  # noqa: E402
@@ -29,7 +32,8 @@ from transaction import NUMS  # noqa: E402
 from paths import BITCOIN_SOURCE  # noqa: E402
 
 sys.path.insert(0, str(BITCOIN_SOURCE / "test/functional"))
-from test_framework.messages import COutPoint, CTransaction, CTxIn, CTxInWitness, CTxOut  # noqa: E402
+from test_framework.messages import (  # noqa: E402
+    COutPoint, CTransaction, CTxIn, CTxInWitness, CTxOut, ser_string_vector)
 from test_framework.script import CScript, taproot_construct  # noqa: E402
 
 LEAF = 0xC2
@@ -51,6 +55,7 @@ def tag2(name: str) -> bytes:
 class RollupStatement(g.Statement):
     extra_items = ("new_root",)
     head_names = ("old_root",)
+    decl_len = 0  # length of the macro declarations before the root push; set by Covenant
 
     def __init__(self, receipt: dict, rollup_id: bytes, old_root: bytes) -> None:
         super().__init__(receipt, covenant=True)
@@ -73,12 +78,12 @@ class RollupStatement(g.Statement):
         ts = m.op("TX", 1, V("tapscript")).top()
         m.push(tag2("TapLeaf") + bytes([LEAF]))
         m.pick(ts)
-        m.push(CS_PREFIX)
+        m.push(CS_PREFIX + self.decl_len)
         m.raw(assemble(["LEFT", "CAT", b"\x20", "CAT"]), 3, V("leaf_head"))
         m.pick(new)
         m.op("CAT", 2, V("leaf_mid"))
         m.roll(ts)
-        m.push(ROOT_END)
+        m.push(ROOT_END + self.decl_len)
         m.push(0xFFFFFFFF)
         m.raw(assemble(["SUBSTR", "CAT", "SHA256"]), 4, V("leaf"))
         leaf = m.top()
@@ -116,14 +121,37 @@ class RollupStatement(g.Statement):
 
 
 class Covenant:
-    """The covenant leaf for one state root. The suffix after the root is identical for every root."""
+    """The covenant leaf for one state root. Everything but the 32-byte root is identical for every root."""
 
-    def __init__(self, receipt: dict, rollup_id: bytes, root: bytes) -> None:
-        self.gen = g.Gen(RollupStatement(receipt, rollup_id, root), ref.load_circuit())
+    def __init__(self, receipt: dict, rollup_id: bytes, root: bytes, compressed: bool = True) -> None:
+        stmt = RollupStatement(receipt, rollup_id, root)
+        self.gen = g.Gen(stmt, ref.load_circuit())
         first = self.gen.generate()[1]
-        script, info = self.gen.generate(first["accesses"], first["pool"])
-        self.script = bytes(script.code)
-        assert self.script[:33] == b"\x20" + root and 0x10000 <= len(self.script) < 1 << 32
+
+        def build() -> tuple[bytes, dict]:
+            script, info = self.gen.generate(first["accesses"], first["pool"])
+            code = bytes(script.code)
+            if compressed:
+                # The head (root push) and the prologue (which embeds the root's offset) are never merged into
+                # macros, so the root stays first in the main script and every root shares the declarations.
+                code, info["compression"] = compress.compress(code, protect=info["head_prologue"])
+                info["decl_len"] = info["compression"]["decl_len"]
+            return code, info
+
+        # The splice offsets depend on the declarations' length; the declarations do not depend on the offsets
+        # (they sit in the protected prologue), so the second build reproduces the first one's length.
+        for _ in range(3):
+            code, info = build()
+            if info["decl_len"] == stmt.decl_len:
+                break
+            stmt.decl_len = info["decl_len"]
+        else:
+            raise RuntimeError("declaration length did not converge")
+        self.decl_len = stmt.decl_len
+        self.compression = info.get("compression")
+        self.script = code
+        d = self.decl_len
+        assert self.script[d:d + 33] == b"\x20" + root and 0x10000 <= len(self.script) < 1 << 32
         assert not op_success_offsets(self.script)
         self.functions = info["functions"]
         self.taproot = taproot_construct(NUMS, [("rollup", CScript(self.script), LEAF)])
@@ -131,10 +159,11 @@ class Covenant:
         self.control = bytes([LEAF | self.taproot.negflag]) + NUMS
 
     def for_root(self, root: bytes) -> "Covenant":
-        """The leaf of another state of the same rollup: only the 32-byte prefix changes."""
+        """The leaf of another state of the same rollup: only the 32-byte root changes."""
         other = object.__new__(Covenant)
-        other.gen, other.functions = self.gen, self.functions
-        other.script = b"\x20" + root + self.script[33:]
+        other.gen, other.functions, other.decl_len = self.gen, self.functions, self.decl_len
+        d = self.decl_len
+        other.script = self.script[:d] + b"\x20" + root + self.script[d + 33:]
         other.taproot = taproot_construct(NUMS, [("rollup", CScript(other.script), LEAF)])
         other.script_pubkey = bytes(other.taproot.scriptPubKey)
         other.control = bytes([LEAF | other.taproot.negflag]) + NUMS
@@ -162,8 +191,9 @@ def settlement_tx(batch: dict) -> CTransaction:
 
 
 def varops_budget(tx: CTransaction, spent_spks: list[bytes]) -> int:
-    """GetTransactionVaropsBudget: weight minus every input that does not run tapscript v2."""
-    weight = tx.get_weight()
+    """GetTransactionVaropsBudget: weight minus every input that does not run Tapleaf 0xC2, less one signature
+    check (500,000) for each Tapleaf 0xC2 input's commitment check."""
+    weight, commitments = tx.get_weight(), 0
     for txin, wit, spk in zip(tx.vin, tx.wit.vtxinwit, spent_spks):
         stack = list(wit.scriptWitness.stack)
         if len(stack) >= 2 and stack[-1][:1] == b"\x50":
@@ -171,8 +201,10 @@ def varops_budget(tx: CTransaction, spent_spks: list[bytes]) -> int:
         taproot = len(spk) == 34 and spk[:2] == b"\x51\x20"
         if not (taproot and len(stack) >= 2 and stack[-1] and stack[-1][0] & 0xFE == LEAF):
             weight -= 4 * len(txin.serialize())
-            weight -= len(wit.scriptWitness.serialize())
-    return weight * 10_000
+            weight -= len(ser_string_vector(wit.scriptWitness.stack))
+        else:
+            commitments += 1
+    return weight * 10_000 - commitments * 500_000
 
 
 def meter(cov: Covenant, tx: CTransaction, batch: dict, path: Path) -> dict:
@@ -193,8 +225,7 @@ def limits(cov: Covenant, e: dict) -> dict:
     return {
         "standard_weight": e["transaction_weight"] <= 400000,
         "varops": e["varops"] <= e["budget"],
-        "invoked_body_bytes": e["invoked_body_bytes"] <= 4000000,
-        "function_ids": len(cov.functions) <= 256,
+        "unrolled_bytes": e["unrolled_bytes"] <= 4000000,
         "stack_entries": e["peak_entries"] <= 32768,
         "live_payload": e["peak_payload_bytes"] <= 8000000,
         "single_element": e["peak_element_bytes"] <= 4000000,

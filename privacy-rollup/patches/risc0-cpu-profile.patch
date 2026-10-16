@@ -1,0 +1,226 @@
+diff --git a/risc0/zkp/src/hal/cpu.rs b/risc0/zkp/src/hal/cpu.rs
+index b549e5af..dbcb8ef8 100644
+--- a/risc0/zkp/src/hal/cpu.rs
++++ b/risc0/zkp/src/hal/cpu.rs
+@@ -14,7 +14,38 @@
+ 
+ //! CPU implementation of the HAL.
+ 
+-use std::{fmt::Debug, ops::Range, sync::Arc};
++use std::{
++    fmt::Debug,
++    ops::Range,
++    sync::{Arc, OnceLock},
++    time::Instant,
++};
++
++// Optional host-only wall-time instrumentation. Each record covers one complete
++// HAL call, including its Rayon workers. No input or proof contents are logged.
++struct CpuOpTimer {
++    name: &'static str,
++    start: Option<Instant>,
++}
++
++impl CpuOpTimer {
++    fn new(name: &'static str) -> Self {
++        static ENABLED: OnceLock<bool> = OnceLock::new();
++        let enabled = *ENABLED.get_or_init(|| std::env::var("GSR_PROFILE_CPU").as_deref() == Ok("1"));
++        Self {
++            name,
++            start: enabled.then(Instant::now),
++        }
++    }
++}
++
++impl Drop for CpuOpTimer {
++    fn drop(&mut self) {
++        if let Some(start) = self.start {
++            eprintln!("gsr_cpu_op {} {}", self.name, start.elapsed().as_nanos());
++        }
++    }
++}
+ 
+ use ndarray::{ArrayView, ArrayViewMut, Axis};
+ use parking_lot::{
+@@ -267,14 +298,17 @@ impl<F: Field> Hal for CpuHal<F> {
+     type Buffer<T: Clone + Debug + PartialEq> = CpuBuffer<T>;
+ 
+     fn alloc_elem(&self, name: &'static str, size: usize) -> Self::Buffer<Self::Elem> {
++        let _profile = CpuOpTimer::new("alloc_elem");
+         CpuBuffer::new(name, size)
+     }
+ 
+     fn copy_from_elem(&self, name: &'static str, slice: &[Self::Elem]) -> Self::Buffer<Self::Elem> {
++        let _profile = CpuOpTimer::new("copy_from_elem");
+         CpuBuffer::copy_from(name, slice)
+     }
+ 
+     fn alloc_extelem(&self, name: &'static str, size: usize) -> Self::Buffer<Self::ExtElem> {
++        let _profile = CpuOpTimer::new("alloc_extelem");
+         CpuBuffer::new(name, size)
+     }
+ 
+@@ -283,22 +317,27 @@ impl<F: Field> Hal for CpuHal<F> {
+         name: &'static str,
+         slice: &[Self::ExtElem],
+     ) -> Self::Buffer<Self::ExtElem> {
++        let _profile = CpuOpTimer::new("copy_from_extelem");
+         CpuBuffer::copy_from(name, slice)
+     }
+ 
+     fn alloc_digest(&self, name: &'static str, size: usize) -> Self::Buffer<Digest> {
++        let _profile = CpuOpTimer::new("alloc_digest");
+         CpuBuffer::new(name, size)
+     }
+ 
+     fn copy_from_digest(&self, name: &'static str, slice: &[Digest]) -> Self::Buffer<Digest> {
++        let _profile = CpuOpTimer::new("copy_from_digest");
+         CpuBuffer::copy_from(name, slice)
+     }
+ 
+     fn alloc_u32(&self, name: &'static str, size: usize) -> Self::Buffer<u32> {
++        let _profile = CpuOpTimer::new("alloc_u32");
+         CpuBuffer::new(name, size)
+     }
+ 
+     fn copy_from_u32(&self, name: &'static str, slice: &[u32]) -> Self::Buffer<u32> {
++        let _profile = CpuOpTimer::new("copy_from_u32");
+         CpuBuffer::copy_from(name, slice)
+     }
+ 
+@@ -309,6 +348,7 @@ impl<F: Field> Hal for CpuHal<F> {
+         count: usize,
+         expand_bits: usize,
+     ) {
++        let _profile = CpuOpTimer::new("batch_expand_into_evaluate_ntt");
+         // batch_expand
+         {
+             let out_size = output.size() / count;
+@@ -340,6 +380,7 @@ impl<F: Field> Hal for CpuHal<F> {
+     }
+ 
+     fn batch_interpolate_ntt(&self, io: &Self::Buffer<Self::Elem>, count: usize) {
++        let _profile = CpuOpTimer::new("batch_interpolate_ntt");
+         let row_size = io.size() / count;
+         assert_eq!(row_size * count, io.size());
+         io.as_slice_mut()
+@@ -350,6 +391,7 @@ impl<F: Field> Hal for CpuHal<F> {
+     }
+ 
+     fn batch_bit_reverse(&self, io: &Self::Buffer<Self::Elem>, count: usize) {
++        let _profile = CpuOpTimer::new("batch_bit_reverse");
+         let row_size = io.size() / count;
+         assert_eq!(row_size * count, io.size());
+         io.as_slice_mut()
+@@ -367,6 +409,7 @@ impl<F: Field> Hal for CpuHal<F> {
+         xs: &Self::Buffer<Self::ExtElem>,
+         out: &Self::Buffer<Self::ExtElem>,
+     ) {
++        let _profile = CpuOpTimer::new("batch_evaluate_any");
+         let po2 = log2_ceil(coeffs.size() / poly_count);
+         assert_eq!(poly_count * (1 << po2), coeffs.size());
+         let eval_count = which.size();
+@@ -393,6 +436,7 @@ impl<F: Field> Hal for CpuHal<F> {
+     }
+ 
+     fn zk_shift(&self, io: &Self::Buffer<Self::Elem>, poly_count: usize) {
++        let _profile = CpuOpTimer::new("zk_shift");
+         let bits = log2_ceil(io.size() / poly_count);
+         let count = io.size();
+         assert_eq!(io.size(), poly_count * (1 << bits));
+@@ -417,6 +461,7 @@ impl<F: Field> Hal for CpuHal<F> {
+         input_size: usize,
+         count: usize,
+     ) {
++        let _profile = CpuOpTimer::new("mix_poly_coeffs");
+         tracing::debug!(
+             "output: {}, input: {}, combos: {}, input_size: {input_size}, count: {count}",
+             output.size(),
+@@ -460,6 +505,7 @@ impl<F: Field> Hal for CpuHal<F> {
+         input1: &Self::Buffer<Self::Elem>,
+         input2: &Self::Buffer<Self::Elem>,
+     ) {
++        let _profile = CpuOpTimer::new("eltwise_add_elem");
+         assert_eq!(output.size(), input1.size());
+         assert_eq!(output.size(), input2.size());
+         let mut output = output.as_slice_mut();
+@@ -477,6 +523,7 @@ impl<F: Field> Hal for CpuHal<F> {
+         output: &Self::Buffer<Self::Elem>,
+         input: &Self::Buffer<Self::ExtElem>,
+     ) {
++        let _profile = CpuOpTimer::new("eltwise_sum_extelem");
+         let count = output.size() / Self::ExtElem::EXT_SIZE;
+         let to_add = input.size() / count;
+         assert_eq!(output.size(), count * Self::ExtElem::EXT_SIZE);
+@@ -504,6 +551,7 @@ impl<F: Field> Hal for CpuHal<F> {
+         output: &Self::Buffer<Self::Elem>,
+         input: &Self::Buffer<Self::Elem>,
+     ) {
++        let _profile = CpuOpTimer::new("eltwise_copy_elem");
+         let count = output.size();
+         assert_eq!(count, input.size());
+         let mut output = output.as_slice_mut();
+@@ -516,6 +564,7 @@ impl<F: Field> Hal for CpuHal<F> {
+     }
+ 
+     fn eltwise_zeroize_elem(&self, elems: &Self::Buffer<Self::Elem>) {
++        let _profile = CpuOpTimer::new("eltwise_zeroize_elem");
+         elems.as_slice_mut().par_iter_mut().for_each(|elem| {
+             *elem = elem.valid_or_zero();
+         });
+@@ -527,6 +576,7 @@ impl<F: Field> Hal for CpuHal<F> {
+         input: &Self::Buffer<Self::Elem>,
+         mix: &Self::ExtElem,
+     ) {
++        let _profile = CpuOpTimer::new("fri_fold");
+         let count = output.size() / Self::ExtElem::EXT_SIZE;
+         assert_eq!(output.size(), count * Self::ExtElem::EXT_SIZE);
+         assert_eq!(input.size(), output.size() * FRI_FOLD);
+@@ -553,6 +603,7 @@ impl<F: Field> Hal for CpuHal<F> {
+     }
+ 
+     fn hash_rows(&self, output: &Self::Buffer<Digest>, matrix: &Self::Buffer<Self::Elem>) {
++        let _profile = CpuOpTimer::new("hash_rows");
+         let row_size = output.size();
+         let col_size = matrix.size() / output.size();
+         assert_eq!(matrix.size(), col_size * row_size);
+@@ -567,6 +618,7 @@ impl<F: Field> Hal for CpuHal<F> {
+     }
+ 
+     fn hash_fold(&self, io: &Self::Buffer<Digest>, input_size: usize, output_size: usize) {
++        let _profile = CpuOpTimer::new("hash_fold");
+         assert!(io.size() >= 2 * input_size);
+         assert_eq!(input_size, 2 * output_size);
+         let io = io.as_slice_sync();
+@@ -588,6 +640,7 @@ impl<F: Field> Hal for CpuHal<F> {
+         size: usize,
+         stride: usize,
+     ) {
++        let _profile = CpuOpTimer::new("gather_sample");
+         let src = src.as_slice();
+         let mut dst = dst.as_slice_mut();
+         for gid in 0..size {
+@@ -602,6 +655,7 @@ impl<F: Field> Hal for CpuHal<F> {
+         offsets: &[u32],
+         values: &[Self::Elem],
+     ) {
++        let _profile = CpuOpTimer::new("scatter");
+         if index.is_empty() {
+             return;
+         }
+@@ -625,6 +679,7 @@ impl<F: Field> Hal for CpuHal<F> {
+         into_offset: usize,
+         into_stride: usize,
+     ) {
++        let _profile = CpuOpTimer::new("eltwise_copy_elem_slice");
+         let mut into = into.as_slice_mut();
+         for row in 0..from_rows {
+             for col in 0..from_cols {
+@@ -635,6 +690,7 @@ impl<F: Field> Hal for CpuHal<F> {
+     }
+ 
+     fn prefix_products(&self, io: &Self::Buffer<Self::ExtElem>) {
++        let _profile = CpuOpTimer::new("prefix_products");
+         let mut io = io.as_slice_mut();
+         for i in 1..io.len() {
+             io[i] = io[i] * io[i - 1];

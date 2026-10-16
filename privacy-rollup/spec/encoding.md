@@ -37,5 +37,10 @@ protocol_version u32 || rollup_id[32] || old_state_root[32] || new_state_root[32
 
 ## Guest input
 
-RISC Zero frames: postcard `BatchWitness`, then (if the batch is nonempty) the postcard ProveKit verifier key
-(its SHA-256 is pinned in the guest) and one postcard `NoirProof` per transaction.
+RISC Zero frame: postcard `BatchWitness`. The guest reads no proofs. For each transaction the host adds the
+claim of the user's zero-knowledge receipt with `ExecutorEnv::add_assumption`, and the guest calls
+`env::verify(JOINSPLIT_ID, statement)` with the transaction's canonical `JoinSplitPublic` encoding.
+`resolve_zk` discharges each assumption when the receipt is proven.
+
+A `RollupTransaction` carries `public`, `external`, and `receipt`: a postcard
+`SuccinctReceipt<ReceiptClaim>` produced by `identity_zk`, at most `MAX_RECEIPT_BYTES = 2^20` bytes.

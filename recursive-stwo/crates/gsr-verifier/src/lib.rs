@@ -19,7 +19,7 @@ use stwo_prover::examples::plonk_with_poseidon::air::{
 use stwo_prover::examples::plonk_without_poseidon::air::{
     verify_plonk_without_poseidon, PlonkWithoutPoseidonProof,
 };
-pub const GSR_COMMIT: &str = "d2799052604eb138c5a79acf88514a0c8b07f4ef";
+pub const GSR_COMMIT: &str = "ad6c16ff0214014023ff2a81504048a8850a1c1c";
 pub const HYBRID_DIGEST: &str = "9c4026acc92e86d59c52a2eae4ea7c9966fa1220948ad34739c521aee4e66c96";
 pub const FINAL_DIGEST: &str = "a7add69c2025bf42d9b9490db99b8d9570f75400776231c67e84466d319afcb7";
 pub const HYBRID_ROOT: &str = "88d94cb6dd4f967ca786fdc7f14dd116947d76480131d3ba39102db4bf917080";

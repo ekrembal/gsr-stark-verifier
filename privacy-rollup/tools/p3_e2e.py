@@ -111,7 +111,7 @@ def main() -> None:
         gtx.wit.vtxinwit[0].scriptWitness.stack = [be.OP_TRUE]
         gtxid = be.rpc("sendrawtransaction", gtx.serialize().hex())
         be.rpc("generateblock", miner, [gtxid])
-        subprocess.run([str(be.BATCHER), "genesis", str(state), gtxid, "0"], check=True)
+        subprocess.run([str(be.BATCHER), "genesis", str(state), gtx.serialize().hex()], check=True)
         log = be.WORK / "batcher.log"
         batcher = serve(state, miner, log)
 

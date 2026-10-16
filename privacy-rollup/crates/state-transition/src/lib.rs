@@ -5,7 +5,7 @@
 //! (anchor window, commitment frontier, nullifier insertion paths) and the settlement transaction,
 //! checks every protocol rule that is not inside a join-split proof, and returns the new state, the
 //! canonical annex and the 196-byte [`BatchJournal`] the covenant rebuilds from `OP_TX`.
-use pr_bitcoin_adapter::SettlementTx;
+use pr_bitcoin_adapter::{PlainTx, SettlementTx};
 use pr_commitment_tree::Frontier;
 use pr_indexed_nullifier_tree::{verify_insertion, InsertionWitness, NullifierError};
 use pr_protocol_types::hash::sha256;
@@ -36,6 +36,9 @@ pub struct BatchWitness {
     /// One insertion witness per nullifier, in ascending nullifier order.
     pub nullifier_witnesses: Vec<InsertionWitness>,
     pub settlement: SettlementTx,
+    /// The transaction that created the rollup coin spent by input 0 (the previous settlement, or
+    /// the genesis transaction), without witnesses. Its txid must be input 0's prevout txid.
+    pub predecessor_tx: PlainTx,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -81,6 +84,8 @@ pub enum TransitionError {
     Dust,
     FeeShortfall,
     Overflow,
+    /// The rollup input is not output 0 of a transaction whose input 0 spent `old_state.parent`.
+    Lineage,
 }
 
 fn add(a: u64, b: u64) -> Result<u64, TransitionError> {
@@ -107,8 +112,24 @@ pub fn genesis(descriptor: &RollupDescriptor) -> (RollupState, AnchorHistory, Fr
         anchor_history_commitment: anchors.commitment(),
         data_history_commitment: [0; 32],
         backing_sats: descriptor.seed_sats,
+        parent: descriptor.genesis_nonce,
     };
     (state, anchors, frontier)
+}
+
+/// Inductive lineage: the coin holding `old` is output 0 of `predecessor`, and `predecessor`'s input
+/// 0 spent `old.parent`. `rollup_in`'s txid is committed by the journal's input digest, so the
+/// private `predecessor` is bound to the transaction the covenant actually spends. By induction from
+/// `genesis_nonce` (spendable once), every accepted coin descends from the genesis transaction;
+/// a copy of the covenant script can never satisfy this.
+pub fn check_lineage(old: &RollupState, rollup_in: &Outpoint, predecessor: &PlainTx) -> Result<(), TransitionError> {
+    if rollup_in.vout != 0
+        || predecessor.txid() != rollup_in.txid
+        || predecessor.inputs.first().map(|i| i.prevout) != Some(old.parent)
+    {
+        return Err(TransitionError::Lineage);
+    }
+    Ok(())
 }
 
 /// Per-transaction rules that only need the old state and the anchor window (also run by mempools).
@@ -254,6 +275,7 @@ pub fn apply_batch(w: &BatchWitness) -> Result<BatchEffects, TransitionError> {
     if rollup_in.amount != old.backing_sats {
         return Err(TransitionError::PredecessorAmount);
     }
+    check_lineage(old, &rollup_in.prevout, &w.predecessor_tx)?;
     let mut funded = vec![0u64; txs.len()];
     for ((i, o), input) in funding.iter().zip(&s.inputs[1..]) {
         if input.prevout != **o {
@@ -342,6 +364,7 @@ pub fn apply_batch(w: &BatchWitness) -> Result<BatchEffects, TransitionError> {
         anchor_history_commitment: anchors.commitment(),
         data_history_commitment: next_data_history(&old.data_history_commitment, next, &body.digest()),
         backing_sats,
+        parent: rollup_in.prevout,
     };
     let annex = Annex { old_state_root: old.root(), new_state_root: new_state.root(), body };
     let annex_bytes = annex.encode();

@@ -13,15 +13,16 @@ The genesis state (`pr_state_transition::genesis`) is: batch 0, empty commitment
 tree holding only the zero sentinel (`nullifier_next_index = 1`), a one-entry anchor history, zero data
 history and `backing_sats = seed_sats`. The genesis transaction must spend `genesis_nonce` (which makes the
 id unique: an outpoint can be spent once) and pay `seed_sats` to the covenant leaf of the genesis state root.
-Scanners and wallets accept only the chain of rollup outputs that descends from that genesis output (see
-`security-model.md` for why copies of the covenant are harmless).
+The genesis transaction must spend `genesis_nonce` as input 0 and hold the rollup at output 0; the genesis
+state's `parent` is `genesis_nonce`. Every settlement proves lineage by induction (below), so only coins
+descending from that genesis output can settle (see `security-model.md`).
 
 ## State
 
 ```
 RollupState { rollup_id, protocol_version, batch_number, commitment_root, commitment_count,
               nullifier_root, nullifier_next_index, anchor_history_commitment,
-              data_history_commitment, backing_sats }
+              data_history_commitment, backing_sats, parent }
 state_root = tagged("gsr-privacy-rollup/state", encode(state))
 ```
 
@@ -32,6 +33,8 @@ state_root = tagged("gsr-privacy-rollup/state", encode(state))
 * data history: `next = tagged("…/data-history", prev || batch_number || body_digest)`, a hash chain of
   every published batch body;
 * `backing_sats`: exactly the value of the rollup output.
+* `parent`: the outpoint spent by input 0 of the transaction that created the rollup output holding this
+  state (`genesis_nonce` at genesis, otherwise the previous rollup output).
 
 ## Notes and keys
 
@@ -59,7 +62,9 @@ For up to 8 transactions, all of which must be valid against the old state:
 2. all nullifiers sorted, distinct, each inserted with a verified insertion witness;
 3. all output commitments sorted, distinct, appended in that order to the authenticated frontier;
 4. the settlement transaction: version 2, locktime 0, inputs `[rollup, funding..]` in declaration order,
-   input 0 sequence 1 with empty scriptSig and amount `backing_sats`, outputs
+   input 0 sequence 1 with empty scriptSig and amount `backing_sats`, spending output 0 of the private
+   witness `predecessor_tx` (witness-free; `sha256d(predecessor_tx) = input 0 txid`) whose own input 0
+   spent `old.parent`; the new state's `parent` is input 0's prevout (`check_lineage`). Outputs
    `[rollup successor, withdrawals.., changes.., reward?]`, each funding set paying exactly
    `deposit + change`;
 5. fees: `F = Σ fee_sats`, optional reward output `R ≥ dust`, miner fee `M = F − R ≥ 0`,

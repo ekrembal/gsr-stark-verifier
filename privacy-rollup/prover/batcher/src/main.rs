@@ -1,5 +1,5 @@
 //! pr-batcher init  <dir> <descriptor.json>       create the operator directory; prints the genesis covenant output
-//! pr-batcher genesis <dir> <txid-hex> <vout>      record the funded genesis outpoint (display txid)
+//! pr-batcher genesis <dir> <tx-hex>              record the genesis tx (spends genesis_nonce, rollup at output 0)
 //! pr-batcher serve <dir> [--listen ADDR] [--web DIR] [--interval SECS] [--mine-to ADDRESS]
 //!                        [--confirmations N] [--min-transactions N]
 //!
@@ -35,10 +35,8 @@ async fn main() -> Result<()> {
                                    "script_pubkey": hex::encode(spk), "seed_sats": descriptor.seed_sats})
             );
         }
-        Some("genesis") if a.len() == 4 => {
-            let mut txid = hex::decode(&a[2])?;
-            txid.reverse();
-            Store::new(&a[1]).genesis(&hex::encode(txid), a[3].parse()?)?;
+        Some("genesis") if a.len() == 3 => {
+            Store::new(&a[1]).genesis(&a[2])?;
         }
         Some("serve") if a.len() >= 2 => {
             let broadcast = flag(&a, "--mine-to").map(Broadcast::Mine).unwrap_or(Broadcast::Send);

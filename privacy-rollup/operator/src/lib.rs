@@ -1,11 +1,12 @@
 //! Operator state store, shared by the `pr-operator` CLI and the `pr-batcher` service. The durable
-//! state is the rollup descriptor, the chain of accepted settlements (annex, rollup value, rollup
-//! outpoint) and the pending pool; every load replays the chain through the scanner and re-admits
+//! state is the rollup descriptor, the genesis transaction, the chain of accepted settlements (annex
+//! and witness-free transaction) and the pending pool; every load replays the chain through the scanner and re-admits
 //! the pool against the replayed tip, so restart and reorg handling share one code path.
 use std::fs;
 use std::path::{Path, PathBuf};
 
 use anyhow::{bail, ensure, Context, Result};
+use pr_bitcoin_adapter::PlainTx;
 use pr_mempool::{assemble_settlement, batch_transactions, Entry, FundingCoin, Mempool};
 use pr_protocol_types::{Canonical, Outpoint, RollupDescriptor, RollupTransaction, TxOut};
 use pr_scanner::Replica;
@@ -16,15 +17,20 @@ use serde::{Deserialize, Serialize};
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Settled {
     pub annex: String,
-    pub value: u64,
-    pub txid: String,
-    pub vout: u32,
+    /// The settlement transaction, hex; any serialization is accepted, stored without witnesses.
+    pub tx: String,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, Default)]
 pub struct Chain {
-    pub genesis: Option<(String, u32)>,
+    /// The genesis transaction (spends `genesis_nonce`, rollup at output 0), hex without witnesses.
+    pub genesis: Option<String>,
     pub settlements: Vec<Settled>,
+}
+
+/// Decodes a transaction in legacy or segwit serialization.
+pub fn plain_tx(hex_tx: &str) -> Result<PlainTx> {
+    PlainTx::decode(&hex::decode(hex_tx)?).map_err(|e| anyhow::anyhow!("transaction encoding: {e:?}"))
 }
 
 const PENDING: &str = "pending.json";
@@ -93,21 +99,25 @@ impl Store {
         Ok(serde_json::from_slice(&fs::read(self.dir.join("chain.json"))?)?)
     }
 
-    pub fn genesis(&self, txid: &str, vout: u32) -> Result<()> {
+    /// Records the genesis transaction; returns its rollup outpoint.
+    pub fn genesis(&self, tx_hex: &str) -> Result<Outpoint> {
         let mut chain = self.chain()?;
         ensure!(chain.genesis.is_none(), "genesis already recorded");
-        outpoint(txid, vout)?;
-        chain.genesis = Some((txid.to_owned(), vout));
-        self.save(&chain)
+        let tx = plain_tx(tx_hex)?;
+        let replica = Replica::new(self.descriptor()?, tx.clone())
+            .map_err(|e| anyhow::anyhow!("genesis must spend genesis_nonce and seed output 0: {e:?}"))?;
+        chain.genesis = Some(hex::encode(tx.serialize_legacy()));
+        self.save(&chain)?;
+        Ok(replica.tip().utxo)
     }
 
     pub fn load(&self) -> Result<(Replica, Chain)> {
         let chain = self.chain()?;
-        let (txid, vout) = chain.genesis.clone().context("genesis outpoint not recorded")?;
-        let mut replica = Replica::new(self.descriptor()?, outpoint(&txid, vout)?);
+        let genesis = plain_tx(chain.genesis.as_deref().context("genesis transaction not recorded")?)?;
+        let mut replica = Replica::new(self.descriptor()?, genesis).map_err(|e| anyhow::anyhow!("genesis: {e:?}"))?;
         for s in &chain.settlements {
             replica
-                .accept_annex_bytes(&hex::decode(&s.annex)?, s.value, outpoint(&s.txid, s.vout)?)
+                .accept_annex_bytes(&hex::decode(&s.annex)?, &plain_tx(&s.tx)?)
                 .map_err(|e| anyhow::anyhow!("replaying batch: {e:?}"))?;
         }
         Ok((replica, chain))
@@ -157,10 +167,11 @@ impl Store {
     /// Records a mined settlement and drops what it settled from the pool.
     pub fn accept(&self, settled: Settled) -> Result<Replica> {
         let (mut replica, mut chain) = self.load()?;
+        let tx = plain_tx(&settled.tx)?;
         replica
-            .accept_annex_bytes(&hex::decode(&settled.annex)?, settled.value, outpoint(&settled.txid, settled.vout)?)
+            .accept_annex_bytes(&hex::decode(&settled.annex)?, &tx)
             .map_err(|e| anyhow::anyhow!("annex rejected: {e:?}"))?;
-        chain.settlements.push(settled);
+        chain.settlements.push(Settled { annex: settled.annex, tx: hex::encode(tx.serialize_legacy()) });
         self.save(&chain)?;
         self.save_pool(&self.load_pool(&replica)?)?;
         Ok(replica)

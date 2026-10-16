@@ -2,7 +2,7 @@
 //! mempool admits them, the operator assembles the settlement, the full transition applies it and
 //! wallets recover their notes by trial decryption. Proofs are out of scope here (the ProveKit
 //! adapter and the guest test them); `submit` passes an always-accepting verifier.
-use pr_bitcoin_adapter::SettlementTx;
+use pr_bitcoin_adapter::{PlainInput, PlainTx, SettlementTx};
 use pr_mempool::{assemble_settlement, batch_transactions, Entry, FundingCoin, Mempool, MempoolError};
 use pr_protocol_types::{
     DepositDeclaration, Fe, Outpoint, RollupDescriptor, RollupTransaction, TxOut, COMMITMENT_TREE_DEPTH,
@@ -72,10 +72,21 @@ impl Default for Harness {
     }
 }
 
+/// A genesis transaction for `descriptor()`: spends the genesis nonce and holds the rollup at output 0.
+pub fn genesis_tx() -> PlainTx {
+    let d = descriptor();
+    PlainTx {
+        version: 2,
+        lock_time: 0,
+        inputs: vec![PlainInput { prevout: d.genesis_nonce, script_sig: Vec::new(), sequence: 0xffff_ffff }],
+        outputs: vec![TxOut { value: d.seed_sats, script_pubkey: ROLLUP_SPK.to_vec() }],
+    }
+}
+
 impl Harness {
     pub fn new() -> Harness {
         Harness {
-            replica: Replica::new(descriptor(), Outpoint { txid: [1; 32], vout: 0 }),
+            replica: Replica::new(descriptor(), genesis_tx()).expect("genesis"),
             mempool: Mempool::new(),
             last_witness: None,
         }
@@ -129,9 +140,8 @@ impl Harness {
     pub fn settle(&mut self, reward: Option<TxOut>) -> Result<BatchEffects, ScanError> {
         let selected = self.mempool.select();
         let settlement = self.settlement(&selected, reward);
-        let utxo = Outpoint { txid: settlement.txid(), vout: 0 };
         let w = self.replica.witness(batch_transactions(&selected), settlement);
-        let effects = self.replica.apply_witness(&w, utxo)?;
+        let effects = self.replica.apply_witness(&w)?;
         self.last_witness = Some(w);
         self.mempool.remove_settled(&selected);
         self.mempool.revalidate(&self.replica);

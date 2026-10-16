@@ -262,7 +262,7 @@ def main() -> None:
         gtx.wit.vtxinwit[0].scriptWitness.stack = [OP_TRUE]
         gtxid = rpc("sendrawtransaction", gtx.serialize().hex())
         mine(miner, [gtxid])
-        operator("genesis", state, internal(gtxid), 0)
+        operator("genesis", state, gtx.serialize().hex())
         report["genesis"] = {"txid": gtxid, "rollup_id": rollup_id.hex(), "state_root": root.hex(),
                              "covenant_script_bytes": len(cov.script), "nonce_spent": coinbase["txid"]}
         report["user_joinsplit"] = deposit(state, COutPoint(int(gtxid, 16), 2), WORK / "user")
@@ -295,7 +295,7 @@ def main() -> None:
                 blocks.append(mine(miner, [raw]))
             entry["raw"] = raw
             settlements.append(entry)
-            operator("accept", state, b.batch["annex"], b.batch["outputs"][0]["value"], internal(entry["txid"]), 0)
+            operator("accept", state, b.batch["annex"], raw)
             if k == 1:
                 first_batch = b
                 report["consensus_negatives_of_settlement_1"] = consensus_negatives(
@@ -315,18 +315,18 @@ def main() -> None:
         rolled = json.loads(operator("rollback", state))
         rpc("reconsiderblock", blocks[-1])
         last = settlements[-1]
-        operator("accept", state, b.batch["annex"], b.batch["outputs"][0]["value"], internal(last["txid"]), 0)
+        operator("accept", state, b.batch["annex"], last["raw"])
         report["reorg"] = {"rolled_back_to": rolled["batch_number"],
                            "restored_to": json.loads(operator("status", state))["batch_number"]}
 
         # Restart from chain data only: read every annex back from the mined settlements.
         fresh = WORK / "replay"
         operator("init", fresh, WORK / "descriptor.json")
-        operator("genesis", fresh, internal(gtxid), 0)
+        operator("genesis", fresh, gtx.serialize().hex())
         for s, block in zip(settlements, blocks):
             mined = rpc("getrawtransaction", s["txid"], True, block)
             annex = mined["vin"][0]["txinwitness"][-1]
-            operator("accept", fresh, annex, round(mined["vout"][0]["value"] * 100_000_000), internal(s["txid"]), 0)
+            operator("accept", fresh, annex, mined["hex"])
         report["replay_matches"] = json.loads(operator("status", fresh)) == json.loads(operator("status", state))
         for s in settlements:
             s.pop("raw")

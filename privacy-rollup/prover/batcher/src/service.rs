@@ -474,12 +474,7 @@ impl Batcher {
         }
         {
             let _g = self.guard();
-            self.store.accept(Settled {
-                annex: f.annex.clone(),
-                value: f.value,
-                txid: f.txid_internal.clone(),
-                vout: 0,
-            })?;
+            self.store.accept(Settled { annex: f.annex.clone(), tx: f.raw.clone() })?;
             fs::remove_file(self.path("inflight.json"))?;
             let mut w = self.witnesses.lock().unwrap_or_else(|p| p.into_inner());
             for k in &f.funding {

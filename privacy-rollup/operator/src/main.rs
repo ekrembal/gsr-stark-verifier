@@ -2,10 +2,10 @@
 //!
 //! ```text
 //! pr-operator init     <dir> <descriptor.json>
-//! pr-operator genesis  <dir> <txid-hex> <vout>          # rollup outpoint created by the genesis tx
+//! pr-operator genesis  <dir> <tx-hex>                   # genesis tx: spends genesis_nonce, rollup at output 0
 //! pr-operator submit   <dir> <tx.json> [<funding.json>] # verify the join-split receipt, reserve, queue
 //! pr-operator build    <dir> <request.json> <out-dir>   # witness, guest frames, annex, journal
-//! pr-operator accept   <dir> <annex-hex> <value> <txid-hex> <vout>
+//! pr-operator accept   <dir> <annex-hex> <tx-hex>       # mined settlement (witnesses optional)
 //! pr-operator rollback <dir>
 //! pr-operator status   <dir>
 //! ```
@@ -67,6 +67,7 @@ fn build(store: &Store, request: &Path, out: &Path) -> Result<()> {
         "old_state_root": hex::encode(effects.annex.old_state_root),
         "new_state_root": hex::encode(effects.new_state.root()),
         "backing_sats": effects.new_state.backing_sats,
+        "settlement_tx": hex::encode(witness.settlement.plain().serialize_legacy()),
         "complete": req.successor_script_pubkey.is_some(),
         "transactions": b.entries.len(),
         "assumption_receipts": frames,
@@ -99,11 +100,14 @@ fn main() -> Result<()> {
                 "rollup_id": hex::encode(state.rollup_id.0), "state_root": hex::encode(state.root())})
             );
         }
-        "genesis" => store.genesis(&a[3], a[4].parse()?)?,
+        "genesis" => {
+            let utxo = store.genesis(&a[3])?;
+            println!("{}", serde_json::json!({"txid": hex::encode(utxo.txid), "vout": utxo.vout}));
+        }
         "submit" => println!("{}", submit(&store, Path::new(&a[3]), a.get(4))?),
         "build" => build(&store, Path::new(&a[3]), Path::new(&a[4]))?,
         "accept" => {
-            let s = Settled { annex: a[3].clone(), value: a[4].parse()?, txid: a[5].clone(), vout: a[6].parse()? };
+            let s = Settled { annex: a[3].clone(), tx: a[4].clone() };
             let replica = store.accept(s)?;
             println!("{}", store.status(&replica)?);
         }

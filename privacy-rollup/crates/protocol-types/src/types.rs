@@ -162,6 +162,10 @@ pub struct RollupState {
     pub anchor_history_commitment: [u8; 32],
     pub data_history_commitment: [u8; 32],
     pub backing_sats: u64,
+    /// Outpoint spent by input 0 of the transaction that created the coin holding this state: the
+    /// previous rollup output, or `genesis_nonce` for the genesis state. Lineage is checked by
+    /// induction from it, so only the coin descending from `genesis_nonce` can settle.
+    pub parent: Outpoint,
 }
 
 impl RollupState {
@@ -181,6 +185,7 @@ impl Canonical for RollupState {
             .bytes(&self.anchor_history_commitment)
             .bytes(&self.data_history_commitment)
             .u64(self.backing_sats);
+        self.parent.encode_to(w);
     }
     fn decode_from(r: &mut Reader<'_>) -> Result<Self, DecodeError> {
         Ok(RollupState {
@@ -194,6 +199,7 @@ impl Canonical for RollupState {
             anchor_history_commitment: r.array()?,
             data_history_commitment: r.array()?,
             backing_sats: r.amount()?,
+            parent: Outpoint::decode_from(r)?,
         })
     }
 }

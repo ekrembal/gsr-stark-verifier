@@ -42,6 +42,17 @@ current or any older root, was created by some other transaction, so no receipt 
 to a copied leaf burns the coins. This is what lets deposit escrows (P2b) trust "input 0 is the rollup leaf".
 Tests: `lineage_rejects_covenant_copies_and_forged_predecessors` in `tests/tests/scenario.rs`.
 
+## Deposit escrows
+
+Escrow deposits (`protocol.md`) can be swept only by a settlement whose input 0 runs this rollup's covenant
+(script, checked with `OP_TX`) and whose receipt opens the escrow to the note it commits to (guest). The
+depositor can refund through the CSV leaf after the delay. Remaining risk: a refund and a sweep race once the
+delay has passed; the batcher stops sweeping an escrow at half its delay, but a settlement that is proven and
+then delayed past the refund height can be invalidated by the refund, which costs the operator a re-prove.
+Tests: `tools/deposit_escrow.py node-test` (sweep body on the gsr node), `tools/escrow_e2e.py` (SDK → batcher →
+proven sweep, refunds), `deposit_addresses` in `prover/sdk/src/tests.rs`, escrow cases in
+`tests/tests/scenario.rs`.
+
 ## Not implemented / not yet established
 
 * **Proving cost.** User proving and settlement proving were measured on one 8-vCPU CPU host only. See

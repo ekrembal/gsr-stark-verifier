@@ -59,4 +59,15 @@ impl Rpc {
         let v = self.call("gettxout", json!([txid, vout, true])).await?;
         Ok(if v.is_null() { None } else { Some(v["confirmations"].as_u64().unwrap_or(0)) })
     }
+
+    /// An unspent output's amount (sats), scriptPubKey and confirmations (0 in the mempool).
+    pub async fn txout(&self, txid: &str, vout: u32) -> Result<Option<(u64, Vec<u8>, u64)>> {
+        let v = self.call("gettxout", json!([txid, vout, true])).await?;
+        if v.is_null() {
+            return Ok(None);
+        }
+        let btc = v["value"].as_f64().context("gettxout value")?;
+        let spk = hex::decode(v["scriptPubKey"]["hex"].as_str().context("gettxout scriptPubKey")?)?;
+        Ok(Some(((btc * 1e8).round() as u64, spk, v["confirmations"].as_u64().unwrap_or(0))))
+    }
 }

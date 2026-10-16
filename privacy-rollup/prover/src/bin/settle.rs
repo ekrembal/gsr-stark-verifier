@@ -1,4 +1,5 @@
 //! `settle exec|prove <witness.json> <out-dir> [<joinsplit-receipt.bin>...]`
+//! `settle id` prints `APPLY_BATCH_ID` (the receipt template's `claim.pre`).
 //!
 //! Runs the `apply_batch` guest on a batch witness (JSON `BatchWitness`, as written by the
 //! operator) with one zero-knowledge join-split receipt per transaction (from `joinsplit prove`)
@@ -15,6 +16,10 @@ use risc0_zkvm::sha::Digestible;
 
 fn main() -> Result<()> {
     let a: Vec<String> = std::env::args().collect();
+    if a.get(1).map(String::as_str) == Some("id") {
+        println!("{}", hex::encode(risc0_zkvm::sha::Digest::from(pr_methods::APPLY_BATCH_ID)));
+        return Ok(());
+    }
     ensure!(
         a.len() >= 4 && (a[1] == "exec" || a[1] == "prove"),
         "usage: settle exec|prove <witness.json> <out-dir> [joinsplit-receipts..]"

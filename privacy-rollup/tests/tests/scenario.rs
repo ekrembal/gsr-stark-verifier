@@ -1,10 +1,10 @@
 //! End-to-end native scenarios and negative transition cases.
 use pr_bitcoin_adapter::PlainTx;
-use pr_mempool::MempoolError;
+use pr_mempool::{EscrowCoin, MempoolError};
 use pr_protocol_types::{Annex, Canonical, Outpoint, TxOut};
 use pr_scanner::{Replica, ScanError};
 use pr_state_transition::{apply_batch, BatchWitness, TransitionError};
-use pr_tests::{coin, descriptor, genesis_tx, Harness, Wallet};
+use pr_tests::{coin, descriptor, escrow_coin, genesis_tx, Harness, Wallet};
 use pr_wallet_core::SpendInput;
 
 const WITHDRAW_SPK: [u8; 22] = [0x00, 0x14, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20];
@@ -209,6 +209,11 @@ fn transition_rejects_every_settlement_tamper() {
         TransitionError::InputCount,
     );
     expect(&|w| w.settlement.inputs[1].prevout.vout = 9, TransitionError::FundingInput);
+    // A funding input carrying the escrow marker (how an escrow would be claimed as a join-split's coin).
+    expect(
+        &|w| w.settlement.inputs[1].sequence = pr_protocol_types::ESCROW_INPUT_SEQUENCE,
+        TransitionError::FundingInput,
+    );
     expect(&|w| w.settlement.inputs[1].amount -= 1, TransitionError::FundingAmount);
     expect(&|w| w.settlement.outputs[0].value -= 1, TransitionError::RolloverOutput);
     expect(
@@ -515,4 +520,76 @@ fn lineage_rejects_covenant_copies_and_forged_predecessors() {
     let next = h.replica.witness(vec![], h.settlement(&[], None));
     assert_eq!(next.predecessor_tx, genuine.creating_tx);
     assert_eq!(apply_batch(&next).unwrap().new_state.parent, genuine.utxo);
+}
+
+#[test]
+fn escrow_deposits_mint_notes_without_a_join_split() {
+    let mut h = Harness::new();
+    let rid = h.replica.descriptor.rollup_id();
+    let mut a = Wallet::new(41);
+    let mut b = Wallet::new(42);
+    let escrows = [escrow_coin(0x61, &rid, &a, 30_000, 700), escrow_coin(0x62, &rid, &b, 20_000, 300)];
+    let backing = h.replica.state().backing_sats;
+    let e = h.settle_with_escrows(&escrows, None).unwrap();
+    a.scan(&h.replica, &e);
+    b.scan(&h.replica, &e);
+    assert_eq!(a.balance(&h.replica), 30_000);
+    assert_eq!(b.balance(&h.replica), 20_000);
+    assert_eq!(e.annex.body.layout.escrows, 2);
+    assert_eq!(e.new_state.backing_sats, backing + 50_000);
+    let w = h.last_witness.clone().unwrap();
+    assert_eq!(w.settlement.inputs.len(), 3);
+    assert_eq!(w.settlement.inputs.iter().map(|i| i.amount).sum::<u64>() - w.settlement.outputs[0].value, 1_000);
+    // The annex round-trips with the minted notes.
+    assert_eq!(<Annex as Canonical>::decode(&e.annex_bytes).unwrap(), e.annex);
+
+    // The minted note is spendable by a normal join-split.
+    let note = a.notes[0].clone();
+    let built = h.build(&h.builder(1_000), [a.spend(&h.replica, &note), SpendInput::Dummy], [b.pay(29_000), b.pay(0)]);
+    h.submit(&built, vec![]).unwrap();
+    let e = h.settle(None).unwrap();
+    b.scan(&h.replica, &e);
+    assert_eq!(b.balance(&h.replica), 49_000);
+}
+
+#[test]
+fn escrow_openings_that_do_not_match_the_output_are_rejected() {
+    let rid = Harness::new().replica.descriptor.rollup_id();
+    let a = Wallet::new(43);
+    let base = escrow_coin(0x63, &rid, &a, 30_000, 700);
+    let reject = |c: EscrowCoin| {
+        let mut h = Harness::new();
+        h.settle_with_escrows(&[c], None).unwrap_err()
+    };
+    let mut c = base.clone();
+    c.amount += 1;
+    reject(c);
+    let mut c = base.clone();
+    c.opening.value += 1;
+    reject(c);
+    let mut c = base.clone();
+    c.opening.fee_sats = 0;
+    reject(c);
+    let mut c = base.clone();
+    c.script_pubkey[5] ^= 1;
+    reject(c);
+    let mut c = base.clone();
+    c.opening.sibling = [6; 32];
+    reject(c);
+    let mut c = base.clone();
+    c.opening.ciphertext.pop();
+    reject(c);
+    // An escrow for another rollup id cannot be swept here.
+    reject(escrow_coin(0x64, &pr_protocol_types::Fe([3; 32]), &a, 30_000, 700));
+    // Dust notes are rejected.
+    reject(escrow_coin(0x65, &rid, &a, 10, 700));
+    let mut h = Harness::new();
+    h.settle_with_escrows(std::slice::from_ref(&base), None).unwrap();
+    // Without the escrow marker the input could be a funding coin; the transition requires the marker.
+    let mut h = Harness::new();
+    h.settle_with_escrows(&[base], None).unwrap();
+    let mut w = h.last_witness.clone().unwrap();
+    let last = w.settlement.inputs.len() - 1;
+    w.settlement.inputs[last].sequence = pr_protocol_types::FUNDING_INPUT_SEQUENCE;
+    assert_eq!(apply_batch(&w).err(), Some(TransitionError::Escrow));
 }

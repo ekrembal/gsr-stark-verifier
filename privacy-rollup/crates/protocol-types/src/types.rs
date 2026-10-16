@@ -414,8 +414,9 @@ pub struct NoteOutput {
     pub ciphertext: Vec<u8>,
 }
 
-/// Settlement layout counts; inputs are `[rollup, funding..]` and outputs are
-/// `[rollup, withdrawals.., changes.., reward?]`. Version one admits no other inputs or outputs.
+/// Settlement layout counts; inputs are `[rollup, funding.., escrows..]` and outputs are
+/// `[rollup, withdrawals.., changes.., reward?]`. Each escrow input mints one note. No other inputs or
+/// outputs are admitted.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct SettlementLayout {
     pub transactions: u8,
@@ -423,11 +424,12 @@ pub struct SettlementLayout {
     pub withdrawals: u8,
     pub changes: u8,
     pub reward: bool,
+    pub escrows: u8,
 }
 
 impl SettlementLayout {
     pub fn input_count(&self) -> usize {
-        1 + self.funding_inputs as usize
+        1 + self.funding_inputs as usize + self.escrows as usize
     }
     pub fn output_count(&self) -> usize {
         1 + self.withdrawals as usize + self.changes as usize + self.reward as usize
@@ -457,7 +459,7 @@ impl Canonical for BatchBody {
         w.u64(self.batch_number);
         self.predecessor.encode_to(w);
         let l = &self.layout;
-        w.u8(l.transactions).u8(l.funding_inputs).u8(l.withdrawals).u8(l.changes).u8(l.reward as u8);
+        w.u8(l.transactions).u8(l.funding_inputs).u8(l.withdrawals).u8(l.changes).u8(l.reward as u8).u8(l.escrows);
         for n in &self.nullifiers {
             n.encode_to(w);
         }
@@ -476,12 +478,14 @@ impl Canonical for BatchBody {
             withdrawals: r.u8()?,
             changes: r.u8()?,
             reward: r.bool()?,
+            escrows: r.u8()?,
         };
         let n = layout.transactions as usize;
         if n > MAX_BATCH_TRANSACTIONS
             || layout.funding_inputs as usize > n * MAX_FUNDING_INPUTS
             || layout.withdrawals as usize > n
             || layout.changes as usize > n
+            || layout.escrows as usize > MAX_BATCH_ESCROWS
         {
             return Err(DecodeError::LengthOutOfRange);
         }
@@ -493,8 +497,9 @@ impl Canonical for BatchBody {
             }
             nullifiers.push(f);
         }
-        let mut outputs: Vec<NoteOutput> = Vec::with_capacity(2 * n);
-        for _ in 0..2 * n {
+        let notes = 2 * n + layout.escrows as usize;
+        let mut outputs: Vec<NoteOutput> = Vec::with_capacity(notes);
+        for _ in 0..notes {
             let commitment = Fe::decode_from(r)?;
             if outputs.last().is_some_and(|p| p.commitment >= commitment) {
                 return Err(DecodeError::BadOrder);

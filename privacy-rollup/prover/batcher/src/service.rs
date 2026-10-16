@@ -16,7 +16,13 @@ use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use anyhow::{bail, ensure, Context, Result};
 use pr_operator::{verify_receipt, write_atomic, Settled, Store};
 use pr_protocol_types::{Annex, Canonical, Outpoint};
-use pr_sdk::api::{Anchor, BatchReport, FundingInput, MerklePath, NoteBatch, Notes, Stage, Submission, SubmitResponse};
+use pr_sdk::api::{
+    Anchor, BatchReport, EscrowRegistration, EscrowState, EscrowTerms, FundingInput, MerklePath, NoteBatch, Notes,
+    Stage, Submission, SubmitResponse,
+};
+use pr_sdk::pr_mempool::EscrowCoin;
+use pr_sdk::pr_protocol_types::{DUST_LIMIT, MAX_BATCH_ESCROWS, MAX_MONEY, NOTE_CIPHERTEXT_LEN};
+use pr_sdk::pr_state_transition::escrow;
 use pr_sdk::{decode_receipt, decode_transaction};
 use serde::{Deserialize, Serialize};
 
@@ -45,6 +51,9 @@ pub struct Config {
     pub poll: Duration,
     /// Smallest pool that is worth a settlement (0 allows empty batches).
     pub min_transactions: usize,
+    /// Smallest escrow refund delay (blocks) accepted; escrows are swept only while their age is at
+    /// most half their refund delay, so a refund cannot race a sweep.
+    pub min_refund_delay: u16,
 }
 
 impl Config {
@@ -59,6 +68,7 @@ impl Config {
             confirmations: 1,
             poll: Duration::from_secs(2),
             min_transactions: 1,
+            min_refund_delay: 144,
         }
     }
 }
@@ -88,7 +98,16 @@ pub struct Inflight {
     pub annex: String,
     pub value: u64,
     pub funding: Vec<String>,
+    #[serde(default)]
+    pub escrows: Vec<String>,
     pub broadcast: bool,
+}
+
+/// A registered escrow output.
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct Registered {
+    pub coin: EscrowCoin,
+    pub refund_delay: u16,
 }
 
 pub struct Batcher {
@@ -99,6 +118,7 @@ pub struct Batcher {
     settling: AtomicBool,
     reports: Mutex<BTreeMap<u64, BatchReport>>,
     witnesses: Mutex<BTreeMap<String, Vec<String>>>,
+    escrows: Mutex<BTreeMap<String, Registered>>,
 }
 
 fn now() -> u64 {
@@ -119,6 +139,7 @@ impl Batcher {
         store.load().context("operator directory (run `pr-batcher init` and `genesis` first)")?;
         let reports: BTreeMap<u64, BatchReport> = read_or_default(&dir.join("reports.json"))?;
         let witnesses = read_or_default(&dir.join("funding-witnesses.json"))?;
+        let escrows = read_or_default(&dir.join("escrows.json"))?;
         Ok(Arc::new(Batcher {
             store,
             cfg,
@@ -127,6 +148,7 @@ impl Batcher {
             settling: AtomicBool::new(false),
             reports: Mutex::new(reports),
             witnesses: Mutex::new(witnesses),
+            escrows: Mutex::new(escrows),
         }))
     }
 
@@ -140,6 +162,7 @@ impl Batcher {
             settling: AtomicBool::new(false),
             reports: Mutex::new(BTreeMap::new()),
             witnesses: Mutex::new(BTreeMap::new()),
+            escrows: Mutex::new(BTreeMap::new()),
         }))
     }
 
@@ -260,7 +283,7 @@ impl Batcher {
             }
             let _g = self.guard();
             let (replica, _) = self.store.load()?;
-            let pending = self.store.load_pool(&replica)?.entries.len();
+            let pending = self.store.load_pool(&replica)?.entries.len() + self.escrow_map().len();
             if pending < self.cfg.min_transactions {
                 return Err(Rejection::Conflict(format!(
                     "pool holds {pending} transactions, fewer than {}",
@@ -325,8 +348,9 @@ impl Batcher {
     }
 
     async fn settle(self: Arc<Self>, n: u64) -> Result<()> {
+        let escrows = self.sweepable_escrows().await?;
         let me = self.clone();
-        let inflight = tokio::task::spawn_blocking(move || me.build_and_prove(n)).await??;
+        let inflight = tokio::task::spawn_blocking(move || me.build_and_prove(n, escrows)).await??;
         self.finish(inflight).await
     }
 
@@ -355,7 +379,134 @@ impl Batcher {
         Ok(hex::decode(spk)?)
     }
 
-    fn build_and_prove(&self, n: u64) -> Result<Inflight> {
+    fn escrow_map(&self) -> std::sync::MutexGuard<'_, BTreeMap<String, Registered>> {
+        self.escrows.lock().unwrap_or_else(|p| p.into_inner())
+    }
+
+    fn save_escrows(&self, m: &BTreeMap<String, Registered>) -> Result<()> {
+        write_atomic(&self.path("escrows.json"), &serde_json::to_vec_pretty(m)?)
+    }
+
+    /// What a depositor needs to build an address; the sweep body is the same for every root.
+    pub fn escrow_terms(&self) -> Result<EscrowTerms> {
+        let path = self.path("escrow-terms.json");
+        if path.exists() {
+            return Ok(serde_json::from_slice(&fs::read(path)?)?);
+        }
+        let (rollup_id, root) = {
+            let _g = self.guard();
+            let (replica, _) = self.store.load()?;
+            let tip = replica.tip().state;
+            (hex::encode(tip.rollup_id.0), hex::encode(tip.root()))
+        };
+        let template = self.cfg.template.to_string_lossy().into_owned();
+        let v = self.covenant(&["escrow-body", &template, &rollup_id, &root])?;
+        let terms = EscrowTerms {
+            rollup_id,
+            body: v["body"].as_str().context("body")?.to_owned(),
+            confirmations: self.cfg.confirmations,
+            min_refund_delay: self.cfg.min_refund_delay,
+        };
+        write_atomic(&path, &serde_json::to_vec_pretty(&terms)?)?;
+        Ok(terms)
+    }
+
+    /// Admits a paid escrow: its opening must open the output on chain to a note of this rollup with
+    /// this batcher's sweep body and a long enough refund delay.
+    pub async fn register_escrow(&self, reg: EscrowRegistration) -> Result<EscrowState, Rejection> {
+        let invalid = |m: String| Rejection::Invalid(m);
+        let terms = self.escrow_terms()?;
+        let (txid, vout) = reg.outpoint.clone();
+        let mut outpoint = pr_operator::outpoint(&txid, vout).map_err(|e| invalid(format!("{e:#}")))?;
+        outpoint.txid.reverse();
+        let key = outpoint_key(&outpoint);
+        if self.escrow_map().contains_key(&key) {
+            return Err(Rejection::Conflict(format!("escrow {txid}:{vout} is already registered")));
+        }
+        let e = &reg.opening;
+        let body = hex::decode(&terms.body).map_err(anyhow::Error::from)?;
+        if e.sweep_leaf.len() != 34 + body.len() || e.sweep_leaf[34..] != body[..] {
+            return Err(invalid("sweep leaf does not use this batcher's sweep body".into()));
+        }
+        if e.ciphertext.len() != NOTE_CIPHERTEXT_LEN || e.value < DUST_LIMIT || e.value > MAX_MONEY {
+            return Err(invalid("escrow note is malformed or dust".into()));
+        }
+        let refund = hex::decode(&reg.refund_leaf).map_err(|_| invalid("refund leaf is not hex".into()))?;
+        let delay = refund_delay(&refund)
+            .ok_or_else(|| invalid("refund leaf is not <delay> CSV DROP <key> CHECKSIG".into()))?;
+        if escrow::tapleaf_hash(escrow::REFUND_LEAF_VERSION, &refund) != e.sibling {
+            return Err(invalid("refund leaf is not the sweep leaf's sibling".into()));
+        }
+        if delay < self.cfg.min_refund_delay {
+            return Err(invalid(format!("refund delay {delay} is below {}", self.cfg.min_refund_delay)));
+        }
+        let (amount, spk, confirmations) = self
+            .rpc
+            .txout(&txid, vout)
+            .await?
+            .ok_or_else(|| Rejection::NotFound(format!("{txid}:{vout} is not an unspent output")))?;
+        let rollup_id = pr_sdk::fe_from_hex(&terms.rollup_id)?;
+        if !escrow::check_escrow(&rollup_id, e, &spk) {
+            return Err(invalid("opening does not open the output's scriptPubKey".into()));
+        }
+        if e.value.checked_add(e.fee_sats) != Some(amount) {
+            return Err(invalid(format!("output pays {amount} sats, the opening {} + {}", e.value, e.fee_sats)));
+        }
+        let coin = EscrowCoin { outpoint, amount, script_pubkey: spk, opening: e.clone() };
+        let mut m = self.escrow_map();
+        m.insert(key, Registered { coin, refund_delay: delay });
+        self.save_escrows(&m)?;
+        Ok(EscrowState { outpoint: reg.outpoint, amount, confirmations, reserved_by: None })
+    }
+
+    /// Every registered escrow with its current confirmations (`gettxout`).
+    pub async fn escrow_states(&self) -> Result<Vec<EscrowState>> {
+        let reserved = self.inflight()?.map(|f| (f.batch_number, f.escrows)).unwrap_or_default();
+        let list: Vec<Registered> = self.escrow_map().values().cloned().collect();
+        let mut out = Vec::new();
+        for r in list {
+            let o = &r.coin.outpoint;
+            let (txid, vout) = (display_hex(&o.txid), o.vout);
+            let confirmations = self.rpc.txout(&txid, vout).await?.map_or(0, |t| t.2);
+            let by = reserved.1.contains(&outpoint_key(o)).then_some(reserved.0);
+            out.push(EscrowState { outpoint: (txid, vout), amount: r.coin.amount, confirmations, reserved_by: by });
+        }
+        Ok(out)
+    }
+
+    /// Revalidates every registered escrow against the UTXO set: drops spent (refunded) ones and
+    /// returns those with enough confirmations and still far from their refund height.
+    async fn sweepable_escrows(&self) -> Result<Vec<EscrowCoin>> {
+        let list: Vec<(String, Registered)> = self.escrow_map().iter().map(|(k, v)| (k.clone(), v.clone())).collect();
+        let mut gone = Vec::new();
+        let mut out = Vec::new();
+        for (k, r) in list {
+            let o = &r.coin.outpoint;
+            match self.rpc.txout(&display_hex(&o.txid), o.vout).await? {
+                None => gone.push(k),
+                Some((amount, spk, c)) if amount == r.coin.amount && spk == r.coin.script_pubkey => {
+                    if c >= self.cfg.confirmations
+                        && c.saturating_mul(2) <= r.refund_delay as u64
+                        && out.len() < MAX_BATCH_ESCROWS
+                    {
+                        out.push(r.coin);
+                    }
+                }
+                Some(_) => gone.push(k),
+            }
+        }
+        if !gone.is_empty() {
+            let mut m = self.escrow_map();
+            for k in &gone {
+                eprintln!("escrow {k} is no longer unspent; dropped");
+                m.remove(k);
+            }
+            self.save_escrows(&m)?;
+        }
+        Ok(out)
+    }
+
+    fn build_and_prove(&self, n: u64, escrows: Vec<EscrowCoin>) -> Result<Inflight> {
         let (b, old_root, rollup_id) = {
             let _g = self.guard();
             let (replica, _) = self.store.load()?;
@@ -363,19 +514,26 @@ impl Batcher {
             ensure!(tip.batch_number + 1 == n, "tip moved to batch {}", tip.batch_number);
             let (rollup_id, old_root) = (hex::encode(tip.rollup_id.0), hex::encode(tip.root()));
             let spk = self.covenant_script_pubkey(&rollup_id, &old_root)?;
-            let first = self.store.build(spk.clone(), Vec::new(), None)?;
+            let first = self.store.build_with_escrows(spk.clone(), Vec::new(), &escrows, None)?;
             let new_root = hex::encode(first.effects.new_state.root());
             let successor = self.covenant_script_pubkey(&rollup_id, &new_root)?;
-            let b = self.store.build(spk, successor, None)?;
+            let b = self.store.build_with_escrows(spk, successor, &escrows, None)?;
             ensure!(hex::encode(b.effects.new_state.root()) == new_root, "new root depends on the successor");
             (b, old_root, rollup_id)
         };
         let settlement = &b.witness.settlement;
         let witnesses = self.witnesses.lock().unwrap_or_else(|p| p.into_inner()).clone();
         let mut funding = Vec::new();
+        let mut swept = Vec::new();
         let mut stacks = vec![Vec::new()];
         for i in &settlement.inputs[1..] {
             let key = outpoint_key(&i.prevout);
+            if let Some(e) = escrows.iter().find(|e| e.outpoint == i.prevout) {
+                let control = escrow::sweep_control_block(&e.opening).context("escrow control block")?;
+                stacks.push(vec![e.opening.sweep_leaf.clone(), control]);
+                swept.push(key);
+                continue;
+            }
             let stack = witnesses.get(&key).with_context(|| format!("no witness for funding input {key}"))?;
             stacks.push(stack.iter().map(hex::decode).collect::<Result<Vec<_>, _>>()?);
             funding.push(key);
@@ -422,6 +580,7 @@ impl Batcher {
             annex,
             value: settlement.outputs[0].value,
             funding,
+            escrows: swept,
             broadcast: false,
         };
         write_atomic(&self.path("inflight.json"), &serde_json::to_vec_pretty(&inflight)?)?;
@@ -464,6 +623,7 @@ impl Batcher {
                     misses += 1;
                     if misses > 3 {
                         if let Err(e) = self.broadcast(&f).await {
+                            self.abandon_if_conflicted(&f).await?;
                             bail!("settlement left the mempool and cannot be re-broadcast: {e:#}");
                         }
                         misses = 0;
@@ -481,6 +641,11 @@ impl Batcher {
                 w.remove(k);
             }
             write_atomic(&self.path("funding-witnesses.json"), &serde_json::to_vec(&*w)?)?;
+            let mut m = self.escrow_map();
+            for k in &f.escrows {
+                m.remove(k);
+            }
+            self.save_escrows(&m)?;
         }
         self.update(n, |r| {
             r.stage = Stage::Confirmed;
@@ -488,6 +653,56 @@ impl Batcher {
         });
         Ok(())
     }
+}
+
+impl Batcher {
+    /// After a failed re-broadcast: if an escrow or funding input of `f` was spent elsewhere (a
+    /// refund or a depositor double spend), the settlement can never confirm, so drop it, drop the
+    /// spent escrows and let the next settlement be rebuilt without them.
+    async fn abandon_if_conflicted(&self, f: &Inflight) -> Result<()> {
+        let mut spent = Vec::new();
+        for k in f.escrows.iter().chain(&f.funding) {
+            let (txid, vout) = k.split_once(':').context("outpoint key")?;
+            let txid = display_hex(&hex::decode(txid)?.try_into().map_err(|_| anyhow::anyhow!("txid"))?);
+            if self.rpc.txout(&txid, vout.parse()?).await?.is_none() {
+                spent.push(k.clone());
+            }
+        }
+        if spent.is_empty() {
+            return Ok(());
+        }
+        let _g = self.guard();
+        let mut m = self.escrow_map();
+        for k in &spent {
+            m.remove(k);
+        }
+        self.save_escrows(&m)?;
+        fs::remove_file(self.path("inflight.json"))?;
+        bail!("settlement inputs {spent:?} were spent elsewhere; abandoned batch {}", f.batch_number)
+    }
+}
+
+/// Display (RPC) order hex of an internal-order txid.
+fn display_hex(txid: &[u8; 32]) -> String {
+    let mut t = *txid;
+    t.reverse();
+    hex::encode(t)
+}
+
+/// The delay of a refund leaf `<delay> OP_CHECKSEQUENCEVERIFY OP_DROP <32 bytes> OP_CHECKSIG`.
+fn refund_delay(leaf: &[u8]) -> Option<u16> {
+    let (delay, rest) = match *leaf.first()? {
+        op @ 0x51..=0x60 => ((op - 0x50) as u16, &leaf[1..]),
+        n @ 1..=2 => {
+            let b = leaf.get(1..1 + n as usize)?;
+            let v = b.iter().rev().fold(0u32, |a, x| a << 8 | *x as u32);
+            (u16::try_from(v).ok()?, &leaf[1 + n as usize..])
+        }
+        _ => return None,
+    };
+    let key = rest.strip_prefix(&[0xb2, 0x75, 0x20][..])?;
+    (key.len() == 33 && key[32] == 0xac && escrow::refund_leaf(key[..32].try_into().ok()?, delay) == leaf)
+        .then_some(delay)
 }
 
 /// Bounds and decodes the funding witnesses; returns them keyed by outpoint.
@@ -503,4 +718,22 @@ fn validate_funding(funding: &[FundingInput]) -> Result<Vec<(String, Vec<String>
         out.push((outpoint_key(&f.coin.outpoint), f.witness.clone()));
     }
     Ok(out)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn refund_delay_parses_only_canonical_refund_leaves() {
+        for d in [1u16, 16, 17, 127, 128, 144, 255, 256, 32767] {
+            assert_eq!(refund_delay(&escrow::refund_leaf(&[7; 32], d)), Some(d));
+        }
+        let mut leaf = escrow::refund_leaf(&[7; 32], 144);
+        assert_eq!(refund_delay(&leaf[..leaf.len() - 1]), None);
+        leaf.push(0x51);
+        assert_eq!(refund_delay(&leaf), None);
+        assert_eq!(refund_delay(&[0x02, 0x90, 0x00, 0xb2, 0x75]), None);
+        assert_eq!(refund_delay(&[0x01, 0x90]), None);
+    }
 }

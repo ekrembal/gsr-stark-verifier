@@ -16,7 +16,7 @@ use crate::Note;
 const KEM_CT_LEN: usize = 1088;
 const NONCE_LEN: usize = 24;
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct NotePlaintext {
     pub value: u64,
     pub randomness: Fe,

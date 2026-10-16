@@ -11,9 +11,11 @@ use serde::{Deserialize, Serialize};
 
 use pr_bitcoin_adapter::{SettlementTx, TxInput};
 use pr_protocol_types::{
-    Fe, Outpoint, RollupTransaction, TxOut, MAX_BATCH_TRANSACTIONS, ROLLUP_INPUT_SEQUENCE, TX_VERSION,
+    Fe, Outpoint, RollupTransaction, TxOut, ESCROW_INPUT_SEQUENCE, FUNDING_INPUT_SEQUENCE, MAX_BATCH_TRANSACTIONS,
+    ROLLUP_INPUT_SEQUENCE, TX_VERSION,
 };
 use pr_scanner::Replica;
+use pr_state_transition::escrow::EscrowDeposit;
 use pr_state_transition::{check_transaction, BatchTransaction, TransitionError};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -162,6 +164,28 @@ pub fn assemble_settlement(
     selected: &[Entry],
     reward: Option<TxOut>,
 ) -> Option<SettlementTx> {
+    assemble_settlement_with_escrows(replica, rollup_script_pubkey, successor_script_pubkey, selected, &[], reward)
+}
+
+/// A confirmed escrow output and its private opening.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct EscrowCoin {
+    pub outpoint: Outpoint,
+    pub amount: u64,
+    pub script_pubkey: Vec<u8>,
+    pub opening: EscrowDeposit,
+}
+
+/// [`assemble_settlement`] that also sweeps `escrows` (inputs after the funding inputs); each adds its
+/// note value to the rollup backing and its fee to the batch fee pool.
+pub fn assemble_settlement_with_escrows(
+    replica: &Replica,
+    rollup_script_pubkey: Vec<u8>,
+    successor_script_pubkey: Vec<u8>,
+    selected: &[Entry],
+    escrows: &[EscrowCoin],
+    reward: Option<TxOut>,
+) -> Option<SettlementTx> {
     let tip = replica.tip();
     let mut inputs = vec![TxInput {
         prevout: tip.utxo,
@@ -176,12 +200,23 @@ pub fn assemble_settlement(
             amount: f.amount,
             script_pubkey: f.script_pubkey.clone(),
             script_sig: Vec::new(),
-            sequence: 0xffff_ffff,
+            sequence: FUNDING_INPUT_SEQUENCE,
+        });
+    }
+    for c in escrows {
+        inputs.push(TxInput {
+            prevout: c.outpoint,
+            amount: c.amount,
+            script_pubkey: c.script_pubkey.clone(),
+            script_sig: Vec::new(),
+            sequence: ESCROW_INPUT_SEQUENCE,
         });
     }
     let p = |e: &Entry| e.tx.public;
-    let backing = (tip.state.backing_sats as u128 + selected.iter().map(|e| p(e).deposit_sats as u128).sum::<u128>())
-        .checked_sub(selected.iter().map(|e| p(e).withdrawal_sats as u128 + p(e).fee_sats as u128).sum())?;
+    let minted: u128 = escrows.iter().map(|c| c.opening.value as u128).sum();
+    let backing =
+        (tip.state.backing_sats as u128 + minted + selected.iter().map(|e| p(e).deposit_sats as u128).sum::<u128>())
+            .checked_sub(selected.iter().map(|e| p(e).withdrawal_sats as u128 + p(e).fee_sats as u128).sum())?;
     let mut outputs = vec![TxOut { value: u64::try_from(backing).ok()?, script_pubkey: successor_script_pubkey }];
     for e in selected {
         if let Some(s) = &e.tx.external.withdrawal_script {

@@ -61,7 +61,8 @@ For up to 8 transactions, all of which must be valid against the old state:
    nullifiers;
 2. all nullifiers sorted, distinct, each inserted with a verified insertion witness;
 3. all output commitments sorted, distinct, appended in that order to the authenticated frontier;
-4. the settlement transaction: version 2, locktime 0, inputs `[rollup, funding..]` in declaration order,
+4. the settlement transaction: version 2, locktime 0, inputs `[rollup, funding.., escrows..]` (funding in
+   declaration order, sequence `0xffffffff`; escrows as below, sequence `0xfffffffd`),
    input 0 sequence 1 with empty scriptSig and amount `backing_sats`, spending output 0 of the private
    witness `predecessor_tx` (witness-free; `sha256d(predecessor_tx) = input 0 txid`) whose own input 0
    spent `old.parent`; the new state's `parent` is input 0's prevout (`check_lineage`). Outputs
@@ -70,6 +71,32 @@ For up to 8 transactions, all of which must be valid against the old state:
 5. fees: `F = Σ fee_sats`, optional reward output `R ≥ dust`, miner fee `M = F − R ≥ 0`,
    `Σ inputs − Σ outputs = M`, new `backing_sats = old + deposits − withdrawals − F ≥ dust`;
 6. new anchor entry, data history, annex and the 196-byte journal (`bitcoin-binding.md`).
+
+## Deposit escrows (non-interactive deposits)
+
+A depositor needs no proof and no round trip: the SDK (`Wallet::deposit_address`) picks a note and returns a
+taproot address `P2TR(NUMS, {sweep (leaf version 0xc2), refund (0xc0)})` that any wallet can pay.
+
+* `D = sha256("GSR-rollup/escrow-v1" || rollup_id || authority || randomness || value || fee_sats ||
+  sha256(ciphertext))`; the sweep leaf is `0x20 D OP_DROP || body`, where `body` (`covenant_cli escrow-body`,
+  served at `GET /v1/escrow`) uses `OP_TX` to require that the sweeping transaction's input 0 is a script-path
+  spend of this rollup's covenant (this image and rollup id, any state root) with an annex, and that the escrow
+  input itself has sequence `ESCROW_INPUT_SEQUENCE = 0xfffffffd`.
+* The refund leaf is `<delay> OP_CHECKSEQUENCEVERIFY OP_DROP <xonly> OP_CHECKSIG`; the batcher requires
+  `delay ≥ --min-refund-delay` (default 144 blocks).
+* `apply_batch` gets each escrow's opening privately (`BatchWitness::escrows`), checks that the sweep leaf
+  starts with `D`, that the input's output key is the NUMS key tweaked by `{sweep, sibling}`, that the input
+  has the escrow sequence and an empty scriptSig and holds exactly `value + fee_sats`, then appends the note's
+  commitment and ciphertext and counts `value + fee_sats` as deposited and `fee_sats` as fee. Only escrow inputs
+  may carry the escrow sequence, so the covenant check in the sweep leaf cannot be satisfied by a funding input.
+* Copies: P2a lineage means only the genuine rollup coin has receipts, and `D` commits to the rollup id, so an
+  escrow can be swept only by the genuine rollup, minting exactly the depositor's note.
+
+The batcher (`POST /v1/escrows`) accepts a registration (outpoint, opening, refund leaf) only if the output
+exists (`gettxout`), opens to the escrow, pays exactly `value + fee_sats`, and the refund leaf is the sweep
+leaf's sibling with a long enough delay. Before each batch it re-reads every registered escrow and sweeps only
+those with `confirmations ≥ --confirmations` and `2 · confirmations ≤ delay` (far from refundable); spent or
+changed outputs are dropped, swept ones removed once the settlement confirms.
 
 An empty batch (no transactions) is valid and only advances the batch number, anchors and data history.
 

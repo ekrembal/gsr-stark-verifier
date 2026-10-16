@@ -5,6 +5,8 @@
         -> {"script_pubkey", "script_bytes"}
     covenant_cli.py witness <template.json> <rollup-id-hex> <old-root-hex> <receipt.json> <seal.bin> <new-root-hex> <annex-hex>
         -> {"stack": [hex, ...], "successor_script_pubkey"}   # input-0 witness, bottom first, annex last
+    covenant_cli.py escrow-body <template.json> <rollup-id-hex> <root-hex>
+        -> {"body", "witness_items"}   # deposit escrow sweep body (deposit_escrow.py); the same for every root
 
 The suffix of the covenant leaf depends only on the template and the rollup id, so `witness` rebuilds the
 leaf for `old-root` and derives the successor from it exactly as the Script does.
@@ -13,6 +15,7 @@ import json
 import sys
 from pathlib import Path
 
+import deposit_escrow as de
 import rollup_covenant as rc
 
 
@@ -33,6 +36,9 @@ def main() -> None:
         stack = cov.witness(receipt, seal, new_root, annex)
         print(json.dumps({"stack": [s.hex() for s in stack],
                           "successor_script_pubkey": rc.successor_script_pubkey(cov, new_root).hex()}))
+    elif len(a) == 4 and a[0] == "escrow-body":
+        t = de.Template.of(covenant(*a[1:]))
+        print(json.dumps({"body": de.sweep_body(t).hex(), "witness_items": t.k}))
     else:
         sys.exit(__doc__)
 

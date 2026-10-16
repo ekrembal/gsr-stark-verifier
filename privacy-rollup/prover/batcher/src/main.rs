@@ -1,7 +1,7 @@
 //! pr-batcher init  <dir> <descriptor.json>       create the operator directory; prints the genesis covenant output
 //! pr-batcher genesis <dir> <tx-hex>              record the genesis tx (spends genesis_nonce, rollup at output 0)
 //! pr-batcher serve <dir> [--listen ADDR] [--web DIR] [--interval SECS] [--mine-to ADDRESS]
-//!                        [--confirmations N] [--min-transactions N]
+//!                        [--confirmations N] [--min-transactions N] [--min-refund-delay BLOCKS]
 //!
 //! Bitcoin Core RPC is configured from the environment (see `rpc.rs`).
 use std::path::PathBuf;
@@ -46,6 +46,9 @@ async fn main() -> Result<()> {
             }
             if let Some(n) = flag(&a, "--min-transactions") {
                 cfg.min_transactions = n.parse()?;
+            }
+            if let Some(n) = flag(&a, "--min-refund-delay") {
+                cfg.min_refund_delay = n.parse()?;
             }
             let rpc = Rpc::from_env()?;
             rpc.call("getblockchaininfo", serde_json::json!([])).await.context("Bitcoin Core RPC")?;

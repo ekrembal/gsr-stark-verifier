@@ -10,7 +10,7 @@ use axum::response::{IntoResponse, Response};
 use axum::routing::{get, post};
 use axum::{Json, Router};
 use pr_operator::MAX_TX_JSON_BYTES;
-use pr_sdk::api::{ApiError, SettleResponse, Submission};
+use pr_sdk::api::{ApiError, EscrowRegistration, SettleResponse, Submission};
 use serde::Deserialize;
 use serde_json::{json, Value};
 
@@ -48,6 +48,19 @@ async fn status(State(b): Shared) -> Result<Json<Value>, Rejection> {
 async fn submit(State(b): Shared, Json(sub): Json<Submission>) -> Result<Response, Rejection> {
     let r = blocking(move || b.submit(sub)).await?;
     Ok((StatusCode::ACCEPTED, Json(r)).into_response())
+}
+
+async fn escrow_terms(State(b): Shared) -> Result<Response, Rejection> {
+    Ok(Json(blocking(move || Ok(b.escrow_terms()?)).await?).into_response())
+}
+
+async fn register_escrow(State(b): Shared, Json(reg): Json<EscrowRegistration>) -> Result<Response, Rejection> {
+    let r = b.register_escrow(reg).await?;
+    Ok((StatusCode::ACCEPTED, Json(r)).into_response())
+}
+
+async fn escrows(State(b): Shared) -> Result<Response, Rejection> {
+    Ok(Json(b.escrow_states().await?).into_response())
 }
 
 #[derive(Deserialize)]
@@ -113,6 +126,8 @@ pub fn router(b: Arc<Batcher>, web: Option<PathBuf>) -> Router {
     let api = Router::new()
         .route("/v1/status", get(status))
         .route("/v1/transactions", post(submit).layer(DefaultBodyLimit::max(MAX_TX_JSON_BYTES as usize)))
+        .route("/v1/escrow", get(escrow_terms))
+        .route("/v1/escrows", post(register_escrow).get(escrows))
         .route("/v1/notes", get(notes))
         .route("/v1/paths/{leaf}", get(merkle_path))
         .route("/v1/batches", post(settle).get(batches))

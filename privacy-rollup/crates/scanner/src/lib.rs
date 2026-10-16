@@ -8,6 +8,7 @@ use pr_protocol_types::{
     next_data_history, AnchorEntry, AnchorHistory, Annex, Canonical, Fe, Outpoint, RollupDescriptor, RollupState,
     DUST_LIMIT,
 };
+use pr_state_transition::escrow::EscrowDeposit;
 use pr_state_transition::{apply_batch, genesis, BatchEffects, BatchTransaction, BatchWitness, TransitionError};
 use serde::{Deserialize, Serialize};
 
@@ -75,6 +76,16 @@ impl Replica {
 
     /// Builds the transition witness for `transactions` settled by `settlement` on top of the tip.
     pub fn witness(&self, transactions: Vec<BatchTransaction>, settlement: SettlementTx) -> BatchWitness {
+        self.witness_with_escrows(transactions, Vec::new(), settlement)
+    }
+
+    /// [`Self::witness`] for a batch that also sweeps escrow deposits (inputs after the funding inputs).
+    pub fn witness_with_escrows(
+        &self,
+        transactions: Vec<BatchTransaction>,
+        escrows: Vec<EscrowDeposit>,
+        settlement: SettlementTx,
+    ) -> BatchWitness {
         let mut nullifiers: Vec<Fe> = transactions.iter().flat_map(|t| t.public.nullifiers).collect();
         nullifiers.sort();
         let mut scratch = self.nullifiers.clone();
@@ -83,11 +94,16 @@ impl Replica {
         BatchWitness {
             old_state: tip.state,
             anchors: tip.anchors.clone(),
-            frontier: if transactions.is_empty() { None } else { Some(self.commitments.frontier()) },
+            frontier: if transactions.is_empty() && escrows.is_empty() {
+                None
+            } else {
+                Some(self.commitments.frontier())
+            },
             transactions,
             nullifier_witnesses,
             settlement,
             predecessor_tx: tip.creating_tx.clone(),
+            escrows,
         }
     }
 

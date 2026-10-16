@@ -4,7 +4,10 @@ use std::time::Duration;
 use anyhow::{bail, Result};
 use serde::de::DeserializeOwned;
 
-use crate::api::{ApiError, BatchReport, MerklePath, Notes, SettleResponse, Status, Submission, SubmitResponse};
+use crate::api::{
+    ApiError, BatchReport, EscrowRegistration, EscrowState, EscrowTerms, MerklePath, Notes, SettleResponse, Status,
+    Submission, SubmitResponse,
+};
 
 pub struct Client {
     base: String,
@@ -51,5 +54,17 @@ impl Client {
 
     pub fn batch(&self, batch_number: u64) -> Result<BatchReport> {
         Self::read(self.http.get(format!("{}/v1/batches/{batch_number}", self.base)).send()?)
+    }
+
+    pub fn escrow_terms(&self) -> Result<EscrowTerms> {
+        Self::read(self.http.get(format!("{}/v1/escrow", self.base)).send()?)
+    }
+
+    pub fn register_escrow(&self, registration: &EscrowRegistration) -> Result<EscrowState> {
+        Self::read(self.http.post(format!("{}/v1/escrows", self.base)).json(registration).send()?)
+    }
+
+    pub fn escrows(&self) -> Result<Vec<EscrowState>> {
+        Self::read(self.http.get(format!("{}/v1/escrows", self.base)).send()?)
     }
 }

@@ -5,6 +5,8 @@
 //! (anchor window, commitment frontier, nullifier insertion paths) and the settlement transaction,
 //! checks every protocol rule that is not inside a join-split proof, and returns the new state, the
 //! canonical annex and the 196-byte [`BatchJournal`] the covenant rebuilds from `OP_TX`.
+pub mod escrow;
+
 use pr_bitcoin_adapter::{PlainTx, SettlementTx};
 use pr_commitment_tree::Frontier;
 use pr_indexed_nullifier_tree::{verify_insertion, InsertionWitness, NullifierError};
@@ -12,8 +14,9 @@ use pr_protocol_types::hash::sha256;
 use pr_protocol_types::{
     next_data_history, AnchorEntry, AnchorHistory, Annex, BatchBody, BatchJournal, Canonical, ExternalData, Fe,
     JoinSplitPublic, NoteOutput, Outpoint, RollupDescriptor, RollupState, SettlementLayout, TxOut, ANCHOR_WINDOW,
-    DUST_LIMIT, MAX_BATCH_TRANSACTIONS, MAX_FUNDING_INPUTS, MAX_MONEY, MAX_SCRIPT_PUBKEY_LEN, NOTE_CIPHERTEXT_LEN,
-    PROTOCOL_VERSION, ROLLUP_INPUT_SEQUENCE, TX_VERSION,
+    DUST_LIMIT, ESCROW_INPUT_SEQUENCE, FUNDING_INPUT_SEQUENCE, MAX_BATCH_ESCROWS, MAX_BATCH_TRANSACTIONS,
+    MAX_FUNDING_INPUTS, MAX_MONEY, MAX_SCRIPT_PUBKEY_LEN, NOTE_CIPHERTEXT_LEN, PROTOCOL_VERSION, ROLLUP_INPUT_SEQUENCE,
+    TX_VERSION,
 };
 use serde::{Deserialize, Serialize};
 
@@ -39,6 +42,8 @@ pub struct BatchWitness {
     /// The transaction that created the rollup coin spent by input 0 (the previous settlement, or
     /// the genesis transaction), without witnesses. Its txid must be input 0's prevout txid.
     pub predecessor_tx: PlainTx,
+    /// Openings of the escrow inputs, which follow the funding inputs in order.
+    pub escrows: Vec<escrow::EscrowDeposit>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -86,6 +91,8 @@ pub enum TransitionError {
     Overflow,
     /// The rollup input is not output 0 of a transaction whose input 0 spent `old_state.parent`.
     Lineage,
+    /// An escrow input does not open to the declared deposit, or there are too many.
+    Escrow,
 }
 
 fn add(a: u64, b: u64) -> Result<u64, TransitionError> {
@@ -233,6 +240,33 @@ pub fn apply_batch(w: &BatchWitness) -> Result<BatchEffects, TransitionError> {
             })
         })
         .collect();
+    let s = &w.settlement;
+    let escrow_start = s.inputs.len().checked_sub(w.escrows.len()).ok_or(TransitionError::InputCount)?;
+    if w.escrows.len() > MAX_BATCH_ESCROWS {
+        return Err(TransitionError::Escrow);
+    }
+    let mut escrowed = 0u64;
+    let mut escrow_fees = 0u64;
+    for (e, input) in w.escrows.iter().zip(&s.inputs[escrow_start..]) {
+        if e.ciphertext.len() != NOTE_CIPHERTEXT_LEN {
+            return Err(TransitionError::BadCiphertext);
+        }
+        if !input.script_sig.is_empty()
+            || input.sequence != ESCROW_INPUT_SEQUENCE
+            || !escrow::check_escrow(&old.rollup_id, e, &input.script_pubkey)
+        {
+            return Err(TransitionError::Escrow);
+        }
+        if e.value < DUST_LIMIT || e.value > MAX_MONEY {
+            return Err(TransitionError::Dust);
+        }
+        if add(e.value, e.fee_sats)? != input.amount {
+            return Err(TransitionError::Escrow);
+        }
+        escrowed = add(escrowed, input.amount)?;
+        escrow_fees = add(escrow_fees, e.fee_sats)?;
+        outputs.push(e.note(&old.rollup_id));
+    }
     outputs.sort_by_key(|a| a.commitment);
     if outputs.windows(2).any(|p| p[0].commitment == p[1].commitment) {
         return Err(TransitionError::DuplicateCommitment);
@@ -252,8 +286,7 @@ pub fn apply_batch(w: &BatchWitness) -> Result<BatchEffects, TransitionError> {
         None => (old.commitment_root, old.commitment_count),
     };
 
-    // Bitcoin layout: inputs [rollup, funding..], outputs [rollup, withdrawals.., changes.., reward?].
-    let s = &w.settlement;
+    // Bitcoin layout: inputs [rollup, funding.., escrows..], outputs [rollup, withdrawals.., changes.., reward?].
     if s.version != TX_VERSION {
         return Err(TransitionError::TxVersion);
     }
@@ -265,7 +298,7 @@ pub fn apply_batch(w: &BatchWitness) -> Result<BatchEffects, TransitionError> {
         .enumerate()
         .flat_map(|(i, t)| t.external.deposit.iter().flat_map(move |d| d.funding.iter().map(move |o| (i, o))))
         .collect();
-    if s.inputs.len() != 1 + funding.len() {
+    if s.inputs.len() != 1 + funding.len() + w.escrows.len() {
         return Err(TransitionError::InputCount);
     }
     let rollup_in = &s.inputs[0];
@@ -278,14 +311,14 @@ pub fn apply_batch(w: &BatchWitness) -> Result<BatchEffects, TransitionError> {
     check_lineage(old, &rollup_in.prevout, &w.predecessor_tx)?;
     let mut funded = vec![0u64; txs.len()];
     for ((i, o), input) in funding.iter().zip(&s.inputs[1..]) {
-        if input.prevout != **o {
+        if input.prevout != **o || input.sequence != FUNDING_INPUT_SEQUENCE {
             return Err(TransitionError::FundingInput);
         }
         funded[*i] = add(funded[*i], input.amount)?;
     }
-    let mut deposits = 0u64;
+    let mut deposits = escrowed;
     let mut withdrawals_total = 0u64;
-    let mut fees = 0u64;
+    let mut fees = escrow_fees;
     let mut withdrawal_outs: Vec<TxOut> = Vec::new();
     let mut change_outs: Vec<TxOut> = Vec::new();
     for (i, t) in txs.iter().enumerate() {
@@ -342,6 +375,7 @@ pub fn apply_batch(w: &BatchWitness) -> Result<BatchEffects, TransitionError> {
         withdrawals: withdrawal_outs.len() as u8,
         changes: change_outs.len() as u8,
         reward: s.outputs.len() == fixed + 1,
+        escrows: w.escrows.len() as u8,
     };
     let body = BatchBody {
         rollup_id: old.rollup_id,

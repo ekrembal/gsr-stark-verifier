@@ -62,4 +62,4 @@ proven sweep, refunds), `deposit_addresses` in `prover/sdk/src/tests.rs`, escrow
   `funding.json` rather than looked up over Bitcoin RPC, nothing is signed or broadcast (the demo builds,
   signs and mines the transactions itself), and cadence is left to the leaf's `1 CSV` rather than tracked.
 * **Relay policy**: annex-bearing spends are nonstandard on the pinned node.
-* **External review** of the circuit, adapter, guest, covenant script and wallet has not happened.
+* **External review** of the ZK mode, `resolve_zk.zkr`, the guests, the covenant script and the wallet has not happened. The scope, threat model, adversarial coverage and open questions for one are in [../review/README.md](../review/README.md).

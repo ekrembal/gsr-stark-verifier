@@ -10,6 +10,8 @@ pub struct Keys {
     pub spending_secret: Fe,
     pub spend_authority: Fe,
     pub nullifier_key: Fe,
+    /// Symmetric key for notes this wallet sends to itself (change).
+    pub outgoing_key: [u8; 32],
     pub decapsulation_key: DecapsulationKey<MlKem768Params>,
     pub encapsulation_key: EncapsulationKey<MlKem768Params>,
 }
@@ -31,6 +33,7 @@ impl Keys {
             spending_secret,
             spend_authority: pr_crypto::spend_authority(&spending_secret),
             nullifier_key: pr_crypto::nullifier_key(&spending_secret),
+            outgoing_key: tagged(tags::NOTE_KEY, &[b"outgoing", seed]),
             decapsulation_key,
             encapsulation_key,
         }

@@ -71,7 +71,9 @@ Earlier ProveKit pipeline (kept for reference):
 | Seal | 222,668 bytes |
 
 Settlement weight does not depend on batch contents beyond the annex (one nullifier is 32 bytes, one output
-32 bytes plus a 1,232-byte ciphertext), because the receipt is constant-size.
+33 bytes plus a 1,232-byte recipient ciphertext or a 120-byte self/change ciphertext) and the funding,
+escrow and withdrawal inputs/outputs, because the receipt is constant-size. Batch selection keeps each
+settlement under 400,000 WU (`MAX_SETTLEMENT_WEIGHT`, budgeted from the measured 331,699 WU empty settlement).
 
 ## Layout
 

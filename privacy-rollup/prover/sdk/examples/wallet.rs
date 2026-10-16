@@ -16,6 +16,7 @@ use std::time::{Duration, Instant};
 use anyhow::{bail, Context, Result};
 use pr_sdk::api::{EscrowRegistration, FundingInput, Stage};
 use pr_sdk::client::Client;
+use pr_sdk::pr_protocol_types::TxOut;
 use pr_sdk::{decode_address, encode_address, fe_from_hex, prove, submission, DepositAddress, OutputSpec, Wallet};
 use rand_core::OsRng;
 use serde_json::json;
@@ -91,9 +92,9 @@ fn main() -> Result<()> {
             let amount: u64 = a[5].parse()?;
             let (payments, withdrawal) = if cmd == "send" {
                 let recipient = if a[4] == "self" { w.address() } else { decode_address(&a[4])? };
-                (vec![OutputSpec { value: amount, recipient, memo: [0; 32] }], None)
+                (vec![OutputSpec { value: amount, recipient, memo: [0; 32], self_key: None }], Vec::new())
             } else {
-                (Vec::new(), Some((hex::decode(&a[4]).context("script-pubkey")?, amount)))
+                (Vec::new(), vec![TxOut { value: amount, script_pubkey: hex::decode(&a[4]).context("script-pubkey")? }])
             };
             let t = Instant::now();
             let path = client.path(leaf)?;

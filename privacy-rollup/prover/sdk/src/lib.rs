@@ -19,7 +19,7 @@ use anyhow::{bail, ensure, Context, Result};
 use pr_commitment_tree::root_from_path;
 use pr_mempool::FundingCoin;
 use pr_protocol_types::{
-    Canonical, DepositDeclaration, ExternalData, Fe, RollupTransaction, COMMITMENT_TREE_DEPTH, MAX_RECEIPT_BYTES,
+    Canonical, DepositDeclaration, ExternalData, Fe, RollupTransaction, TxOut, COMMITMENT_TREE_DEPTH, MAX_RECEIPT_BYTES,
 };
 use rand_core::{CryptoRng, RngCore};
 
@@ -133,13 +133,13 @@ impl Wallet {
             anchor_batch_number: status.anchor.batch_number,
             expiry_batch_number: status.batch_number + expiry_batches,
             deposit: None,
-            withdrawal: None,
+            withdrawals: Vec::new(),
             fee_sats,
         })
     }
 
     fn change(&self, value: u64) -> OutputSpec {
-        OutputSpec { value, recipient: self.address(), memo: [0; 32] }
+        OutputSpec { value, recipient: self.address(), memo: [0; 32], self_key: Some(self.keys.outgoing_key) }
     }
 
     /// A deposit of every `funding` coin, paying `sum - fee` to this wallet. The witness is checked
@@ -217,7 +217,7 @@ impl Wallet {
         status: &Status,
         spends: &[(OwnedNote, MerklePath)],
         payments: Vec<OutputSpec>,
-        withdrawal: Option<(Vec<u8>, u64)>,
+        withdrawals: Vec<TxOut>,
         fee_sats: u64,
         expiry_batches: u64,
     ) -> Result<BuiltJoinSplit> {
@@ -243,7 +243,7 @@ impl Wallet {
         ensure!(payments.len() <= 2, "a join-split has two output slots");
         let paid = payments.iter().try_fold(0u64, |s, o| s.checked_add(o.value)).context("outputs overflow")?;
         let out = paid
-            .checked_add(withdrawal.as_ref().map_or(0, |w| w.1))
+            .checked_add(withdrawals.iter().try_fold(0u64, |a, o| a.checked_add(o.value)).context("withdrawals overflow")?)
             .and_then(|v| v.checked_add(fee_sats))
             .context("outputs overflow")?;
         let Some(change) = in_value.checked_sub(out) else { bail!("inputs of {in_value} sats do not cover {out}") };
@@ -256,7 +256,7 @@ impl Wallet {
             outputs.push(self.change(0));
         }
         let mut b = Self::builder(status, expiry_batches, fee_sats)?;
-        b.withdrawal = withdrawal;
+        b.withdrawals = withdrawals;
         let outputs: [OutputSpec; 2] = outputs.try_into().map_err(|_| anyhow::anyhow!("two outputs"))?;
         let built = b.build(rng, inputs, outputs).map_err(|e| anyhow::anyhow!("join-split: {e}"))?;
         built.witness.check().map_err(|e| anyhow::anyhow!("witness: {e}"))?;

@@ -10,7 +10,7 @@ fn external(change: Option<TxOut>, withdrawal: Option<Vec<u8>>) -> ExternalData 
             funding: vec![Outpoint { txid: [3; 32], vout: 1 }, Outpoint { txid: [4; 32], vout: 0 }],
             change,
         }),
-        withdrawal_script: withdrawal,
+        withdrawals: withdrawal.into_iter().map(|s| TxOut { value: 1_000, script_pubkey: s }).collect(),
         ciphertexts: [vec![5; NOTE_CIPHERTEXT_LEN], vec![6; NOTE_CIPHERTEXT_LEN]],
     }
 }

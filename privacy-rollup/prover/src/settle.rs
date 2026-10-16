@@ -134,7 +134,7 @@ pub fn prove_settlement(witness: &BatchWitness, receipts: &[SuccinctReceipt<Rece
     let assumed: Vec<Assumption> = session.assumptions.iter().map(|(a, _)| a.clone()).collect();
     let output = MaybePruned::Value(Some(Output {
         journal: MaybePruned::Pruned(journal.digest()),
-        assumptions: assumed.into(),
+        assumptions: assumed.clone().into(),
     }));
     let last = segments.last_mut().context("session is empty")?;
     ensure!(last.claim.output.digest() == output.digest(), "final segment output differs from the session output");

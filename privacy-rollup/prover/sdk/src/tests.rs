@@ -114,8 +114,17 @@ fn scan_then_transfer_spends_the_deposit() {
     };
     let bob = Wallet::from_seed(&[2; 32]);
     let pay = vec![OutputSpec { value: 5_000, recipient: bob.address(), memo: [0; 32], self_key: None }];
-    let t =
-        w.transfer(&mut OsRng, &s, &[(note.clone(), path.clone())], pay, vec![TxOut { value: 4_000, script_pubkey: vec![0x51] }], 300, 10).unwrap();
+    let t = w
+        .transfer(
+            &mut OsRng,
+            &s,
+            &[(note.clone(), path.clone())],
+            pay,
+            vec![TxOut { value: 4_000, script_pubkey: vec![0x51] }],
+            300,
+            10,
+        )
+        .unwrap();
     assert_eq!(t.witness.public.nullifiers[0], note.nullifier);
     assert_eq!((t.witness.public.withdrawal_sats, t.witness.public.fee_sats), (4_000, 300));
     assert_eq!(t.output_notes.iter().map(|n| n.value).sum::<u64>(), 19_300 - 4_000 - 300);
@@ -124,7 +133,10 @@ fn scan_then_transfer_spends_the_deposit() {
     wrong.siblings[0] = Fe([9; 32]);
     let pay = || vec![OutputSpec { value: 5_000, recipient: bob.address(), memo: [0; 32], self_key: None }];
     assert!(w.transfer(&mut OsRng, &s, &[(note.clone(), wrong)], pay(), Vec::new(), 300, 10).is_err(), "bad path");
-    assert!(bob.transfer(&mut OsRng, &s, &[(note.clone(), path.clone())], pay(), Vec::new(), 300, 10).is_err(), "not ours");
+    assert!(
+        bob.transfer(&mut OsRng, &s, &[(note.clone(), path.clone())], pay(), Vec::new(), 300, 10).is_err(),
+        "not ours"
+    );
     let over = vec![OutputSpec { value: 19_301, recipient: bob.address(), memo: [0; 32], self_key: None }];
     assert!(w.transfer(&mut OsRng, &s, &[(note, path)], over, Vec::new(), 0, 10).is_err(), "overspend");
 }

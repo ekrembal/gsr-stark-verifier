@@ -243,7 +243,9 @@ impl Wallet {
         ensure!(payments.len() <= 2, "a join-split has two output slots");
         let paid = payments.iter().try_fold(0u64, |s, o| s.checked_add(o.value)).context("outputs overflow")?;
         let out = paid
-            .checked_add(withdrawals.iter().try_fold(0u64, |a, o| a.checked_add(o.value)).context("withdrawals overflow")?)
+            .checked_add(
+                withdrawals.iter().try_fold(0u64, |a, o| a.checked_add(o.value)).context("withdrawals overflow")?,
+            )
             .and_then(|v| v.checked_add(fee_sats))
             .context("outputs overflow")?;
         let Some(change) = in_value.checked_sub(out) else { bail!("inputs of {in_value} sats do not cover {out}") };

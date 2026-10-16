@@ -165,7 +165,9 @@ def main() -> None:
 
         scans = {n: be.wallet("scan", URL, u["seed"]) for n, u in users.items()}
         report["scan_final"] = scans
-        live = {n: sorted(x["value"] for x in scans[n] if x["leaf"] != note[n]["leaf"] and x["value"]) for n in users}
+        spent = {"a", "c", "d"}
+        live = {n: sorted(x["value"] for x in scans[n] if x["value"] and not (n in spent and x["leaf"] == note[n]["leaf"]))
+                for n in users}
         left = lambda n: DEPOSITS[n] - DEPOSIT_FEE - TRANSFER_SATS - TRANSFER_FEE
         assert live["a"] == sorted([left("a"), TRANSFER_SATS]), live
         assert live["b"] == sorted([DEPOSITS["b"] - DEPOSIT_FEE, TRANSFER_SATS]), live

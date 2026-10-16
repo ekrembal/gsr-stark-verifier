@@ -612,7 +612,9 @@ fn self_change_ciphertexts_are_compact_and_only_the_sender_recovers_them() {
     let js = h.build(&b, [SpendInput::Dummy, SpendInput::Dummy], [bob.pay(3_000), alice.change(6_000)]);
     h.submit(&js, funding).unwrap();
     let e = h.settle(None).unwrap();
-    let outs = &e.annex.body.outputs;
+    let [paid, change] = js.witness.public.output_commitments;
+    let find = |c| e.annex.body.outputs.iter().find(|o| o.commitment == c).unwrap();
+    let outs = [find(paid), find(change)];
     assert_eq!(outs[0].ciphertext.len(), pr_protocol_types::NOTE_CIPHERTEXT_LEN);
     assert_eq!(outs[1].ciphertext.len(), pr_protocol_types::SELF_CIPHERTEXT_LEN);
     alice.scan(&h.replica, &e);
@@ -687,6 +689,7 @@ fn one_join_split_pays_several_withdrawal_outputs() {
     }
     let e = h.settle(None).unwrap();
     assert_eq!(e.new_state.backing_sats, 10_000 + 20_000 - 10_000 - 500);
+    assert_eq!(Annex::decode(&e.annex_bytes).unwrap().body.layout.withdrawals as usize, outs.len());
 }
 
 #[test]

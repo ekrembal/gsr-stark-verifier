@@ -565,7 +565,7 @@ impl Canonical for BatchBody {
         let n = layout.transactions as usize;
         if n > MAX_BATCH_TRANSACTIONS
             || layout.funding_inputs as usize > n * MAX_FUNDING_INPUTS
-            || layout.withdrawals as usize > n
+            || layout.withdrawals as usize > n * MAX_WITHDRAWALS_PER_TX
             || layout.changes as usize > n
             || layout.escrows as usize > MAX_BATCH_ESCROWS
         {

@@ -118,7 +118,7 @@ fn annex_rejects_bad_magic_order_and_layout() {
         assert_eq!(Annex::decode(&b), Err(DecodeError::BadMagic));
     }
     let body_at = 1 + 4 + 1 + 64;
-    let nullifiers_at = body_at + 32 + 8 + 36 + 5;
+    let nullifiers_at = body_at + 32 + 8 + 36 + 6;
 
     let mut a = annex();
     a.body.nullifiers.swap(0, 1);
@@ -139,6 +139,9 @@ fn annex_rejects_bad_magic_order_and_layout() {
     let mut b = good.clone();
     b[body_at + 32 + 8 + 36 + 4] = 2;
     assert_eq!(Annex::decode(&b), Err(DecodeError::NonCanonicalBool));
+    let mut b = good.clone();
+    b[body_at + 32 + 8 + 36 + 5] = (MAX_BATCH_ESCROWS + 1) as u8;
+    assert_eq!(Annex::decode(&b), Err(DecodeError::LengthOutOfRange));
     assert_eq!(&good[nullifiers_at..nullifiers_at + 32], &fe(1).0);
 }
 

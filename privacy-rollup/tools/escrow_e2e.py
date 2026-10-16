@@ -50,6 +50,20 @@ def serve(state, miner, log):
     raise RuntimeError("batcher did not start")
 
 
+def settle_mining(miner: str) -> dict:
+    """`wallet settle`, mining a block whenever the settlement waits for confirmations."""
+    p = subprocess.Popen([str(be.WALLET), "settle", URL], stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+    while p.poll() is None:
+        time.sleep(5)
+        batches = be.http("GET", "/v1/batches")[1]
+        if batches and batches[-1]["stage"] == "broadcast" and batches[-1]["block_hash"]:
+            be.rpc("generatetoaddress", 1, miner)
+    out, err = p.communicate()
+    if p.returncode:
+        raise RuntimeError(f"wallet settle: exit {p.returncode}: {err}")
+    return json.loads(out)
+
+
 def pay(fund_txid: str, vout: int, spk: bytes, amount: int, miner: str) -> str:
     """An ordinary payment to the escrow address (here from a regtest P2WSH(OP_TRUE) coin)."""
     tx = CTransaction()
@@ -164,7 +178,7 @@ def main() -> None:
         be.rpc("generatetoaddress", CONFIRMATIONS, miner)
 
         t = time.time()
-        r = be.wallet("settle", URL)
+        r = settle_mining(miner)
         r["wall_seconds"] = round(time.time() - t, 1)
         tx = be.rpc("getrawtransaction", r["txid"], 1, r["block_hash"])
         sweep = tx["vin"][1]
@@ -187,17 +201,20 @@ def main() -> None:
         assert report["escrows_after_sweep"] == []
 
         b = users["b"]
-        early = refund_tx(b["deposit"], b["txid"], b["key"], DELAY - 1)
-        report["refund_before_delay"] = be.rpc("testmempoolaccept", [early.serialize().hex()])[0]
-        assert not report["refund_before_delay"]["allowed"]
         on_time = refund_tx(b["deposit"], b["txid"], b["key"], DELAY)
-        report["refund_too_early_by_height"] = be.rpc("testmempoolaccept", [on_time.serialize().hex()])[0]
-        assert not report["refund_too_early_by_height"]["allowed"]
+        report["refund_before_delay"] = be.rpc("testmempoolaccept", [on_time.serialize().hex()])[0]
+        assert not report["refund_before_delay"]["allowed"]
         be.rpc("generatetoaddress", DELAY, miner)
+        short = refund_tx(b["deposit"], b["txid"], b["key"], DELAY - 1)
+        report["refund_sequence_below_delay"] = be.rpc("testmempoolaccept", [short.serialize().hex()])[0]
+        assert not report["refund_sequence_below_delay"]["allowed"]
+        wrong = refund_tx(b["deposit"], b["txid"], users["a"]["key"], DELAY)
+        report["refund_wrong_key"] = be.rpc("testmempoolaccept", [wrong.serialize().hex()])[0]
+        assert not report["refund_wrong_key"]["allowed"]
         report["refund_after_delay"] = be.rpc("testmempoolaccept", [on_time.serialize().hex()])[0]
         assert report["refund_after_delay"]["allowed"], report["refund_after_delay"]
         be.rpc("generateblock", miner, [be.rpc("sendrawtransaction", on_time.serialize().hex())])
-        assert be.rpc("gettxout", b["txid"], 0) is None
+        assert not be.rpc("gettxout", b["txid"], 0)
         report["refund_mined"] = True
     finally:
         if batcher:

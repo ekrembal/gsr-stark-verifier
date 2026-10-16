@@ -3,7 +3,10 @@
 //! wallets recover their notes by trial decryption. Proofs are out of scope here (the ProveKit
 //! adapter and the guest test them); `submit` passes an always-accepting verifier.
 use pr_bitcoin_adapter::{PlainInput, PlainTx, SettlementTx};
-use pr_mempool::{assemble_settlement, batch_transactions, Entry, FundingCoin, Mempool, MempoolError};
+use pr_mempool::{
+    assemble_settlement, assemble_settlement_with_escrows, batch_transactions, Entry, EscrowCoin, FundingCoin, Mempool,
+    MempoolError,
+};
 use pr_protocol_types::{
     DepositDeclaration, Fe, Outpoint, RollupDescriptor, RollupTransaction, TxOut, COMMITMENT_TREE_DEPTH,
 };
@@ -147,6 +150,42 @@ impl Harness {
         self.mempool.revalidate(&self.replica);
         Ok(effects)
     }
+}
+
+impl Harness {
+    /// Settles the mempool's selection plus `escrows` and applies it to the replica.
+    pub fn settle_with_escrows(
+        &mut self,
+        escrows: &[EscrowCoin],
+        reward: Option<TxOut>,
+    ) -> Result<BatchEffects, ScanError> {
+        let selected = self.mempool.select();
+        let settlement = assemble_settlement_with_escrows(
+            &self.replica,
+            ROLLUP_SPK.to_vec(),
+            ROLLUP_SPK.to_vec(),
+            &selected,
+            escrows,
+            reward,
+        )
+        .expect("assemble");
+        let openings = escrows.iter().map(|c| c.opening.clone()).collect();
+        let w = self.replica.witness_with_escrows(batch_transactions(&selected), openings, settlement);
+        let effects = self.replica.apply_witness(&w)?;
+        self.last_witness = Some(w);
+        self.mempool.remove_settled(&selected);
+        self.mempool.revalidate(&self.replica);
+        Ok(effects)
+    }
+}
+
+/// A confirmed escrow paying `value + fee` to `to`, swept by a leaf with body `OP_TRUE` in tests.
+pub fn escrow_coin(tag: u8, rollup_id: &Fe, to: &Wallet, value: u64, fee: u64) -> EscrowCoin {
+    let (opening, _) =
+        pr_wallet_core::escrow_deposit(&mut OsRng, rollup_id, &to.keys.address(), value, fee, &[0x51], [5; 32]);
+    let script_pubkey =
+        pr_state_transition::escrow::escrow_script_pubkey(&opening.sweep_leaf, &opening.sibling).expect("valid tweak");
+    EscrowCoin { outpoint: Outpoint { txid: [tag; 32], vout: 0 }, amount: value + fee, script_pubkey, opening }
 }
 
 pub fn coin(tag: u8, amount: u64) -> FundingCoin {

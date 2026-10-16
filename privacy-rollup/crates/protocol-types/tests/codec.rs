@@ -23,7 +23,14 @@ fn annex() -> Annex {
             rollup_id: fe(9),
             batch_number: 7,
             predecessor: Outpoint { txid: [8; 32], vout: 0 },
-            layout: SettlementLayout { transactions: 1, funding_inputs: 1, withdrawals: 1, changes: 0, reward: true },
+            layout: SettlementLayout {
+                transactions: 1,
+                funding_inputs: 1,
+                withdrawals: 1,
+                changes: 0,
+                reward: true,
+                escrows: 0,
+            },
             nullifiers: vec![fe(1), fe(2)],
             outputs: vec![
                 NoteOutput { commitment: fe(3), ciphertext: vec![7; NOTE_CIPHERTEXT_LEN] },

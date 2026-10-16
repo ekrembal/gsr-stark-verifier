@@ -109,7 +109,7 @@ def main() -> None:
     shutil.rmtree(WORK, ignore_errors=True)
     DATADIR.mkdir(parents=True)
     subprocess.run([str(BITCOIN / "bitcoind"), "-regtest", f"-datadir={DATADIR}", "-daemonwait", "-server",
-                    "-listen=0", f"-rpcport={PORT}", f"-port={PORT + 1}", "-vbparams=script_restoration:0:3999999999"],
+                    "-listen=0", f"-rpcport={PORT}", f"-port={PORT + 1}", "-vbparams=tapleaf_0xc2:0:3999999999"],
                    check=True)
     report: dict = {}
     batcher = None
@@ -117,7 +117,7 @@ def main() -> None:
         miner = script_to_p2wsh(OP_TRUE)
         first = rpc("generatetoaddress", 1, miner)[0]
         rpc("generatetoaddress", 100, miner)
-        while rpc("getdeploymentinfo")["deployments"]["script_restoration"]["bip9"]["status"] != "active":
+        while rpc("getdeploymentinfo")["deployments"]["tapleaf_0xc2"]["bip9"]["status"] != "active":
             rpc("generatetoaddress", 144, miner)
         coinbase = rpc("getblock", first, 2)["tx"][0]
         template = json.loads(TEMPLATE.read_text())

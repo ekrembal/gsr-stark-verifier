@@ -97,6 +97,9 @@ pub struct BatchReport {
     /// `pr_prover::settle::SettlementStats` once proven.
     pub prove: Option<serde_json::Value>,
     pub weight: Option<u64>,
+    /// `pr_batcher::fees::FeePlan` of the proven settlement.
+    #[serde(default)]
+    pub fees: Option<serde_json::Value>,
     pub started_unix: u64,
     pub finished_unix: Option<u64>,
 }

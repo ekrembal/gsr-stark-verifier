@@ -14,7 +14,7 @@ use pr_sdk::api::{ApiError, EscrowRegistration, SettleResponse, Submission};
 use serde::Deserialize;
 use serde_json::{json, Value};
 
-use crate::service::{Batcher, Rejection};
+use crate::service::{Batcher, BumpRequest, Rejection};
 
 pub const MAX_BENCHMARK_BYTES: usize = 64 << 10;
 
@@ -82,6 +82,19 @@ async fn settle(State(b): Shared) -> Result<Response, Rejection> {
     Ok((StatusCode::ACCEPTED, Json(SettleResponse { batch_number })).into_response())
 }
 
+async fn fees(State(b): Shared) -> Result<Response, Rejection> {
+    let pool = b.readiness().await?;
+    let reward_script = b.reward_script().map(hex::encode);
+    Ok(Json(json!({"quote": b.quote(), "pool": pool, "reward_script": reward_script})).into_response())
+}
+
+async fn bump(State(b): Shared, Json(req): Json<BumpRequest>) -> Result<Response, Rejection> {
+    if !(req.sat_per_vb.is_finite() && req.sat_per_vb > 0.0 && req.sat_per_vb <= 10_000.0) {
+        return Err(Rejection::Invalid(format!("sat_per_vb {} is out of range", req.sat_per_vb)));
+    }
+    Ok(Json(b.bump(req.sat_per_vb).await?).into_response())
+}
+
 async fn batches(State(b): Shared) -> Response {
     Json(b.reports()).into_response()
 }
@@ -131,6 +144,8 @@ pub fn router(b: Arc<Batcher>, web: Option<PathBuf>) -> Router {
         .route("/v1/notes", get(notes))
         .route("/v1/paths/{leaf}", get(merkle_path))
         .route("/v1/batches", post(settle).get(batches))
+        .route("/v1/fees", get(fees))
+        .route("/v1/bump", post(bump))
         .route("/v1/batches/{n}", get(batch))
         .route(
             "/v1/benchmarks",

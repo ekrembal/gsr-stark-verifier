@@ -171,9 +171,7 @@ impl Store {
         reward: Option<TxOut>,
     ) -> Result<BuiltBatch> {
         let (replica, _) = self.load()?;
-        let swept: u64 = escrows.iter().map(escrow_weight).sum();
-        let budget = (MAX_SETTLEMENT_WEIGHT - EMPTY_SETTLEMENT_WEIGHT).saturating_sub(swept);
-        let entries = self.load_pool(&replica)?.select_within(budget);
+        let entries = self.select(&replica, escrows)?;
         let settlement =
             assemble_settlement_with_escrows(&replica, rollup_script_pubkey, successor, &entries, escrows, reward)
                 .context("batch withdraws more than it backs")?;
@@ -181,6 +179,13 @@ impl Store {
         let witness = replica.witness_with_escrows(batch_transactions(&entries), openings, settlement);
         let effects = apply_batch(&witness).map_err(|e| anyhow::anyhow!("transition: {e:?}"))?;
         Ok(BuiltBatch { entries, witness, effects })
+    }
+
+    /// The pool transactions the next settlement sweeping `escrows` would carry.
+    pub fn select(&self, replica: &Replica, escrows: &[EscrowCoin]) -> Result<Vec<Entry>> {
+        let swept: u64 = escrows.iter().map(escrow_weight).sum();
+        let budget = (MAX_SETTLEMENT_WEIGHT - EMPTY_SETTLEMENT_WEIGHT).saturating_sub(swept);
+        Ok(self.load_pool(replica)?.select_within(budget))
     }
 
     /// Records a mined settlement and drops what it settled from the pool.

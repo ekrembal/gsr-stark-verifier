@@ -209,6 +209,11 @@ fn transition_rejects_every_settlement_tamper() {
         TransitionError::InputCount,
     );
     expect(&|w| w.settlement.inputs[1].prevout.vout = 9, TransitionError::FundingInput);
+    // A funding input carrying the escrow marker (how an escrow would be claimed as a join-split's coin).
+    expect(
+        &|w| w.settlement.inputs[1].sequence = pr_protocol_types::ESCROW_INPUT_SEQUENCE,
+        TransitionError::FundingInput,
+    );
     expect(&|w| w.settlement.inputs[1].amount -= 1, TransitionError::FundingAmount);
     expect(&|w| w.settlement.outputs[0].value -= 1, TransitionError::RolloverOutput);
     expect(
@@ -579,5 +584,12 @@ fn escrow_openings_that_do_not_match_the_output_are_rejected() {
     // Dust notes are rejected.
     reject(escrow_coin(0x65, &rid, &a, 10, 700));
     let mut h = Harness::new();
+    h.settle_with_escrows(std::slice::from_ref(&base), None).unwrap();
+    // Without the escrow marker the input could be a funding coin; the transition requires the marker.
+    let mut h = Harness::new();
     h.settle_with_escrows(&[base], None).unwrap();
+    let mut w = h.last_witness.clone().unwrap();
+    let last = w.settlement.inputs.len() - 1;
+    w.settlement.inputs[last].sequence = pr_protocol_types::FUNDING_INPUT_SEQUENCE;
+    assert_eq!(apply_batch(&w).err(), Some(TransitionError::Escrow));
 }

@@ -11,7 +11,8 @@ use serde::{Deserialize, Serialize};
 
 use pr_bitcoin_adapter::{SettlementTx, TxInput};
 use pr_protocol_types::{
-    Fe, Outpoint, RollupTransaction, TxOut, MAX_BATCH_TRANSACTIONS, ROLLUP_INPUT_SEQUENCE, TX_VERSION,
+    Fe, Outpoint, RollupTransaction, TxOut, ESCROW_INPUT_SEQUENCE, FUNDING_INPUT_SEQUENCE, MAX_BATCH_TRANSACTIONS,
+    ROLLUP_INPUT_SEQUENCE, TX_VERSION,
 };
 use pr_scanner::Replica;
 use pr_state_transition::escrow::EscrowDeposit;
@@ -199,7 +200,7 @@ pub fn assemble_settlement_with_escrows(
             amount: f.amount,
             script_pubkey: f.script_pubkey.clone(),
             script_sig: Vec::new(),
-            sequence: 0xffff_ffff,
+            sequence: FUNDING_INPUT_SEQUENCE,
         });
     }
     for c in escrows {
@@ -208,7 +209,7 @@ pub fn assemble_settlement_with_escrows(
             amount: c.amount,
             script_pubkey: c.script_pubkey.clone(),
             script_sig: Vec::new(),
-            sequence: 0xffff_ffff,
+            sequence: ESCROW_INPUT_SEQUENCE,
         });
     }
     let p = |e: &Entry| e.tx.public;

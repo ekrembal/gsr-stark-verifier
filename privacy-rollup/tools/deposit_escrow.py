@@ -2,10 +2,11 @@
 """Non-interactive deposit escrows: `P2TR(NUMS, {sweep (0xc2), refund (0xc0)})`.
 
 The sweep leaf is `0x20 D OP_DROP || body`. The body uses OP_TX to require that input 0 of the sweeping
-transaction is a taproot script-path spend of this image's rollup covenant (any state root, any rollup id),
-with exactly the covenant's witness item count and an annex. The guest then accepts the escrow input only if
-its output key opens to a sweep leaf committing to `D`, and `D` commits to the state's rollup id, so only the
-genuine rollup (P2a lineage) can mint the deposit. `python3 deposit_escrow.py node-test` checks the body's
+transaction is a taproot script-path spend of this rollup's covenant (this image and rollup id, any state
+root), with exactly the covenant's witness item count and an annex, and that the escrow input itself carries
+`ESCROW_INPUT_SEQUENCE`. The guest accepts that sequence only on escrow inputs, and only if the input's output
+key opens to a sweep leaf committing to `D`; `D` commits to the rollup id, and P2a lineage means only the
+genuine rollup coin has receipts, so the escrow mints exactly its note in exactly this rollup. `python3 deposit_escrow.py node-test` checks the body's
 semantics on the gsr regtest node against a small stand-in covenant leaf.
 """
 import hashlib
@@ -29,11 +30,13 @@ SWEEP_LEAF, REFUND_LEAF = 0xc2, 0xc0
 SEL_SPK = bytes([0, 0, 0, 0x30, 0x08, 0])
 SEL_WITNESS_COUNT = bytes([0, 0, 0, 0x30, 0x40, 0])
 SEL_WITNESS_ITEMS = bytes([0, 0, 0, 0x30, 0x80, 0])
+SEL_CURRENT_SEQUENCE = bytes([0, 0, 0, 0x10, 0x20, 0])
+ESCROW_INPUT_SEQUENCE = 0xfffffffd  # pr_protocol_types::ESCROW_INPUT_SEQUENCE
 ROLLUP_ID_PUSH = b"\x24" + struct.pack("<I", 1)
 
 
 class Template:
-    """Where the root and the rollup id sit in a covenant leaf, and the hash of everything else."""
+    """Where the root sits in a covenant leaf (which must hold the rollup id push once), and the hash of the rest."""
 
     def __init__(self, script: bytes, root_offset: int, rollup_id: bytes, witness_items: int) -> None:
         d = root_offset
@@ -43,17 +46,25 @@ class Template:
         r = hits[0] + len(ROLLUP_ID_PUSH)
         assert d + 33 <= r and r + 32 <= len(script)
         self.d, self.r, self.length, self.k = d, r, len(script), witness_items
-        self.masked = hashlib.sha256(script[:d + 1] + script[d + 33:r] + script[r + 32:]).digest()
+        self.masked = hashlib.sha256(script[:d + 1] + script[d + 33:]).digest()
 
     @staticmethod
-    def of(cov: rc.Covenant, witness_items: int) -> "Template":
-        return Template(cov.script, cov.decl_len, cov.gen.stmt.rollup_id, witness_items)
+    def of(cov: rc.Covenant) -> "Template":
+        return Template(cov.script, cov.decl_len, cov.gen.stmt.rollup_id, covenant_witness_items())
+
+
+def covenant_witness_items() -> int:
+    """Items of a covenant spend: the verifier stack plus new root, leaf, control block and annex."""
+    g = rc.g
+    return rc.ref.QUERIES * len(g.QUERY_ITEMS) + len(g.SETUP_ITEMS) + 4
 
 
 def sweep_body(t: Template) -> bytes:
-    d, r, n = t.d, t.r, t.length
+    d, n = t.d, t.length
+    seq = ESCROW_INPUT_SEQUENCE.to_bytes(4, "little")  # BIP 441 minimal unsigned number
     drops = ["2DROP"] * ((t.k - 3) // 2) + ["DROP"] * ((t.k - 3) % 2)
     return bytes(assemble([
+        SEL_CURRENT_SEQUENCE, "TX", seq, "EQUALVERIFY",
         0, SEL_SPK, "TX", "SIZE", 34, "EQUALVERIFY", 0, 2, "SUBSTR", b"\x51\x20", "EQUALVERIFY",
         0, SEL_WITNESS_COUNT, "TX", t.k, "NUMEQUALVERIFY",
         0, SEL_WITNESS_ITEMS, "TX",
@@ -62,8 +73,7 @@ def sweep_body(t: Template) -> bytes:
         0, 1, "SUBSTR", "DUP", b"\xc2", "EQUAL", "SWAP", b"\xc3", "EQUAL", "ADD", "VERIFY",
         "SIZE", n, "EQUALVERIFY",
         "DUP", 0, d + 1, "SUBSTR", "SWAP",
-        "DUP", d + 33, r - d - 33, "SUBSTR", "SWAP",
-        r + 32, n - r - 32, "SUBSTR", "CAT", "CAT", "SHA256", t.masked, "EQUALVERIFY",
+        d + 33, n - d - 33, "SUBSTR", "CAT", "SHA256", t.masked, "EQUALVERIFY",
         *drops, 1,
     ]).code)
 
@@ -158,7 +168,8 @@ def node_test() -> dict:
         escrow_vouts = list(range(5, 11))
         annex = b"\x50" + b"\x00" * 10
 
-        def attempt(name, first_vout, first_wit, escrow_vout, expect, seq=0xffffffff, escrow_wit=None, sign=False):
+        def attempt(name, first_vout, first_wit, escrow_vout, expect, seq=ESCROW_INPUT_SEQUENCE, escrow_wit=None,
+                    sign=False):
             tx = CTransaction()
             tx.version = 2
             vins = ([CTxIn(COutPoint(int(fid, 16), first_vout), b"", 0xffffffff)] if first_vout is not None else [])
@@ -198,10 +209,11 @@ def node_test() -> dict:
         attempt("reject_no_annex", coin[good_spk], good_wit[:2], escrow_vouts[0], False)
         attempt("reject_escrow_alone", None, None, escrow_vouts[0], False)
         attempt("reject_refund_before_delay", None, None, escrow_vouts[0], False, seq=delay, sign=True)
+        attempt("reject_sweep_without_escrow_sequence", coin[good_spk], good_wit, escrow_vouts[1], False,
+                seq=0xffffffff)
         attempt("accept_sweep_genuine_template", coin[good_spk], good_wit, escrow_vouts[0], True)
-        # Masking the rollup id: another rollup of the same image passes the Script; the guest rejects it (D).
-        attempt("accept_sweep_other_rollup_id_same_image", coin[rid2_spk],
-                [standin(b"\x22" * 32, other_rid), rid2_ctl, annex], escrow_vouts[1], True)
+        attempt("reject_sweep_other_rollup_id_same_image", coin[rid2_spk],
+                [standin(b"\x22" * 32, other_rid), rid2_ctl, annex], escrow_vouts[1], False)
         rpc("generatetoaddress", delay, miner)
         attempt("accept_refund_after_delay", None, None, escrow_vouts[2], True, seq=delay, sign=True)
         report["sweep_body_bytes"] = len(body)

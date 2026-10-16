@@ -15,7 +15,7 @@ use pr_protocol_types::{
     next_data_history, AnchorEntry, AnchorHistory, Annex, BatchBody, BatchJournal, Canonical, ExternalData, Fe,
     JoinSplitPublic, NoteOutput, Outpoint, RollupDescriptor, RollupState, SettlementLayout, TxOut, ANCHOR_WINDOW,
     DUST_LIMIT, MAX_BATCH_ESCROWS, MAX_BATCH_TRANSACTIONS, MAX_FUNDING_INPUTS, MAX_MONEY, MAX_SCRIPT_PUBKEY_LEN,
-    NOTE_CIPHERTEXT_LEN, PROTOCOL_VERSION, ROLLUP_INPUT_SEQUENCE, TX_VERSION,
+    NOTE_CIPHERTEXT_LEN, PROTOCOL_VERSION, ROLLUP_INPUT_SEQUENCE, TX_VERSION, ESCROW_INPUT_SEQUENCE, FUNDING_INPUT_SEQUENCE,
 };
 use serde::{Deserialize, Serialize};
 
@@ -250,7 +250,10 @@ pub fn apply_batch(w: &BatchWitness) -> Result<BatchEffects, TransitionError> {
         if e.ciphertext.len() != NOTE_CIPHERTEXT_LEN {
             return Err(TransitionError::BadCiphertext);
         }
-        if !input.script_sig.is_empty() || !escrow::check_escrow(&old.rollup_id, e, &input.script_pubkey) {
+        if !input.script_sig.is_empty()
+            || input.sequence != ESCROW_INPUT_SEQUENCE
+            || !escrow::check_escrow(&old.rollup_id, e, &input.script_pubkey)
+        {
             return Err(TransitionError::Escrow);
         }
         if e.value < DUST_LIMIT || e.value > MAX_MONEY {
@@ -307,7 +310,7 @@ pub fn apply_batch(w: &BatchWitness) -> Result<BatchEffects, TransitionError> {
     check_lineage(old, &rollup_in.prevout, &w.predecessor_tx)?;
     let mut funded = vec![0u64; txs.len()];
     for ((i, o), input) in funding.iter().zip(&s.inputs[1..]) {
-        if input.prevout != **o {
+        if input.prevout != **o || input.sequence != FUNDING_INPUT_SEQUENCE {
             return Err(TransitionError::FundingInput);
         }
         funded[*i] = add(funded[*i], input.amount)?;

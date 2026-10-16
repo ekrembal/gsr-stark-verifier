@@ -31,3 +31,7 @@ pub const ANNEX_MAGIC: [u8; 4] = *b"GSRP";
 pub const ANNEX_ENCODING_VERSION: u8 = 1;
 pub const TX_VERSION: u32 = 2;
 pub const ROLLUP_INPUT_SEQUENCE: u32 = 1;
+pub const FUNDING_INPUT_SEQUENCE: u32 = 0xffff_ffff;
+/// Marks an escrow input: the sweep leaf requires it and the transition allows it only on escrow inputs, so an
+/// escrow can never be claimed as a join-split's funding coin.
+pub const ESCROW_INPUT_SEQUENCE: u32 = 0xffff_fffd;

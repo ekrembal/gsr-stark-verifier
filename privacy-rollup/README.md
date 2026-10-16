@@ -29,6 +29,7 @@ user: joinsplit guest (private witness) -> zero-knowledge receipt (`identity_zk`
 | `resolve_zk.zkr` | Built with patched Zirgen and added to the allowed control root (`5edc9538…5b01`) |
 | Batches containing join-splits | **Proven and settled on regtest** (image `00eb5e47…e50f`): a real deposit join-split, 15 segments, 24.8 min to the padded receipt; mined, altered spends rejected. See [reports/zk-joinsplit.md](reports/zk-joinsplit.md) |
 | P3: anchors, ciphertexts, batches | Append-only anchor tree (no anchor expiry), 120-byte self/change ciphertexts, up to 4 withdrawal outputs per join-split, 16-transaction weight-bounded batches; four-deposit and transfer + 4-output-withdrawal batches proven and mined on `gsr` (333,850 / 335,724 WU). See [reports/p3-anchors-ciphertexts.md](reports/p3-anchors-ciphertexts.md) |
+| P4: fees, CPFP, conflicts | Fee quotes (`GET /v1/fees`), admission floors, shortfall refusal before proving, auto-settle policy, operator reward output as CPFP anchor (`POST /v1/bump`), direct-to-miner submission, funding-conflict abandonment and adoption of competing settlements; run end to end on `gsr` (conflicted 4-deposit proof abandoned, 3-deposit re-proof mined with its CPFP child, 333,485 WU). See [reports/p4-fees.md](reports/p4-fees.md) |
 | Empty batches | **Proven** and settled consecutively on activated regtest |
 | Covenant (`OP_TX` binding, successor leaf, `1 CSV`) | Implemented, metered, mined on regtest; altered spends rejected |
 | Relay | Consensus-valid; **nonstandard** under the pinned node's policy (annex) |

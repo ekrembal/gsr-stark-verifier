@@ -84,7 +84,8 @@ async fn settle(State(b): Shared) -> Result<Response, Rejection> {
 
 async fn fees(State(b): Shared) -> Result<Response, Rejection> {
     let pool = b.readiness().await?;
-    Ok(Json(json!({"quote": b.quote(), "pool": pool})).into_response())
+    let reward_script = b.reward_script().map(hex::encode);
+    Ok(Json(json!({"quote": b.quote(), "pool": pool, "reward_script": reward_script})).into_response())
 }
 
 async fn bump(State(b): Shared, Json(req): Json<BumpRequest>) -> Result<Response, Rejection> {

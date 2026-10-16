@@ -28,8 +28,9 @@ use pr_sdk::pr_state_transition::escrow;
 use pr_sdk::{decode_receipt, decode_transaction};
 use serde::{Deserialize, Serialize};
 
+use crate::cpfp::RewardKey;
 use crate::fees::{self, FeePlan, FeeQuote, SettlePolicy};
-use crate::rpc::{btc, Rpc};
+use crate::rpc::Rpc;
 use crate::tx::{display_txid, serialize_segwit, weight};
 
 pub const MAX_FUNDING_INPUTS: usize = 16;
@@ -79,6 +80,8 @@ pub struct Config {
     pub fee_rate: FeeRate,
     /// Receives fee surplus; also the CPFP anchor, so it should be a key of the node's wallet.
     pub reward_script: Option<Vec<u8>>,
+    /// Secret key of a BIP86 `reward_script`, which lets [`Batcher::bump`] sign CPFP children.
+    pub reward_key: Option<Vec<u8>>,
     /// Batch size the verifier spend is priced over in quotes, and that triggers an automatic settlement.
     pub target_transactions: usize,
     /// Longest an admitted transaction waits for an automatic settlement once fees cover it.
@@ -100,6 +103,7 @@ impl Config {
             min_refund_delay: 144,
             fee_rate: FeeRate::Fixed(1.0),
             reward_script: None,
+            reward_key: None,
             target_transactions: 8,
             max_wait: Duration::from_secs(3600),
         }
@@ -836,13 +840,14 @@ impl Batcher {
         if spent.is_empty() {
             return Ok(());
         }
-        let _g = self.guard();
-        let mut m = self.escrow_map();
-        for k in &spent {
-            m.remove(k);
+        {
+            let _g = self.guard();
+            let mut m = self.escrow_map();
+            for k in &spent {
+                m.remove(k);
+            }
+            self.save_escrows(&m)?;
         }
-        self.save_escrows(&m)?;
-        drop(m);
         self.drop_entries_funded_by(&spent)?;
         fs::remove_file(self.path("inflight.json"))?;
         bail!("settlement inputs {spent:?} were spent elsewhere; abandoned batch {}", f.batch_number)
@@ -864,6 +869,10 @@ impl Batcher {
         };
         *self.rate.lock().unwrap_or_else(|p| p.into_inner()) = r;
         Ok(r)
+    }
+
+    pub fn reward_script(&self) -> Option<&[u8]> {
+        self.cfg.reward_script.as_deref()
     }
 
     pub fn quote(&self) -> FeeQuote {
@@ -1071,21 +1080,16 @@ impl Batcher {
         if child_fee + fees::DUST_SATS > value {
             return Err(Rejection::Invalid(format!("reward {value} sats cannot pay a {child_fee} sat child")));
         }
-        let address = self.rpc.call("getnewaddress", serde_json::json!(["cpfp", "bech32m"])).await?;
-        let input = serde_json::json!([{"txid": f.txid, "vout": vout}]);
-        let unsigned = self
-            .rpc
-            .call(
-                "createrawtransaction",
-                serde_json::json!([input, [{ address.as_str().unwrap_or(""): btc(value - child_fee) }]]),
-            )
-            .await?;
-        let prev = serde_json::json!([{"txid": f.txid, "vout": vout, "scriptPubKey": spk, "amount": btc(value)}]);
-        let signed = self.rpc.call("signrawtransactionwithwallet", serde_json::json!([unsigned, prev])).await?;
-        if signed["complete"].as_bool() != Some(true) {
-            return Err(Rejection::Internal(anyhow::anyhow!("wallet cannot sign the reward output: {signed}")));
+        let secret = self
+            .cfg
+            .reward_key
+            .as_ref()
+            .ok_or_else(|| Rejection::Conflict("no reward key is configured (PR_BATCHER_REWARD_KEY)".into()))?;
+        let key = RewardKey::from_secret(secret)?;
+        if hex::encode(key.script_pubkey()) != spk {
+            return Err(Rejection::Conflict("the reward output does not pay the configured reward key".into()));
         }
-        let child = signed["hex"].as_str().context("signed hex")?.to_owned();
+        let child = key.child(&f.txid, vout, value, child_fee)?;
         let package = [f.raw.clone(), child.clone()];
         let r = match &self.cfg.broadcast {
             Broadcast::Direct(miner) => miner.submit_package(&package).await?,

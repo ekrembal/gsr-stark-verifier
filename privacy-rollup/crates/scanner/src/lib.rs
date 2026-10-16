@@ -1,7 +1,7 @@
 //! Full rollup replica: rebuilds every tree from genesis plus the annexes of the settlement chain,
 //! checks each published state root, serves witnesses to the operator and paths to wallets, and
 //! rolls back on reorgs.
-use pr_bitcoin_adapter::SettlementTx;
+use pr_bitcoin_adapter::{PlainTx, SettlementTx};
 use pr_commitment_tree::Tree;
 use pr_indexed_nullifier_tree::IndexedTree;
 use pr_protocol_types::{
@@ -23,6 +23,7 @@ pub enum ScanError {
     CommitmentRejected,
     Transition(TransitionError),
     NothingToRollBack,
+    BadGenesis,
 }
 
 /// One accepted settlement as the replica remembers it.
@@ -30,8 +31,10 @@ pub enum ScanError {
 pub struct Checkpoint {
     pub state: RollupState,
     pub anchors: AnchorHistory,
-    /// Outpoint of the rollup output holding `state`.
+    /// Outpoint of the rollup output holding `state`: output 0 of `creating_tx`.
     pub utxo: Outpoint,
+    /// The genesis transaction or the settlement that created `utxo`, without witnesses.
+    pub creating_tx: PlainTx,
 }
 
 #[derive(Clone, Debug)]
@@ -44,14 +47,22 @@ pub struct Replica {
 }
 
 impl Replica {
-    pub fn new(descriptor: RollupDescriptor, genesis_utxo: Outpoint) -> Replica {
+    /// A replica at genesis. `genesis_tx` must spend `genesis_nonce` as input 0 and hold the rollup
+    /// at output 0, otherwise no settlement can ever pass the lineage check.
+    pub fn new(descriptor: RollupDescriptor, genesis_tx: PlainTx) -> Result<Replica, ScanError> {
         let (state, anchors, _) = genesis(&descriptor);
-        Replica {
+        if genesis_tx.inputs.first().map(|i| i.prevout) != Some(descriptor.genesis_nonce)
+            || genesis_tx.outputs.first().map(|o| o.value) != Some(descriptor.seed_sats)
+        {
+            return Err(ScanError::BadGenesis);
+        }
+        let utxo = Outpoint { txid: genesis_tx.txid(), vout: 0 };
+        Ok(Replica {
             descriptor,
             commitments: Tree::new(),
             nullifiers: IndexedTree::new(),
-            history: vec![Checkpoint { state, anchors, utxo: genesis_utxo }],
-        }
+            history: vec![Checkpoint { state, anchors, utxo, creating_tx: genesis_tx }],
+        })
     }
 
     pub fn tip(&self) -> &Checkpoint {
@@ -76,20 +87,23 @@ impl Replica {
             transactions,
             nullifier_witnesses,
             settlement,
+            predecessor_tx: tip.creating_tx.clone(),
         }
     }
 
     /// Operator path: checks a batch with the full transition and commits it.
-    pub fn apply_witness(&mut self, w: &BatchWitness, utxo: Outpoint) -> Result<BatchEffects, ScanError> {
+    pub fn apply_witness(&mut self, w: &BatchWitness) -> Result<BatchEffects, ScanError> {
         let effects = apply_batch(w).map_err(ScanError::Transition)?;
-        self.accept_annex(&effects.annex, effects.new_state.backing_sats, utxo)?;
+        self.accept_annex(&effects.annex, &w.settlement.plain())?;
         Ok(effects)
     }
 
-    /// Scanner path: replays a published annex. `rollup_value` is output zero's value and `utxo` its
-    /// outpoint; the replica recomputes the successor state and requires the published root.
-    pub fn accept_annex(&mut self, annex: &Annex, rollup_value: u64, utxo: Outpoint) -> Result<(), ScanError> {
+    /// Scanner path: replays the annex published by settlement `tx` (witnesses stripped). The replica
+    /// recomputes the successor state from it and output 0 and requires the published root.
+    pub fn accept_annex(&mut self, annex: &Annex, tx: &PlainTx) -> Result<(), ScanError> {
         let tip = self.tip().clone();
+        let rollup_value = tx.outputs.first().map_or(0, |o| o.value);
+        let utxo = Outpoint { txid: tx.txid(), vout: 0 };
         let body = &annex.body;
         if body.rollup_id != tip.state.rollup_id {
             return Err(ScanError::WrongRollup);
@@ -97,7 +111,7 @@ impl Replica {
         if body.batch_number != tip.state.batch_number + 1 {
             return Err(ScanError::WrongBatchNumber);
         }
-        if body.predecessor != tip.utxo {
+        if body.predecessor != tip.utxo || tx.inputs.first().map(|i| i.prevout) != Some(tip.utxo) {
             return Err(ScanError::WrongPredecessor);
         }
         if annex.old_state_root != tip.state.root() {
@@ -135,20 +149,21 @@ impl Replica {
                 &body.digest(),
             ),
             backing_sats: rollup_value,
+            parent: tip.utxo,
         };
         if state.root() != annex.new_state_root {
             return Err(ScanError::NewRootMismatch);
         }
         self.commitments = commitments;
         self.nullifiers = nullifiers;
-        self.history.push(Checkpoint { state, anchors, utxo });
+        self.history.push(Checkpoint { state, anchors, utxo, creating_tx: tx.clone() });
         Ok(())
     }
 
     /// Replays raw annex bytes (as read from input zero's witness).
-    pub fn accept_annex_bytes(&mut self, annex: &[u8], rollup_value: u64, utxo: Outpoint) -> Result<(), ScanError> {
+    pub fn accept_annex_bytes(&mut self, annex: &[u8], tx: &PlainTx) -> Result<(), ScanError> {
         let annex = Annex::decode(annex).map_err(|_| ScanError::BadAnnex)?;
-        self.accept_annex(&annex, rollup_value, utxo)
+        self.accept_annex(&annex, tx)
     }
 
     /// Reorg: forget the most recent settlement and restore the trees.

@@ -154,7 +154,17 @@ mod tests {
                 seed_sats: 10_000,
             })
             .unwrap();
-        store.genesis(&hex::encode([9; 32]), 0).unwrap();
+        let genesis = pr_bitcoin_adapter::PlainTx {
+            version: 2,
+            lock_time: 0,
+            inputs: vec![pr_bitcoin_adapter::PlainInput {
+                prevout: Outpoint { txid: [7; 32], vout: 0 },
+                script_sig: Vec::new(),
+                sequence: 0xffff_ffff,
+            }],
+            outputs: vec![pr_protocol_types::TxOut { value: 10_000, script_pubkey: vec![0x51] }],
+        };
+        store.genesis(&hex::encode(genesis.serialize_legacy())).unwrap();
         Batcher::open(&dir, Config::from_env(Broadcast::Send), Rpc::new("http://127.0.0.1:0", "", "").unwrap()).unwrap()
     }
 

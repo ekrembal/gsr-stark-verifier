@@ -32,10 +32,15 @@
 
 ## Copies of the covenant
 
-Anyone can pay to the leaf of an existing state root, creating a second coin with the same script. Spending it
-requires a valid receipt whose predecessor amount equals the copied state's `backing_sats`, so a copy is a
-self-funded fork: notes valid at the forked state could be withdrawn from it, paid entirely by whoever funded
-the copy. Wallets and the operator follow only the outpoint chain that descends from the genesis output.
+Anyone can pay to the leaf of an existing state root, creating a second coin with the same script. The covenant
+only sees its own prevout, but `apply_batch` proves lineage by induction: the state commits to `parent`, the
+outpoint spent to create the coin holding it, and a settlement must spend output 0 of a transaction
+(`predecessor_tx`, a private witness hashed to input 0's txid, which the journal's input digest commits) whose
+input 0 spent `parent`. At genesis `parent = genesis_nonce`, which only the genesis transaction can spend; each
+genuine settlement spends the previous genuine output, which nothing else can spend. A copy coin, at the
+current or any older root, was created by some other transaction, so no receipt for spending it exists: paying
+to a copied leaf burns the coins. This is what lets deposit escrows (P2b) trust "input 0 is the rollup leaf".
+Tests: `lineage_rejects_covenant_copies_and_forged_predecessors` in `tests/tests/scenario.rs`.
 
 ## Not implemented / not yet established
 

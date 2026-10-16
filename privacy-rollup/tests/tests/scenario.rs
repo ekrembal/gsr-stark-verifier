@@ -1,15 +1,16 @@
 //! End-to-end native scenarios and negative transition cases.
+use pr_bitcoin_adapter::PlainTx;
 use pr_mempool::MempoolError;
 use pr_protocol_types::{Annex, Canonical, Outpoint, TxOut};
 use pr_scanner::{Replica, ScanError};
 use pr_state_transition::{apply_batch, BatchWitness, TransitionError};
-use pr_tests::{coin, descriptor, Harness, Wallet};
+use pr_tests::{coin, descriptor, genesis_tx, Harness, Wallet};
 use pr_wallet_core::SpendInput;
 
 const WITHDRAW_SPK: [u8; 22] = [0x00, 0x14, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20];
 
-/// `(annex, rollup value, rollup outpoint)` of every settlement, as published on chain.
-type Published = Vec<(Vec<u8>, u64, Outpoint)>;
+/// `(annex, settlement without witnesses)` of every settlement, as published on chain.
+type Published = Vec<(Vec<u8>, PlainTx)>;
 
 /// Alice deposits, pays Bob, Bob withdraws; returns the harness, wallets and every published annex.
 fn lifecycle() -> (Harness, Wallet, Wallet, Published) {
@@ -17,7 +18,7 @@ fn lifecycle() -> (Harness, Wallet, Wallet, Published) {
     let (mut alice, mut bob) = (Wallet::new(1), Wallet::new(2));
     let mut published = Vec::new();
     let mut record = |h: &Harness, e: &pr_state_transition::BatchEffects| {
-        published.push((e.annex_bytes.clone(), e.new_state.backing_sats, h.replica.tip().utxo));
+        published.push((e.annex_bytes.clone(), h.replica.tip().creating_tx.clone()));
     };
 
     // Batch 1: deposit 50_000 from a 60_000 coin with 10_000 change; fee 1_000 of which 600 is the prover reward.
@@ -70,9 +71,9 @@ fn lifecycle() -> (Harness, Wallet, Wallet, Published) {
 #[test]
 fn deposit_transfer_withdraw_and_scanner_replay() {
     let (h, _, _, published) = lifecycle();
-    let mut fresh = Replica::new(descriptor(), Outpoint { txid: [1; 32], vout: 0 });
-    for (annex, value, utxo) in &published {
-        fresh.accept_annex_bytes(annex, *value, *utxo).unwrap();
+    let mut fresh = Replica::new(descriptor(), genesis_tx()).unwrap();
+    for (annex, tx) in &published {
+        fresh.accept_annex_bytes(annex, tx).unwrap();
     }
     assert_eq!(fresh.tip(), h.replica.tip());
     assert_eq!(fresh.commitments.root(), h.replica.commitments.root());
@@ -82,23 +83,27 @@ fn deposit_transfer_withdraw_and_scanner_replay() {
 #[test]
 fn scanner_rejects_tampered_or_out_of_order_annexes() {
     let (_, _, _, published) = lifecycle();
-    let genesis = Outpoint { txid: [1; 32], vout: 0 };
-    let mut r = Replica::new(descriptor(), genesis);
-    let (a2, v2, u2) = &published[1];
-    assert_eq!(r.accept_annex_bytes(a2, *v2, *u2), Err(ScanError::WrongBatchNumber));
-    let (a1, v1, u1) = &published[0];
-    assert_eq!(r.accept_annex_bytes(a1, v1 + 1, *u1), Err(ScanError::NewRootMismatch));
+    let mut r = Replica::new(descriptor(), genesis_tx()).unwrap();
+    let (a2, t2) = &published[1];
+    assert_eq!(r.accept_annex_bytes(a2, t2), Err(ScanError::WrongBatchNumber));
+    let (a1, t1) = &published[0];
+    let mut inflated = t1.clone();
+    inflated.outputs[0].value += 1;
+    assert_eq!(r.accept_annex_bytes(a1, &inflated), Err(ScanError::NewRootMismatch));
+    let mut other_parent = t1.clone();
+    other_parent.inputs[0].prevout.vout = 1;
+    assert_eq!(r.accept_annex_bytes(a1, &other_parent), Err(ScanError::WrongPredecessor));
     let mut bad = a1.clone();
     *bad.last_mut().unwrap() ^= 1;
-    assert!(r.accept_annex_bytes(&bad, *v1, *u1).is_err());
+    assert!(r.accept_annex_bytes(&bad, t1).is_err());
     let mut trailing = a1.clone();
     trailing.push(0);
-    assert_eq!(r.accept_annex_bytes(&trailing, *v1, *u1), Err(ScanError::BadAnnex));
+    assert_eq!(r.accept_annex_bytes(&trailing, t1), Err(ScanError::BadAnnex));
     let mut decoded = Annex::decode(a1).unwrap();
     decoded.body.predecessor.vout = 1;
-    assert_eq!(r.accept_annex(&decoded, *v1, *u1), Err(ScanError::WrongPredecessor));
-    r.accept_annex_bytes(a1, *v1, *u1).unwrap();
-    assert_eq!(r.accept_annex_bytes(a1, *v1, *u1), Err(ScanError::WrongBatchNumber));
+    assert_eq!(r.accept_annex(&decoded, t1), Err(ScanError::WrongPredecessor));
+    r.accept_annex_bytes(a1, t1).unwrap();
+    assert_eq!(r.accept_annex_bytes(a1, t1), Err(ScanError::WrongBatchNumber));
 }
 
 #[test]
@@ -107,8 +112,8 @@ fn rollback_restores_state_and_allows_reapplication() {
     let before = h.replica.tip().clone();
     h.replica.rollback().unwrap();
     assert_eq!(h.replica.state().batch_number, 3);
-    let (a, v, u) = &published[3];
-    h.replica.accept_annex_bytes(a, *v, *u).unwrap();
+    let (a, t) = &published[3];
+    h.replica.accept_annex_bytes(a, t).unwrap();
     assert_eq!(h.replica.tip(), &before);
     for _ in 0..4 {
         h.replica.rollback().unwrap();
@@ -458,4 +463,56 @@ fn stale_anchor_is_refreshed_by_rebuilding_at_the_tip() {
     h.submit(&fresh, vec![]).unwrap();
     h.settle(None).unwrap();
     assert!(h.replica.spent(&note.nullifier));
+}
+
+/// A copy of the covenant (same script, any root) is a coin whose creating transaction did not spend
+/// the genuine rollup's parent, so no witness for it passes the lineage check.
+#[test]
+fn lineage_rejects_covenant_copies_and_forged_predecessors() {
+    let mut h = Harness::new();
+    let (good, _) = deposit_witness(&h, 20_000, 20_000, 700);
+    let ok = apply_batch(&good).unwrap();
+    assert_eq!(ok.new_state.parent, h.replica.tip().utxo);
+    assert_eq!(h.replica.state().parent, descriptor().genesis_nonce);
+    let expect = |w: &BatchWitness| assert_eq!(apply_batch(w).err(), Some(TransitionError::Lineage));
+
+    // Copy at the current root: funded by any other transaction paying the same script at output 0.
+    let mut copy_tx: PlainTx = genesis_tx();
+    copy_tx.inputs[0].prevout = Outpoint { txid: [0x66; 32], vout: 3 };
+    let mut w = good.clone();
+    w.settlement.inputs[0].prevout = Outpoint { txid: copy_tx.txid(), vout: 0 };
+    w.predecessor_tx = copy_tx.clone();
+    expect(&w);
+    // ... even if the copier claims the genuine creating transaction as the predecessor.
+    let mut w = good.clone();
+    w.settlement.inputs[0].prevout = Outpoint { txid: copy_tx.txid(), vout: 0 };
+    expect(&w);
+    // Copy at output 1 of the genuine genesis transaction.
+    let mut w = good.clone();
+    w.settlement.inputs[0].prevout.vout = 1;
+    expect(&w);
+    // Forged predecessor whose txid does not match input 0.
+    let mut w = good.clone();
+    w.predecessor_tx.outputs[0].value += 1;
+    expect(&w);
+
+    // After a genuine settlement, a copy at an older root (genesis state) still fails: its parent is
+    // the genesis nonce, which only the genuine genesis transaction spent.
+    let mut alice = Wallet::new(1);
+    let funding = vec![coin(0x42, 20_000)];
+    let b = h.deposit_builder(700, &funding, 20_000, None);
+    let js = h.build(&b, [SpendInput::Dummy, SpendInput::Dummy], [alice.pay(19_300), alice.pay(0)]);
+    h.submit(&js, funding).unwrap();
+    let e = h.settle(None).unwrap();
+    alice.scan(&h.replica, &e);
+    let genuine = h.replica.tip().clone();
+    assert_eq!(genuine.state.parent, Outpoint { txid: genesis_tx().txid(), vout: 0 });
+    let mut stale = good.clone();
+    stale.settlement.inputs[0].prevout = Outpoint { txid: copy_tx.txid(), vout: 0 };
+    stale.predecessor_tx = copy_tx;
+    expect(&stale);
+    // The next genuine settlement passes with the settlement that created the tip as predecessor.
+    let next = h.replica.witness(vec![], h.settlement(&[], None));
+    assert_eq!(next.predecessor_tx, genuine.creating_tx);
+    assert_eq!(apply_batch(&next).unwrap().new_state.parent, genuine.utxo);
 }

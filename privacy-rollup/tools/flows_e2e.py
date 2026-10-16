@@ -147,7 +147,7 @@ def main() -> None:
         report["scan_final"] = scans
         a_left = DEPOSITS["a"] - DEPOSIT_FEE - TRANSFER_SATS - TRANSFER_FEE
         b_left = DEPOSITS["b"] - DEPOSIT_FEE - WITHDRAW_SATS - WITHDRAW_FEE
-        assert sorted(x["value"] for x in scans["a"] if x["leaf"] != note_a["leaf"]) == [0, 0, a_left], scans["a"]
+        assert sorted(x["value"] for x in scans["a"] if x["leaf"] != note_a["leaf"]) == [0, a_left], scans["a"]
         assert TRANSFER_SATS in [x["value"] for x in scans["b"]], scans["b"]
         assert b_left in [x["value"] for x in scans["b"]], scans["b"]
 

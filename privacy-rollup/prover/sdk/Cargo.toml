@@ -16,6 +16,7 @@ pr-protocol-types = { path = "../../crates/protocol-types" }
 pr-wallet-core = { path = "../../crates/wallet-core" }
 pr-joinsplit = { path = "../../crates/joinsplit" }
 pr-mempool = { path = "../../crates/mempool" }
+pr-state-transition = { path = "../../crates/state-transition" }
 pr-commitment-tree = { path = "../../crates/commitment-tree" }
 pr-prover = { path = "..", optional = true }
 reqwest = { version = "0.12.28", default-features = false, features = ["blocking", "json"], optional = true }

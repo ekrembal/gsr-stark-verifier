@@ -178,3 +178,51 @@ mod receipts {
         assert!(err.contains("witness"), "{err}");
     }
 }
+
+mod deposit_addresses {
+    use pr_protocol_types::Fe;
+    use pr_state_transition::escrow;
+
+    use super::*;
+
+    fn terms() -> EscrowTerms {
+        EscrowTerms { rollup_id: hex::encode([0x1e; 32]), body: "51".into(), confirmations: 3, min_refund_delay: 144 }
+    }
+
+    #[test]
+    fn deposit_address_opens_to_a_taproot_escrow_with_a_refund_leaf() {
+        let w = Wallet::from_seed(&SEED);
+        let d = w.deposit_address(&mut OsRng, &terms(), 20_000, 700, &[0x22; 32], 144).unwrap();
+        assert_eq!(d.amount_sats, 20_700);
+        let spk = hex::decode(&d.script_pubkey).unwrap();
+        assert_eq!((spk.len(), spk[0], spk[1]), (34, 0x51, 0x20));
+        assert!(escrow::check_escrow(&Fe([0x1e; 32]), &d.opening, &spk));
+        assert!(!escrow::check_escrow(&Fe([0x1f; 32]), &d.opening, &spk));
+        let refund = hex::decode(&d.refund_leaf).unwrap();
+        assert_eq!(refund, escrow::refund_leaf(&[0x22; 32], 144));
+        assert_eq!(d.opening.sibling, escrow::tapleaf_hash(escrow::REFUND_LEAF_VERSION, &refund));
+        assert_eq!((d.opening.value, d.opening.fee_sats, d.note.value), (20_000, 700, 20_000));
+        let control = escrow::sweep_control_block(&d.opening).unwrap();
+        assert_eq!(control.len(), 65);
+        let json = serde_json::to_string(&d).unwrap();
+        assert_eq!(serde_json::from_str::<DepositAddress>(&json).unwrap(), d);
+    }
+
+    #[test]
+    fn deposit_address_rejects_short_refund_delay_dust_and_overflow() {
+        let w = Wallet::from_seed(&SEED);
+        assert!(w.deposit_address(&mut OsRng, &terms(), 20_000, 0, &[0x22; 32], 143).is_err());
+        assert!(w.deposit_address(&mut OsRng, &terms(), 20_000, 0, &[0x22; 32], 1 << 15).is_err());
+        assert!(w.deposit_address(&mut OsRng, &terms(), 100, 0, &[0x22; 32], 144).is_err());
+        assert!(w.deposit_address(&mut OsRng, &terms(), u64::MAX, 1, &[0x22; 32], 144).is_err());
+    }
+
+    #[test]
+    fn deposit_addresses_are_unlinkable_across_calls() {
+        let w = Wallet::from_seed(&SEED);
+        let a = w.deposit_address(&mut OsRng, &terms(), 20_000, 0, &[0x22; 32], 144).unwrap();
+        let b = w.deposit_address(&mut OsRng, &terms(), 20_000, 0, &[0x22; 32], 144).unwrap();
+        assert_ne!(a.script_pubkey, b.script_pubkey);
+        assert_ne!(a.opening.digest(&Fe([0x1e; 32])), b.opening.digest(&Fe([0x1e; 32])));
+    }
+}

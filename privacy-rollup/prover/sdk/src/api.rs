@@ -2,6 +2,7 @@
 //! order; field elements are 32-byte big-endian hex.
 use pr_mempool::FundingCoin;
 use pr_protocol_types::{Fe, NoteOutput};
+use pr_state_transition::escrow::EscrowDeposit;
 use serde::{Deserialize, Serialize};
 
 /// The anchor new join-splits prove membership against.
@@ -110,4 +111,36 @@ pub struct SettleResponse {
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ApiError {
     pub error: String,
+}
+
+/// `GET /v1/escrow`: how to build a deposit address for this rollup. `body` is the sweep body
+/// (`tools/covenant_cli.py escrow-body`); the batcher sweeps an escrow once it has `confirmations`.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct EscrowTerms {
+    pub rollup_id: String,
+    pub body: String,
+    pub confirmations: u64,
+    /// Smallest refund delay (blocks) the batcher accepts, so it has time to sweep.
+    pub min_refund_delay: u16,
+}
+
+/// `POST /v1/escrows`: a paid deposit address and its opening. The opening reveals the minted
+/// note's authority, randomness and value to the batcher, as a deposit's amount is public anyway.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct EscrowRegistration {
+    /// Funding outpoint: (txid, vout).
+    pub outpoint: (String, u32),
+    pub opening: EscrowDeposit,
+    /// The address's refund leaf (hex), whose leaf hash is `opening.sibling`.
+    pub refund_leaf: String,
+}
+
+/// One registered escrow as the batcher sees it.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct EscrowState {
+    pub outpoint: (String, u32),
+    pub amount: u64,
+    pub confirmations: u64,
+    /// Batch whose in-flight settlement sweeps it.
+    pub reserved_by: Option<u64>,
 }

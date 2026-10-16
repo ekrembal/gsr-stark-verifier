@@ -32,9 +32,13 @@ pub use pr_prover::user::{
 };
 #[cfg(feature = "prove")]
 pub use pr_prover::JOINSPLIT_ID;
-pub use pr_wallet_core::{scan_outputs, Address, BuiltJoinSplit, Keys, OutputSpec, OwnedNote, SpendInput};
+pub use pr_state_transition;
+pub use pr_wallet_core::{
+    scan_outputs, Address, BuiltJoinSplit, Keys, NotePlaintext, OutputSpec, OwnedNote, SpendInput,
+};
 
-use api::{FundingInput, MerklePath, Notes, Status, Submission};
+use api::{EscrowTerms, FundingInput, MerklePath, Notes, Status, Submission};
+use pr_state_transition::escrow::{self, EscrowDeposit};
 
 /// Bound on a hex-encoded canonical transaction: twice the receipt bound plus the statement and
 /// external data.
@@ -94,6 +98,19 @@ pub fn verify_transaction(tx: &RollupTransaction) -> Result<()> {
     verify_joinsplit_receipt(&decode_receipt(&tx.receipt)?, &tx.public)
 }
 
+/// A non-interactive deposit address: pay exactly `amount_sats` to `script_pubkey` from any wallet,
+/// then register `opening` with the batcher. After `refund_delay` blocks the payer can take the coin
+/// back with `refund_leaf` (version `0xc0`) and their key if it was not swept.
+#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+pub struct DepositAddress {
+    pub script_pubkey: String,
+    pub amount_sats: u64,
+    pub opening: EscrowDeposit,
+    pub refund_leaf: String,
+    pub refund_delay: u16,
+    pub note: NotePlaintext,
+}
+
 /// A wallet: keys derived from a 32-byte seed.
 pub struct Wallet {
     pub keys: Keys,
@@ -146,6 +163,48 @@ impl Wallet {
             .map_err(|e| anyhow::anyhow!("join-split: {e}"))?;
         built.witness.check().map_err(|e| anyhow::anyhow!("witness: {e}"))?;
         Ok(built)
+    }
+
+    /// A deposit address minting a `value` note to this wallet; `fee_sats` goes to the batch fee pool.
+    pub fn deposit_address<R: RngCore + CryptoRng>(
+        &self,
+        rng: &mut R,
+        terms: &EscrowTerms,
+        value: u64,
+        fee_sats: u64,
+        refund_xonly: &[u8; 32],
+        refund_delay: u16,
+    ) -> Result<DepositAddress> {
+        ensure!(
+            refund_delay >= terms.min_refund_delay,
+            "refund delay is below the batcher's {}",
+            terms.min_refund_delay
+        );
+        ensure!(refund_delay < 1 << 15, "refund delay must be a BIP68 block count");
+        ensure!(value >= pr_protocol_types::DUST_LIMIT, "deposit of {value} sats is dust");
+        let amount_sats = value.checked_add(fee_sats).context("amount overflows")?;
+        let rollup_id = fe_from_hex(&terms.rollup_id)?;
+        let refund = escrow::refund_leaf(refund_xonly, refund_delay);
+        let sibling = escrow::tapleaf_hash(escrow::REFUND_LEAF_VERSION, &refund);
+        let (opening, note) = pr_wallet_core::escrow_deposit(
+            rng,
+            &rollup_id,
+            &self.address(),
+            value,
+            fee_sats,
+            &hex::decode(&terms.body)?,
+            sibling,
+        );
+        let spk = escrow::escrow_script_pubkey(&opening.sweep_leaf, &sibling).context("invalid taproot tweak")?;
+        ensure!(escrow::check_escrow(&rollup_id, &opening, &spk), "escrow does not open its address");
+        Ok(DepositAddress {
+            script_pubkey: hex::encode(spk),
+            amount_sats,
+            opening,
+            refund_leaf: hex::encode(refund),
+            refund_delay,
+            note,
+        })
     }
 
     /// Spends up to two owned notes (each with its path against `status.anchor`) into up to two

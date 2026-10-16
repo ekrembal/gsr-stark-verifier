@@ -7,7 +7,7 @@ use std::path::{Path, PathBuf};
 
 use anyhow::{bail, ensure, Context, Result};
 use pr_bitcoin_adapter::PlainTx;
-use pr_mempool::{assemble_settlement, batch_transactions, Entry, FundingCoin, Mempool};
+use pr_mempool::{assemble_settlement_with_escrows, batch_transactions, Entry, EscrowCoin, FundingCoin, Mempool};
 use pr_protocol_types::{Canonical, Outpoint, RollupDescriptor, RollupTransaction, TxOut};
 use pr_scanner::Replica;
 use pr_state_transition::{apply_batch, BatchEffects, BatchWitness};
@@ -155,11 +155,24 @@ impl Store {
         successor: Vec<u8>,
         reward: Option<TxOut>,
     ) -> Result<BuiltBatch> {
+        self.build_with_escrows(rollup_script_pubkey, successor, &[], reward)
+    }
+
+    /// As [`Store::build`], also sweeping `escrows` (confirmed escrow outputs) into minted notes.
+    pub fn build_with_escrows(
+        &self,
+        rollup_script_pubkey: Vec<u8>,
+        successor: Vec<u8>,
+        escrows: &[EscrowCoin],
+        reward: Option<TxOut>,
+    ) -> Result<BuiltBatch> {
         let (replica, _) = self.load()?;
         let entries = self.load_pool(&replica)?.select();
-        let settlement = assemble_settlement(&replica, rollup_script_pubkey, successor, &entries, reward)
-            .context("batch withdraws more than it backs")?;
-        let witness = replica.witness(batch_transactions(&entries), settlement);
+        let settlement =
+            assemble_settlement_with_escrows(&replica, rollup_script_pubkey, successor, &entries, escrows, reward)
+                .context("batch withdraws more than it backs")?;
+        let openings = escrows.iter().map(|c| c.opening.clone()).collect();
+        let witness = replica.witness_with_escrows(batch_transactions(&entries), openings, settlement);
         let effects = apply_batch(&witness).map_err(|e| anyhow::anyhow!("transition: {e:?}"))?;
         Ok(BuiltBatch { entries, witness, effects })
     }

@@ -19,6 +19,7 @@ pub const NUMS_X: [u8; 32] = [
     0x0f, 0x28, 0xec, 0x96, 0xd5, 0x47, 0xbf, 0xee, 0x9a, 0xce, 0x80, 0x3a, 0xc0,
 ];
 pub const SWEEP_LEAF_VERSION: u8 = 0xc2;
+pub const REFUND_LEAF_VERSION: u8 = 0xc0;
 const DIGEST_TAG: &[u8] = b"GSR-rollup/escrow-v1";
 
 /// The private opening of one escrow input.
@@ -103,6 +104,11 @@ pub fn tapbranch_hash(a: &[u8; 32], b: &[u8; 32]) -> [u8; 32] {
 
 /// The x-only output key of `P2TR(NUMS, merkle_root)`; `None` if the tweak is not a valid scalar.
 pub fn output_key(merkle_root: &[u8; 32]) -> Option<[u8; 32]> {
+    tweaked_output(merkle_root).map(|(x, _)| x)
+}
+
+/// The output key of `P2TR(NUMS, merkle_root)` and whether its y coordinate is odd.
+pub fn tweaked_output(merkle_root: &[u8; 32]) -> Option<([u8; 32], bool)> {
     let t = tagged(b"TapTweak", &[&NUMS_X, merkle_root]);
     let scalar = <Scalar as Reduce<U256>>::reduce_bytes(&t.into());
     if scalar.to_bytes().as_slice() != t {
@@ -111,10 +117,41 @@ pub fn output_key(merkle_root: &[u8; 32]) -> Option<[u8; 32]> {
     let p: Option<AffinePoint> =
         AffinePoint::from_encoded_point(&EncodedPoint::from_bytes([&[0x02][..], &NUMS_X].concat()).ok()?).into();
     let q = (ProjectivePoint::from(p?) + ProjectivePoint::GENERATOR * scalar).to_affine();
-    Some(q.x().into())
+    Some((q.x().into(), bool::from(q.y_is_odd())))
 }
 
-/// `OP_1 <32-byte key>` for the escrow `{sweep_leaf, sibling}`.
+/// The refund leaf `<delay> OP_CHECKSEQUENCEVERIFY OP_DROP <user> OP_CHECKSIG`, version
+/// [`REFUND_LEAF_VERSION`]; `delay` is a BIP68 block count.
+pub fn refund_leaf(user_xonly: &[u8; 32], delay: u16) -> Vec<u8> {
+    let mut s = Vec::with_capacity(40);
+    match delay {
+        0 => s.push(0x00),
+        1..=16 => s.push(0x50 + delay as u8),
+        _ => {
+            let mut n = delay.to_le_bytes().to_vec();
+            if n[1] == 0 {
+                n.pop();
+            }
+            if n.last().is_some_and(|b| b & 0x80 != 0) {
+                n.push(0);
+            }
+            s.push(n.len() as u8);
+            s.extend(n);
+        }
+    }
+    s.extend([0xb2, 0x75, 0x20]);
+    s.extend(user_xonly);
+    s.push(0xac);
+    s
+}
+
+/// The control block that spends the sweep leaf of `e`'s address.
+pub fn sweep_control_block(e: &EscrowDeposit) -> Option<Vec<u8>> {
+    let root = tapbranch_hash(&tapleaf_hash(SWEEP_LEAF_VERSION, &e.sweep_leaf), &e.sibling);
+    let (_, odd) = tweaked_output(&root)?;
+    Some([&[SWEEP_LEAF_VERSION | odd as u8][..], &NUMS_X, &e.sibling].concat())
+}
+
 pub fn escrow_script_pubkey(sweep_leaf: &[u8], sibling: &[u8; 32]) -> Option<Vec<u8>> {
     let root = tapbranch_hash(&tapleaf_hash(SWEEP_LEAF_VERSION, sweep_leaf), sibling);
     Some([&[0x51, 0x20][..], &output_key(&root)?].concat())
@@ -160,6 +197,32 @@ mod tests {
     }
 
     #[test]
+    fn refund_leaf_and_control_block_match_deposit_escrow_py() {
+        let refund = refund_leaf(&[0x22; 32], 144);
+        assert_eq!(
+            hex::encode(&refund),
+            "029000b275202222222222222222222222222222222222222222222222222222222222222222ac"
+        );
+        let sibling = tapleaf_hash(REFUND_LEAF_VERSION, &refund);
+        assert_eq!(hex::encode(sibling), "dcc5a52c7884d9a19cea606a7ab22c8efef3849ed7f030cc85a466f8034aa619");
+        assert_eq!(refund_leaf(&[0; 32], 5)[0], 0x55);
+        let e = EscrowDeposit {
+            authority: Fe([0; 32]),
+            randomness: Fe([0; 32]),
+            value: 0,
+            fee_sats: 0,
+            sweep_leaf: sweep_leaf(&[0x11; 32], &[0x51]),
+            sibling,
+            ciphertext: Vec::new(),
+        };
+        assert_eq!(
+            hex::encode(sweep_control_block(&e).unwrap()),
+            "c350929b74c1a04954b78b4b6035e97a5e078a5a0f28ec96d547bfee9ace803ac0\
+             dcc5a52c7884d9a19cea606a7ab22c8efef3849ed7f030cc85a466f8034aa619"
+        );
+    }
+
+    #[test]
     fn escrow_binds_digest_leaf_and_sibling() {
         let rid = Fe([7; 32]);
         let mut e = EscrowDeposit {
@@ -194,8 +257,10 @@ mod tests {
     fn escrow_script_pubkey_matches_python_vector() {
         let leaf = sweep_leaf(&[0x11; 32], &[0x51]);
         assert_eq!(hex::encode(&leaf), "2011111111111111111111111111111111111111111111111111111111111111117551");
-        let sibling: [u8; 32] =
-            hex::decode("dcc5a52c7884d9a19cea606a7ab22c8efef3849ed7f030cc85a466f8034aa619").unwrap().try_into().unwrap();
+        let sibling: [u8; 32] = hex::decode("dcc5a52c7884d9a19cea606a7ab22c8efef3849ed7f030cc85a466f8034aa619")
+            .unwrap()
+            .try_into()
+            .unwrap();
         assert_eq!(
             hex::encode(escrow_script_pubkey(&leaf, &sibling).unwrap()),
             "5120401361e7f8b69af84cf54706f6f76544e0ac22a915725199f1959401c9948dc6"

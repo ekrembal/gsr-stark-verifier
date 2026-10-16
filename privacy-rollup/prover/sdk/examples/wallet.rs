@@ -4,6 +4,9 @@
 //! wallet address <seed-hex>
 //! wallet deposit <url> <seed-hex> <funding.json> <fee-sats> <submission-out.json> [po2]
 //!     funding.json: [FundingInput]; the submission sent is also written to <submission-out.json>
+//! wallet deposit-address <url> <seed-hex> <value-sats> <fee-sats> <refund-xonly-hex> <refund-delay> <out.json>
+//!     a non-interactive Taproot escrow address; pay `amount_sats` to `script_pubkey` from any wallet
+//! wallet register <url> <deposit-address.json> <txid> <vout>      register the paid escrow output
 //! wallet scan    <url> <seed-hex>
 //! wallet send    <url> <seed-hex> <leaf> <to-address|self> <amount-sats> <fee-sats> [po2]
 //! wallet withdraw <url> <seed-hex> <leaf> <script-pubkey-hex> <amount-sats> <fee-sats> [po2]
@@ -11,9 +14,9 @@
 use std::time::{Duration, Instant};
 
 use anyhow::{bail, Context, Result};
-use pr_sdk::api::{FundingInput, Stage};
+use pr_sdk::api::{EscrowRegistration, FundingInput, Stage};
 use pr_sdk::client::Client;
-use pr_sdk::{decode_address, encode_address, fe_from_hex, prove, submission, OutputSpec, Wallet};
+use pr_sdk::{decode_address, encode_address, fe_from_hex, prove, submission, DepositAddress, OutputSpec, Wallet};
 use rand_core::OsRng;
 use serde_json::json;
 
@@ -44,6 +47,30 @@ fn main() -> Result<()> {
             let r = client.submit(&sub)?;
             json!({"witness_seconds": witness_seconds, "prove": stats, "pending": r.pending,
                    "deposit_sats": tx.public.deposit_sats, "fee_sats": tx.public.fee_sats})
+        }
+        Some("deposit-address") if a.len() == 8 => {
+            let (client, w) = (Client::new(&a[1])?, wallet(&a[2])?);
+            let refund: [u8; 32] = hex::decode(&a[5])?.try_into().map_err(|_| anyhow::anyhow!("refund key"))?;
+            let d = w.deposit_address(
+                &mut OsRng,
+                &client.escrow_terms()?,
+                a[3].parse()?,
+                a[4].parse()?,
+                &refund,
+                a[6].parse()?,
+            )?;
+            std::fs::write(&a[7], serde_json::to_vec_pretty(&d)?)?;
+            json!({"script_pubkey": d.script_pubkey, "amount_sats": d.amount_sats, "refund_delay": d.refund_delay})
+        }
+        Some("register") if a.len() == 5 => {
+            let client = Client::new(&a[1])?;
+            let d: DepositAddress = serde_json::from_slice(&std::fs::read(&a[2])?)?;
+            let reg = EscrowRegistration {
+                outpoint: (a[3].clone(), a[4].parse()?),
+                opening: d.opening,
+                refund_leaf: d.refund_leaf,
+            };
+            serde_json::to_value(client.register_escrow(&reg)?)?
         }
         Some("scan") if a.len() == 3 => {
             let (client, w) = (Client::new(&a[1])?, wallet(&a[2])?);

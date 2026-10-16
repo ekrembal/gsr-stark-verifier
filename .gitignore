@@ -75,3 +75,7 @@ venv/
 # Node
 node_modules/
 dist/
+
+# Built by privacy-rollup/prover/sdk-wasm/build.sh
+privacy-rollup/prover/web/pr-sdk-wasm.wasm
+!privacy-rollup/prover/web/vendor/package/dist/

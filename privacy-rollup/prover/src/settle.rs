@@ -134,7 +134,7 @@ pub fn prove_settlement(witness: &BatchWitness, receipts: &[SuccinctReceipt<Rece
     let assumed: Vec<Assumption> = session.assumptions.iter().map(|(a, _)| a.clone()).collect();
     let output = MaybePruned::Value(Some(Output {
         journal: MaybePruned::Pruned(journal.digest()),
-        assumptions: assumed.into(),
+        assumptions: assumed.clone().into(),
     }));
     let last = segments.last_mut().context("session is empty")?;
     ensure!(last.claim.output.digest() == output.digest(), "final segment output differs from the session output");
@@ -147,7 +147,12 @@ pub fn prove_settlement(witness: &BatchWitness, receipts: &[SuccinctReceipt<Rece
     }
     let lift_join_seconds = t.seconds();
     let t = Clock::start();
-    for r in &assumptions {
+    // The executor prepends each verified claim, so resolve in the session's (head-first) order.
+    for a in &assumed {
+        let r = assumptions
+            .iter()
+            .find(|r| r.claim.digest() == a.claim)
+            .context("no join-split receipt for an assumption")?;
         conditional = recursion::resolve_zk(&conditional, r)?;
     }
     let resolve_zk_seconds = t.seconds();

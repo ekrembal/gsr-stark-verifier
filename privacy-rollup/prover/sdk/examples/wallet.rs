@@ -6,6 +6,7 @@
 //!     funding.json: [FundingInput]; the submission sent is also written to <submission-out.json>
 //! wallet scan    <url> <seed-hex>
 //! wallet send    <url> <seed-hex> <leaf> <to-address|self> <amount-sats> <fee-sats> [po2]
+//! wallet withdraw <url> <seed-hex> <leaf> <script-pubkey-hex> <amount-sats> <fee-sats> [po2]
 //! wallet settle  <url>                                                 request a batch, wait for it
 use std::time::{Duration, Instant};
 
@@ -54,21 +55,27 @@ fn main() -> Result<()> {
                 "nullifier": hex::encode(n.nullifier.0)}))
                 .collect::<Vec<_>>())
         }
-        Some("send") if (7..=8).contains(&a.len()) => {
+        Some(cmd @ ("send" | "withdraw")) if (7..=8).contains(&a.len()) => {
             let (client, w) = (Client::new(&a[1])?, wallet(&a[2])?);
             let status = client.status()?;
             let leaf: u64 = a[3].parse()?;
             let notes = w.scan(&fe_from_hex(&status.rollup_id)?, &client.notes(0)?);
             let note = notes.into_iter().find(|n| n.leaf_index == leaf).context("no owned note at that leaf")?;
-            let recipient = if a[4] == "self" { w.address() } else { decode_address(&a[4])? };
-            let pay = OutputSpec { value: a[5].parse()?, recipient, memo: [0; 32] };
+            let amount: u64 = a[5].parse()?;
+            let (payments, withdrawal) = if cmd == "send" {
+                let recipient = if a[4] == "self" { w.address() } else { decode_address(&a[4])? };
+                (vec![OutputSpec { value: amount, recipient, memo: [0; 32] }], None)
+            } else {
+                (Vec::new(), Some((hex::decode(&a[4]).context("script-pubkey")?, amount)))
+            };
             let t = Instant::now();
-            let built =
-                w.transfer(&mut OsRng, &status, &[(note, client.path(leaf)?)], vec![pay], None, a[6].parse()?, 1)?;
+            let path = client.path(leaf)?;
+            let built = w.transfer(&mut OsRng, &status, &[(note, path)], payments, withdrawal, a[6].parse()?, 1)?;
             let witness_seconds = t.elapsed().as_secs_f64();
             let (tx, stats) = prove(&built.witness, &built.external, po2(&a, 7)?)?;
             let r = client.submit(&submission(&tx, Vec::new()))?;
-            json!({"witness_seconds": witness_seconds, "prove": stats, "pending": r.pending})
+            json!({"witness_seconds": witness_seconds, "prove": stats, "pending": r.pending,
+                   "withdrawal_sats": tx.public.withdrawal_sats, "fee_sats": tx.public.fee_sats})
         }
         Some("settle") if a.len() == 2 => {
             let client = Client::new(&a[1])?;

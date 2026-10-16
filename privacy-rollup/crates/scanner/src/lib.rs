@@ -89,7 +89,7 @@ impl Replica {
         let mut nullifiers: Vec<Fe> = transactions.iter().flat_map(|t| t.public.nullifiers).collect();
         nullifiers.sort();
         let mut scratch = self.nullifiers.clone();
-        let nullifier_witnesses = nullifiers.iter().filter_map(|n| scratch.insert(*n).ok()).collect();
+        let nullifier_witness = scratch.insert_batch(&nullifiers).unwrap_or_default();
         let tip = self.tip();
         BatchWitness {
             old_state: tip.state,
@@ -112,7 +112,7 @@ impl Replica {
                 Some(self.commitments.frontier())
             },
             transactions,
-            nullifier_witnesses,
+            nullifier_witness,
             settlement,
             predecessor_tx: tip.creating_tx.clone(),
             escrows,
@@ -168,6 +168,7 @@ impl Replica {
             batch_number: body.batch_number,
             commitment_root: commitments.root(),
             commitment_count: commitments.count(),
+            commitment_frontier: commitments.frontier().digest(),
             nullifier_root: nullifiers.root(),
             nullifier_next_index: nullifiers.next_index(),
             anchor_history_commitment: anchors.commitment(),

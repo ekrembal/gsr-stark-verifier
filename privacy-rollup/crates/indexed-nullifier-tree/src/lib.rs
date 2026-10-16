@@ -64,6 +64,8 @@ pub enum NullifierError {
     BadPath,
     Full,
     Duplicate,
+    /// The low-leaf runs of a batch witness do not cover the batch exactly.
+    Coverage,
 }
 
 /// Witness for inserting one value into the tree with root `root` and `next_index` leaves.
@@ -112,6 +114,131 @@ pub fn verify_insertion(
     }
     let new_leaf = Leaf { value: *value, next_index: w.low_leaf.next_index, next_value: w.low_leaf.next_value };
     Ok(root_from_path(&new_leaf.hash(), next_index, &w.new_path))
+}
+
+/// One pre-existing leaf whose gap receives the next `count` values of a sorted batch.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct LowUpdate {
+    pub low_index: u64,
+    pub low_leaf: Leaf,
+    /// Path of `low_index` against the root after the previous low updates.
+    pub path: Vec<Hash>,
+    pub count: u32,
+}
+
+/// Witness for inserting a sorted batch of values: one path per distinct low leaf, plus the left
+/// siblings of slot `next_index` after those updates. The new leaves occupy consecutive slots, so
+/// they are appended like a frontier (about two node hashes each) instead of one 32-level path
+/// verification and one recomputation per value.
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct BatchInsertionWitness {
+    pub lows: Vec<LowUpdate>,
+    /// Sibling of the slot-`next_index` path at each level; levels where the slot is a left child
+    /// must hold the empty-subtree hash.
+    pub frontier: Vec<Hash>,
+}
+
+/// Root of a tree whose leaves at `count..` are empty, from the left siblings `left[l]` of slot
+/// `count` (read only where bit `l` of `count` is set).
+fn root_from_left(left: &[Hash], count: u64) -> Hash {
+    let e = empty_hashes();
+    let mut n = EMPTY;
+    let mut empty = true;
+    for l in 0..DEPTH {
+        if (count >> l) & 1 == 1 {
+            n = node(&left[l], &n);
+            empty = false;
+        } else if empty {
+            n = e[l + 1];
+        } else {
+            n = node(&n, &e[l]);
+        }
+    }
+    n
+}
+
+/// Verifies insertion of `values` (strictly increasing) and returns the new root. The resulting
+/// tree equals inserting the values one by one in increasing order with [`verify_insertion`].
+pub fn verify_batch_insertion(
+    root: &Hash,
+    next_index: u64,
+    values: &[Fe],
+    w: &BatchInsertionWitness,
+) -> Result<Hash, NullifierError> {
+    if values.is_empty() {
+        return if w.lows.is_empty() && w.frontier.is_empty() { Ok(*root) } else { Err(NullifierError::Coverage) };
+    }
+    if values[0].is_zero() {
+        return Err(NullifierError::ZeroNullifier);
+    }
+    if values.windows(2).any(|p| p[0] >= p[1]) {
+        return Err(NullifierError::Duplicate);
+    }
+    let k = values.len() as u64;
+    if next_index.checked_add(k).is_none_or(|end| end > CAPACITY) {
+        return Err(NullifierError::Full);
+    }
+    let mut root = *root;
+    let mut new_leaves = Vec::with_capacity(values.len());
+    let mut j = 0usize;
+    for u in &w.lows {
+        let end = j.checked_add(u.count as usize).filter(|&e| u.count > 0 && e <= values.len());
+        let Some(end) = end else { return Err(NullifierError::Coverage) };
+        let run = &values[j..end];
+        if u.low_index >= next_index {
+            return Err(NullifierError::BadIndex);
+        }
+        if u.path.len() != DEPTH {
+            return Err(NullifierError::BadPath);
+        }
+        let l = &u.low_leaf;
+        if !(l.brackets(&run[0]) && l.brackets(&run[run.len() - 1])) {
+            return Err(if run.iter().any(|v| *v == l.value || *v == l.next_value) {
+                NullifierError::Duplicate
+            } else {
+                NullifierError::NotBracketed
+            });
+        }
+        if root_from_path(&l.hash(), u.low_index, &u.path) != root {
+            return Err(NullifierError::LowLeafMismatch);
+        }
+        let updated = Leaf { value: l.value, next_index: next_index + j as u64, next_value: run[0] };
+        root = root_from_path(&updated.hash(), u.low_index, &u.path);
+        for (i, v) in run.iter().enumerate() {
+            let (next_index, next_value) = match run.get(i + 1) {
+                Some(n) => (next_index + (j + i + 1) as u64, *n),
+                None => (l.next_index, l.next_value),
+            };
+            new_leaves.push(Leaf { value: *v, next_index, next_value }.hash());
+        }
+        j = end;
+    }
+    if j != values.len() {
+        return Err(NullifierError::Coverage);
+    }
+    if w.frontier.len() != DEPTH {
+        return Err(NullifierError::BadPath);
+    }
+    let e = empty_hashes();
+    if (0..DEPTH).any(|l| (next_index >> l) & 1 == 0 && w.frontier[l] != e[l]) {
+        return Err(NullifierError::SlotNotEmpty);
+    }
+    if root_from_left(&w.frontier, next_index) != root {
+        return Err(NullifierError::SlotNotEmpty);
+    }
+    let mut left = w.frontier.clone();
+    let mut count = next_index;
+    for h in new_leaves {
+        let mut n = h;
+        let mut l = 0;
+        while (count >> l) & 1 == 1 {
+            n = node(&left[l], &n);
+            l += 1;
+        }
+        left[l] = n;
+        count += 1;
+    }
+    Ok(root_from_left(&left, count))
 }
 
 /// Non-membership proof: the low leaf bracketing `value`, with its path.
@@ -211,6 +338,50 @@ impl IndexedTree {
         self.write(next_index, new_leaf.hash());
         Ok(InsertionWitness { low_index, low_leaf, low_path, new_path })
     }
+    /// Inserts strictly increasing `values` and returns the [`BatchInsertionWitness`] for them.
+    pub fn insert_batch(&mut self, values: &[Fe]) -> Result<BatchInsertionWitness, NullifierError> {
+        if values.is_empty() {
+            return Ok(BatchInsertionWitness::default());
+        }
+        if values.iter().any(Fe::is_zero) {
+            return Err(NullifierError::ZeroNullifier);
+        }
+        if values.windows(2).any(|p| p[0] >= p[1]) || values.iter().any(|v| self.contains(v)) {
+            return Err(NullifierError::Duplicate);
+        }
+        let start = self.next_index();
+        if start + values.len() as u64 > CAPACITY {
+            return Err(NullifierError::Full);
+        }
+        let mut lows = Vec::new();
+        let mut new_leaves = Vec::with_capacity(values.len());
+        let mut j = 0;
+        while j < values.len() {
+            let low_index = self.low_index(&values[j]);
+            let low_leaf = self.leaves[low_index as usize];
+            let count = values[j..].iter().take_while(|v| low_leaf.brackets(v)).count();
+            lows.push(LowUpdate { low_index, low_leaf, path: self.path(low_index), count: count as u32 });
+            let updated = Leaf { value: low_leaf.value, next_index: start + j as u64, next_value: values[j] };
+            self.leaves[low_index as usize] = updated;
+            self.write(low_index, updated.hash());
+            for i in j..j + count {
+                let (next_index, next_value) = if i + 1 < j + count {
+                    (start + i as u64 + 1, values[i + 1])
+                } else {
+                    (low_leaf.next_index, low_leaf.next_value)
+                };
+                new_leaves.push(Leaf { value: values[i], next_index, next_value });
+            }
+            j += count;
+        }
+        let frontier = self.path(start);
+        for (i, leaf) in new_leaves.into_iter().enumerate() {
+            self.leaves.push(leaf);
+            self.by_value.insert(leaf.value, start + i as u64);
+            self.write(start + i as u64, leaf.hash());
+        }
+        Ok(BatchInsertionWitness { lows, frontier })
+    }
     /// Rebuilds the tree with only the first `next_index` leaves' insertions (reorg rollback).
     pub fn truncate(&mut self, next_index: u64) {
         let values: Vec<Fe> = self.leaves[1..next_index.max(1) as usize].iter().map(|l| l.value).collect();
@@ -274,6 +445,70 @@ mod tests {
         let mut bad = w.clone();
         bad.new_path = t.path(1);
         assert!(verify_insertion(&root, 1, &Fe::from_u64(15), &bad).is_err());
+    }
+
+    fn values(v: &[u64]) -> Vec<Fe> {
+        let mut v: Vec<Fe> = v.iter().map(|x| Fe::from_u64(*x)).collect();
+        v.sort();
+        v
+    }
+
+    #[test]
+    fn batch_insertion_matches_sequential_insertion() {
+        let mut seq = IndexedTree::new();
+        let mut bat = IndexedTree::new();
+        for batch in [&[50u64][..], &[10, 90, 30], &[11, 12, 13, 89, 91, 1000], &[2, 3, 4, 5, 6, 7, 8, 9, 14], &[]] {
+            let vs = values(batch);
+            let (root, next) = (bat.root(), bat.next_index());
+            let w = bat.insert_batch(&vs).unwrap();
+            for v in &vs {
+                seq.insert(*v).unwrap();
+            }
+            assert_eq!(bat.root(), seq.root());
+            assert_eq!(verify_batch_insertion(&root, next, &vs, &w), Ok(bat.root()));
+        }
+        assert_eq!(bat.leaves, seq.leaves);
+    }
+
+    #[test]
+    fn batch_insertion_rejects_tampering() {
+        let mut t = IndexedTree::new();
+        t.insert_batch(&values(&[10, 20, 30])).unwrap();
+        let (root, next) = (t.root(), t.next_index());
+        let vs = values(&[15, 16, 25]);
+        let w = t.clone().insert_batch(&vs).unwrap();
+        assert_eq!(w.lows.len(), 2);
+        assert!(verify_batch_insertion(&root, next, &vs, &w).is_ok());
+        assert_eq!(t.clone().insert_batch(&values(&[15, 20])), Err(NullifierError::Duplicate));
+        assert_eq!(verify_batch_insertion(&root, next, &values(&[15, 16, 20]), &w), Err(NullifierError::Duplicate));
+        assert_eq!(verify_batch_insertion(&root, next, &values(&[15, 16, 35]), &w), Err(NullifierError::NotBracketed));
+        assert_eq!(verify_batch_insertion(&root, next, &values(&[15, 16]), &w), Err(NullifierError::Coverage));
+        assert_eq!(verify_batch_insertion(&root, next, &[vs[1], vs[0], vs[2]], &w), Err(NullifierError::Duplicate));
+        assert_eq!(verify_batch_insertion(&root, next + 1, &vs, &w), Err(NullifierError::LowLeafMismatch));
+        assert_eq!(verify_batch_insertion(&root, next, &[], &w), Err(NullifierError::Coverage));
+        let mut bad = w.clone();
+        bad.lows.swap(0, 1);
+        assert!(verify_batch_insertion(&root, next, &vs, &bad).is_err());
+        let mut bad = w.clone();
+        bad.lows[0].count = 1;
+        bad.lows[1].count = 2;
+        assert!(verify_batch_insertion(&root, next, &vs, &bad).is_err());
+        let mut bad = w.clone();
+        bad.lows.pop();
+        assert_eq!(verify_batch_insertion(&root, next, &vs, &bad), Err(NullifierError::Coverage));
+        let mut bad = w.clone();
+        bad.lows[1].low_leaf.next_value = Fe::from_u64(26);
+        assert_eq!(verify_batch_insertion(&root, next, &vs, &bad), Err(NullifierError::LowLeafMismatch));
+        let mut bad = w.clone();
+        bad.frontier[0] = [7; 32];
+        assert_eq!(verify_batch_insertion(&root, next, &vs, &bad), Err(NullifierError::SlotNotEmpty));
+        // The same low leaf supplied twice (to split a run) fails: its first update changes its hash.
+        let mut bad = w.clone();
+        bad.lows[0].count = 1;
+        let mut again = bad.lows[0].clone();
+        again.count = 1;
+        bad.lows.insert(1, again);
+        assert_eq!(verify_batch_insertion(&root, next, &vs, &bad), Err(NullifierError::LowLeafMismatch));
     }
 
     #[test]

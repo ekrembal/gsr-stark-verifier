@@ -2543,6 +2543,7 @@ dependencies = [
  "pr-crypto",
  "pr-protocol-types",
  "serde",
+ "sha2 0.10.9",
 ]
 
 [[package]]
@@ -2553,6 +2554,7 @@ dependencies = [
  "ark-ff 0.6.0",
  "hex",
  "pr-protocol-types",
+ "risc0-bigint2",
 ]
 
 [[package]]
@@ -2598,6 +2600,7 @@ dependencies = [
 name = "pr-protocol-types"
 version = "0.1.0"
 dependencies = [
+ "once_cell",
  "serde",
  "sha2 0.10.9",
 ]

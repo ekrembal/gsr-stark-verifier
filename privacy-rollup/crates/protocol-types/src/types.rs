@@ -212,6 +212,10 @@ pub struct RollupState {
     pub batch_number: u64,
     pub commitment_root: Fe,
     pub commitment_count: u64,
+    /// Digest of the canonical commitment frontier for `(commitment_root, commitment_count)`
+    /// (`Frontier::digest`): the batch guest authenticates the frontier by this SHA-256 digest
+    /// instead of recomputing the 32-level Poseidon2 root.
+    pub commitment_frontier: [u8; 32],
     pub nullifier_root: [u8; 32],
     pub nullifier_next_index: u64,
     pub anchor_history_commitment: [u8; 32],
@@ -235,6 +239,7 @@ impl Canonical for RollupState {
         w.u32(self.protocol_version).u64(self.batch_number);
         self.commitment_root.encode_to(w);
         w.u64(self.commitment_count)
+            .bytes(&self.commitment_frontier)
             .bytes(&self.nullifier_root)
             .u64(self.nullifier_next_index)
             .bytes(&self.anchor_history_commitment)
@@ -249,6 +254,7 @@ impl Canonical for RollupState {
             batch_number: r.u64()?,
             commitment_root: Fe::decode_from(r)?,
             commitment_count: r.u64()?,
+            commitment_frontier: r.array()?,
             nullifier_root: r.array()?,
             nullifier_next_index: r.u64()?,
             anchor_history_commitment: r.array()?,

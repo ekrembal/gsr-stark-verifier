@@ -1,9 +1,13 @@
 //! Note commitments, nullifiers and Poseidon2 hashing, bit-for-bit identical to the
 //! `joinsplit-2x2` Noir circuit (Noir `std::hash::poseidon2_permutation`, BN254, t = 4).
 #![allow(clippy::needless_range_loop)]
+#[cfg(any(test, target_os = "zkvm"))]
+mod poseidon2_canonical;
+#[cfg(test)]
 mod poseidon2_constants;
-
-use std::sync::OnceLock;
+mod poseidon2_mont;
+#[cfg(any(test, target_os = "zkvm"))]
+mod zkvm;
 
 use ark_bn254::Fr;
 use ark_ff::{AdditiveGroup, BigInteger, PrimeField};
@@ -16,23 +20,6 @@ pub mod tags {
     pub const NOTE: u64 = 4;
     pub const NULLIFIER: u64 = 5;
     pub const NODE: u64 = 6;
-}
-
-struct Constants {
-    diagonal: [Fr; 4],
-    rounds: [[Fr; 4]; 64],
-}
-
-fn parse(h: &str) -> Fr {
-    Fr::from_be_bytes_mod_order(&hex::decode(h).expect("constant hex"))
-}
-
-fn constants() -> &'static Constants {
-    static C: OnceLock<Constants> = OnceLock::new();
-    C.get_or_init(|| Constants {
-        diagonal: poseidon2_constants::INTERNAL_DIAGONAL.map(parse),
-        rounds: poseidon2_constants::ROUND_CONSTANTS.map(|r| r.map(parse)),
-    })
 }
 
 #[inline]
@@ -54,24 +41,23 @@ fn external_matrix(s: &mut [Fr; 4]) {
 }
 
 pub fn poseidon2_permutation(mut s: [Fr; 4]) -> [Fr; 4] {
-    let c = constants();
     external_matrix(&mut s);
     for r in 0..4 {
         for i in 0..4 {
-            s[i] = sbox(s[i] + c.rounds[r][i]);
+            s[i] = sbox(s[i] + poseidon2_mont::ROUND_CONSTANTS[r][i]);
         }
         external_matrix(&mut s);
     }
     for r in 4..60 {
-        s[0] = sbox(s[0] + c.rounds[r][0]);
+        s[0] = sbox(s[0] + poseidon2_mont::ROUND_CONSTANTS[r][0]);
         let sum = s[0] + s[1] + s[2] + s[3];
         for i in 0..4 {
-            s[i] = s[i] * c.diagonal[i] + sum;
+            s[i] = s[i] * poseidon2_mont::INTERNAL_DIAGONAL[i] + sum;
         }
     }
     for r in 60..64 {
         for i in 0..4 {
-            s[i] = sbox(s[i] + c.rounds[r][i]);
+            s[i] = sbox(s[i] + poseidon2_mont::ROUND_CONSTANTS[r][i]);
         }
         external_matrix(&mut s);
     }
@@ -93,25 +79,61 @@ pub fn to_fe(f: &Fr) -> Fe {
     Fe(b)
 }
 
+#[cfg(not(target_os = "zkvm"))]
 pub fn spend_authority(secret: &Fe) -> Fe {
     to_fe(&h3(tags::OWNER, to_fr(secret), Fr::from(0u64), Fr::from(0u64)))
 }
 
+#[cfg(not(target_os = "zkvm"))]
 pub fn nullifier_key(secret: &Fe) -> Fe {
     to_fe(&h3(tags::NULLIFIER_KEY, to_fr(secret), Fr::from(0u64), Fr::from(0u64)))
 }
 
+#[cfg(not(target_os = "zkvm"))]
 pub fn note_commitment(rollup_id: &Fe, value: u64, authority: &Fe, randomness: &Fe) -> Fe {
     let inner = h3(tags::NOTE_INNER, to_fr(rollup_id), Fr::from(value), to_fr(authority));
     to_fe(&h3(tags::NOTE, inner, to_fr(randomness), Fr::from(0u64)))
 }
 
+#[cfg(not(target_os = "zkvm"))]
 pub fn nullifier(nullifier_key: &Fe, commitment: &Fe, leaf_index: u32) -> Fe {
     to_fe(&h3(tags::NULLIFIER, to_fr(nullifier_key), to_fr(commitment), Fr::from(leaf_index as u64)))
 }
 
+#[cfg(not(target_os = "zkvm"))]
 pub fn merkle_node(left: &Fe, right: &Fe) -> Fe {
     to_fe(&h3(tags::NODE, to_fr(left), to_fr(right), Fr::from(0u64)))
+}
+
+#[cfg(target_os = "zkvm")]
+pub fn spend_authority(secret: &Fe) -> Fe {
+    zkvm::to_fe(&zkvm::h3(tags::OWNER, zkvm::limbs(secret), zkvm::small(0), zkvm::small(0)))
+}
+
+#[cfg(target_os = "zkvm")]
+pub fn nullifier_key(secret: &Fe) -> Fe {
+    zkvm::to_fe(&zkvm::h3(tags::NULLIFIER_KEY, zkvm::limbs(secret), zkvm::small(0), zkvm::small(0)))
+}
+
+#[cfg(target_os = "zkvm")]
+pub fn note_commitment(rollup_id: &Fe, value: u64, authority: &Fe, randomness: &Fe) -> Fe {
+    let inner = zkvm::h3(tags::NOTE_INNER, zkvm::limbs(rollup_id), zkvm::small(value), zkvm::limbs(authority));
+    zkvm::to_fe(&zkvm::h3(tags::NOTE, inner, zkvm::limbs(randomness), zkvm::small(0)))
+}
+
+#[cfg(target_os = "zkvm")]
+pub fn nullifier(nullifier_key: &Fe, commitment: &Fe, leaf_index: u32) -> Fe {
+    zkvm::to_fe(&zkvm::h3(
+        tags::NULLIFIER,
+        zkvm::limbs(nullifier_key),
+        zkvm::limbs(commitment),
+        zkvm::small(leaf_index as u64),
+    ))
+}
+
+#[cfg(target_os = "zkvm")]
+pub fn merkle_node(left: &Fe, right: &Fe) -> Fe {
+    zkvm::to_fe(&zkvm::h3(tags::NODE, zkvm::limbs(left), zkvm::limbs(right), zkvm::small(0)))
 }
 
 #[cfg(test)]
@@ -119,7 +141,30 @@ mod tests {
     use super::*;
 
     fn fr(h: &str) -> Fr {
-        parse(h)
+        Fr::from_be_bytes_mod_order(&hex::decode(h).expect("constant hex"))
+    }
+
+    fn canonical_limbs(f: Fr) -> [u32; 8] {
+        let b = f.into_bigint().0;
+        core::array::from_fn(|i| (b[i / 2] >> (32 * (i % 2))) as u32)
+    }
+
+    #[test]
+    fn canonical_tables_match_hex() {
+        assert_eq!(
+            poseidon2_canonical::INTERNAL_DIAGONAL,
+            poseidon2_constants::INTERNAL_DIAGONAL.map(|h| canonical_limbs(fr(h)))
+        );
+        assert_eq!(
+            poseidon2_canonical::ROUND_CONSTANTS,
+            poseidon2_constants::ROUND_CONSTANTS.map(|r| r.map(|h| canonical_limbs(fr(h))))
+        );
+    }
+
+    #[test]
+    fn mont_tables_match_hex() {
+        assert_eq!(poseidon2_mont::INTERNAL_DIAGONAL, poseidon2_constants::INTERNAL_DIAGONAL.map(fr));
+        assert_eq!(poseidon2_mont::ROUND_CONSTANTS, poseidon2_constants::ROUND_CONSTANTS.map(|r| r.map(fr)));
     }
 
     #[test]

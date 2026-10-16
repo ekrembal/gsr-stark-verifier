@@ -2855,6 +2855,7 @@ dependencies = [
  "pr-crypto",
  "pr-protocol-types",
  "serde",
+ "sha2",
 ]
 
 [[package]]
@@ -2865,6 +2866,7 @@ dependencies = [
  "ark-ff 0.6.0",
  "hex",
  "pr-protocol-types",
+ "risc0-bigint2",
 ]
 
 [[package]]
@@ -2924,6 +2926,7 @@ dependencies = [
 name = "pr-protocol-types"
 version = "0.1.0"
 dependencies = [
+ "once_cell",
  "serde",
  "sha2",
 ]
@@ -3419,6 +3422,14 @@ name = "ringbuffer"
 version = "0.15.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3df6368f71f205ff9c33c076d170dd56ebf68e8161c733c0caa07a7a5509ed53"
+
+[[package]]
+name = "risc0-bigint2"
+version = "1.4.14"
+dependencies = [
+ "include_bytes_aligned",
+ "stability",
+]
 
 [[package]]
 name = "risc0-binfmt"

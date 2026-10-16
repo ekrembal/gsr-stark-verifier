@@ -13,7 +13,7 @@ trailing bytes, so every value has exactly one encoding.
   ascending where the protocol says so (`BatchBody` nullifiers and output commitments).
 
 Hashes outside the circuit are BIP-340-style tagged SHA-256, tags `gsr-privacy-rollup/{state, anchors,
-anchor-node, batch-body, data-history, external-data, nullifier-leaf, nullifier-node, rollup-id, note-key}`.
+anchor-node, commitment-frontier, batch-body, data-history, external-data, nullifier-leaf, nullifier-node, rollup-id, note-key}`.
 
 ## Annex (input 0)
 

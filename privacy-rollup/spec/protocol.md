@@ -21,14 +21,21 @@ descending from that genesis output can settle (see `security-model.md`).
 
 ```
 RollupState { rollup_id, protocol_version, batch_number, commitment_root, commitment_count,
-              nullifier_root, nullifier_next_index, anchor_history_commitment,
+              commitment_frontier, nullifier_root, nullifier_next_index, anchor_history_commitment,
               data_history_commitment, backing_sats, parent }
 state_root = tagged("gsr-privacy-rollup/state", encode(state))
 ```
 
 * commitment tree: depth-32 append-only Poseidon2 Merkle tree of note commitments (`pr-commitment-tree`);
+  `commitment_frontier = tagged("…/commitment-frontier", count_le64 || node[0..32])` commits to the canonical
+  frontier (left siblings of slot `commitment_count`) of that tree. Every accepted transition (and `genesis`)
+  sets it from the same frontier as `commitment_root`, so the batch guest authenticates the frontier with one
+  SHA-256 instead of recomputing the 32-level Poseidon2 root;
 * nullifier tree: depth-32 indexed (linked-list) Merkle tree over SHA-256 (`pr-indexed-nullifier-tree`);
-  insertion is authenticated by the low leaf whose interval brackets the new value, Aztec style;
+  insertion is authenticated by the low leaf whose interval brackets the new value, Aztec style. A batch's
+  sorted nullifiers are inserted together (`verify_batch_insertion`): one path per distinct low leaf, then the
+  new leaves are appended at consecutive slots from the left siblings of slot `nullifier_next_index`; the
+  result equals inserting them one by one in ascending order;
 * anchor history: the root of an append-only SHA-256 Merkle tree of depth 32 whose leaf `i` is
   `tagged("…/anchors", batch_number || commitment_root || commitment_count)` for the anchor after batch `i`
   (unused leaves are zero, nodes `tagged("…/anchor-node", left || right)`). Anchors never leave the history,

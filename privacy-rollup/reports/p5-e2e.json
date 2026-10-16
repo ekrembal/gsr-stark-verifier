@@ -1,0 +1,428 @@
+{
+  "quote": {
+    "deposit_sats": 2792,
+    "empty_settlement_weight": 332000,
+    "floor_sat_per_kwu": 25,
+    "sat_per_vb": 0.1,
+    "shared_sats": 2767,
+    "target_transactions": 3,
+    "transfer_sats": 2809,
+    "withdrawal_sats": 2790
+  },
+  "deposit_fee": 3192,
+  "low_fee_rejected": "wallet deposit: exit 1: Error: batcher returned 400 Bad Request: fee_sats 1 is below the floor 25 for 978 WU at 0.1 sat/vB\n",
+  "deposit_a": {
+    "deposit_sats": 50000,
+    "fee_sats": 3192,
+    "pending": 1,
+    "prove": {
+      "cycles_total": 1572864,
+      "cycles_user": 1410560,
+      "execute_seconds": 0.092693302,
+      "identity_zk_seconds": 11.00466963,
+      "lift_join_seconds": 28.532051578,
+      "receipt_bytes": 276385,
+      "seal_words": 56683,
+      "segment_po2": null,
+      "segment_proving_seconds": 145.737808204,
+      "segment_seconds": [
+        97.426523737,
+        48.311284844
+      ],
+      "segments": 2,
+      "segments_proven": 2,
+      "total_seconds": 185.426909219,
+      "verify_seconds": 0.05586375,
+      "witness_check_seconds": 0.000158166
+    },
+    "witness_seconds": 0.000518153,
+    "wall_seconds": 185.5
+  },
+  "deposit_b": {
+    "deposit_sats": 50000,
+    "fee_sats": 3192,
+    "pending": 2,
+    "prove": {
+      "cycles_total": 1572864,
+      "cycles_user": 1410560,
+      "execute_seconds": 0.083235042,
+      "identity_zk_seconds": 11.014279097,
+      "lift_join_seconds": 28.746855156000002,
+      "receipt_bytes": 276307,
+      "seal_words": 56683,
+      "segment_po2": null,
+      "segment_proving_seconds": 132.489009146,
+      "segment_seconds": [
+        88.329377724,
+        44.159631848
+      ],
+      "segments": 2,
+      "segments_proven": 2,
+      "total_seconds": 172.385217172,
+      "verify_seconds": 0.047547609,
+      "witness_check_seconds": 0.000126855
+    },
+    "witness_seconds": 0.000522059,
+    "wall_seconds": 172.5
+  },
+  "fees_two": {
+    "pool": {
+      "escrows": 0,
+      "fees": 6384,
+      "oldest_age_secs": 173,
+      "ready": false,
+      "required": 8349,
+      "sat_per_vb": 0.1,
+      "transactions": 2
+    },
+    "quote": {
+      "deposit_sats": 2792,
+      "empty_settlement_weight": 332000,
+      "floor_sat_per_kwu": 25,
+      "sat_per_vb": 0.1,
+      "shared_sats": 2767,
+      "target_transactions": 3,
+      "transfer_sats": 2809,
+      "withdrawal_sats": 2790
+    },
+    "reward_script": "51201d7a061054548e6f3943dc41d06104bacd3b21ea12621b963ab9eefbbc6e2acc"
+  },
+  "shortfall": [
+    409,
+    {
+      "error": "fees 6384 do not cover the settlement: 8349 required at 0.1 sat/vB"
+    }
+  ],
+  "deposit_c": {
+    "deposit_sats": 50000,
+    "fee_sats": 3192,
+    "pending": 3,
+    "prove": {
+      "cycles_total": 1572864,
+      "cycles_user": 1410560,
+      "execute_seconds": 0.097072357,
+      "identity_zk_seconds": 11.569767624,
+      "lift_join_seconds": 31.715065648,
+      "receipt_bytes": 276407,
+      "seal_words": 56683,
+      "segment_po2": null,
+      "segment_proving_seconds": 144.73036005199998,
+      "segment_seconds": [
+        92.854847894,
+        51.875512782
+      ],
+      "segments": 2,
+      "segments_proven": 2,
+      "total_seconds": 188.16978836,
+      "verify_seconds": 0.053787496,
+      "witness_check_seconds": 0.000131642
+    },
+    "witness_seconds": 0.00056318,
+    "wall_seconds": 188.3
+  },
+  "deposit_d": {
+    "deposit_sats": 50000,
+    "fee_sats": 3192,
+    "pending": 4,
+    "prove": {
+      "cycles_total": 1572864,
+      "cycles_user": 1410560,
+      "execute_seconds": 0.084523541,
+      "identity_zk_seconds": 10.729043449,
+      "lift_join_seconds": 28.957048510999996,
+      "receipt_bytes": 276270,
+      "seal_words": 56683,
+      "segment_po2": null,
+      "segment_proving_seconds": 129.713101656,
+      "segment_seconds": [
+        85.743533512,
+        43.96956859
+      ],
+      "segments": 2,
+      "segments_proven": 2,
+      "total_seconds": 169.534477334,
+      "verify_seconds": 0.04705228,
+      "witness_check_seconds": 0.000150293
+    },
+    "witness_seconds": 0.000572346,
+    "wall_seconds": 169.7
+  },
+  "fees_four": {
+    "pool": {
+      "escrows": 0,
+      "fees": 12768,
+      "oldest_age_secs": 531,
+      "ready": true,
+      "required": 8403,
+      "sat_per_vb": 0.1,
+      "transactions": 4
+    },
+    "quote": {
+      "deposit_sats": 2792,
+      "empty_settlement_weight": 332000,
+      "floor_sat_per_kwu": 25,
+      "sat_per_vb": 0.1,
+      "shared_sats": 2767,
+      "target_transactions": 3,
+      "transfer_sats": 2809,
+      "withdrawal_sats": 2790
+    },
+    "reward_script": "51201d7a061054548e6f3943dc41d06104bacd3b21ea12621b963ab9eefbbc6e2acc"
+  },
+  "pin_txid": "49d65403bc67741c2641697929f334acb0ef637de61b530fdc215dbb9cfcb544",
+  "abandoned": {
+    "batch_number": 1,
+    "stage": "failed",
+    "transactions": 4,
+    "txid": "330b196d0a12ccbe26d7b6ab8104129f1b03501e7780b02da58717d5bd0a7885",
+    "block_hash": null,
+    "error": "settlement inputs [\"560cce9b8e15b07c04bd3d5ebd94060c2f6a71a28a69b24e3f8e8f0da45c3c5a:5\"] were spent elsewhere; abandoned batch 1",
+    "prove": {
+      "cycles_total": 5242880,
+      "cycles_user": 4804976,
+      "identity_sha256_padded_seconds": 6.031842675,
+      "lift_join_seconds": 86.019118541,
+      "resolve_zk_seconds": 40.044132281,
+      "seal_words": 55667,
+      "segment_proving_seconds": 422.075295789,
+      "segments": 5,
+      "transactions": 4,
+      "workers": 1
+    },
+    "weight": 334022,
+    "fees": {
+      "fees": 12768,
+      "miner_fee": 8403,
+      "reward": {
+        "script_pubkey": [
+          81,
+          32,
+          29,
+          122,
+          6,
+          16,
+          84,
+          84,
+          142,
+          111,
+          57,
+          67,
+          220,
+          65,
+          208,
+          97,
+          4,
+          186,
+          205,
+          59,
+          33,
+          234,
+          18,
+          98,
+          27,
+          150,
+          58,
+          185,
+          238,
+          251,
+          188,
+          110,
+          42,
+          204
+        ],
+        "value": 4365
+      },
+      "weight": 336084
+    },
+    "started_unix": 1792182557,
+    "finished_unix": 1792183226,
+    "wall_seconds": 673.4
+  },
+  "prove_wall_seconds": 638.3,
+  "inflight": {
+    "txid": "8a50c09f9682e082ef1c8a11e0bde605ec3da79b2aa1abf4f60a674825940bf5",
+    "miner_fee": 8378,
+    "weight": 333485,
+    "reward": [
+      1,
+      1198,
+      "51201d7a061054548e6f3943dc41d06104bacd3b21ea12621b963ab9eefbbc6e2acc"
+    ]
+  },
+  "parent_mempool": {
+    "vsize_adjusted": 83372,
+    "vsize": 83372,
+    "vsize_bip141": 83372,
+    "weight": 333485,
+    "time": 1792183866,
+    "height": 534,
+    "descendantcount": 1,
+    "descendantsize": 83372,
+    "ancestorcount": 1,
+    "ancestorsize": 83372,
+    "wtxid": "8636167919a6fda74d3a20e60361e7cbebae25fe9e46fd7078001000b101e4f0",
+    "chunkweight": 333485,
+    "fees": {
+      "base": 8.378e-05,
+      "modified": 8.378e-05,
+      "ancestor": 8.378e-05,
+      "descendant": 8.378e-05,
+      "chunk": 8.378e-05
+    },
+    "depends": [],
+    "spentby": [],
+    "unbroadcast": true
+  },
+  "bump_sat_per_vb": 0.10555442425403974,
+  "bump": [
+    200,
+    {
+      "child_txid": "a81b60f18cb491366551ee0b192fa9f129e70bdcc08e61c9453222eb413de09b",
+      "child_fee": 434,
+      "package_sat_per_vb": 0.10555442425403974
+    }
+  ],
+  "parent_after_bump": {
+    "vsize_adjusted": 83372,
+    "vsize": 83372,
+    "vsize_bip141": 83372,
+    "weight": 333485,
+    "time": 1792183866,
+    "height": 534,
+    "descendantcount": 2,
+    "descendantsize": 83483,
+    "ancestorcount": 1,
+    "ancestorsize": 83372,
+    "wtxid": "8636167919a6fda74d3a20e60361e7cbebae25fe9e46fd7078001000b101e4f0",
+    "chunkweight": 333929,
+    "fees": {
+      "base": 8.378e-05,
+      "modified": 8.378e-05,
+      "ancestor": 8.378e-05,
+      "descendant": 8.812e-05,
+      "chunk": 8.812e-05
+    },
+    "depends": [],
+    "spentby": [
+      "a81b60f18cb491366551ee0b192fa9f129e70bdcc08e61c9453222eb413de09b"
+    ],
+    "unbroadcast": true
+  },
+  "settlement": {
+    "batch_number": 1,
+    "stage": "confirmed",
+    "transactions": 3,
+    "txid": "8a50c09f9682e082ef1c8a11e0bde605ec3da79b2aa1abf4f60a674825940bf5",
+    "block_hash": null,
+    "error": null,
+    "prove": {
+      "cycles_total": 4718592,
+      "cycles_user": 4403266,
+      "identity_sha256_padded_seconds": 6.422374244,
+      "lift_join_seconds": 88.793466952,
+      "resolve_zk_seconds": 31.789962783,
+      "seal_words": 55667,
+      "segment_proving_seconds": 383.737027515,
+      "segments": 5,
+      "transactions": 3,
+      "workers": 1
+    },
+    "weight": 333485,
+    "fees": {
+      "fees": 9576,
+      "miner_fee": 8378,
+      "reward": {
+        "script_pubkey": [
+          81,
+          32,
+          29,
+          122,
+          6,
+          16,
+          84,
+          84,
+          142,
+          111,
+          57,
+          67,
+          220,
+          65,
+          208,
+          97,
+          4,
+          186,
+          205,
+          59,
+          33,
+          234,
+          18,
+          98,
+          27,
+          150,
+          58,
+          185,
+          238,
+          251,
+          188,
+          110,
+          42,
+          204
+        ],
+        "value": 1198
+      },
+      "weight": 335106
+    },
+    "started_unix": 1792183230,
+    "finished_unix": 1792183870,
+    "vsize": 83372,
+    "inputs": 4,
+    "outputs": [
+      [
+        0.00240424,
+        "51208f0f960692f740ba9e0eb438d25dd9116d336c0b713a299b625d8fc52ec85105"
+      ],
+      [
+        1.198e-05,
+        "51201d7a061054548e6f3943dc41d06104bacd3b21ea12621b963ab9eefbbc6e2acc"
+      ]
+    ]
+  },
+  "status": {
+    "anchor": {
+      "batch_number": 1,
+      "commitment_count": 6,
+      "root": "265bc01d5e6990f6d67de74cd84cb5940f5ac95b5640d952f43371fed433bb25"
+    },
+    "backing_sats": 240424,
+    "batch_number": 1,
+    "commitment_count": 6,
+    "nullifier_next_index": 7,
+    "pending": 0,
+    "rollup_id": "0836ee4a3697aae32d46013847e6df15e3cf0027bdb41ffa4a88ab4b92d774f5",
+    "settling": false,
+    "state_root": "4ef78a204780f7b9cb0c75dd2ff0236f19548eb51e26e9d85a3e801cb53c9ad5",
+    "utxo": [
+      "f50b942548670af6f4aba12a9ba73dec05e6bde0118a1cef82e082969fc0508a",
+      0
+    ]
+  },
+  "status_adopted": {
+    "anchor": {
+      "batch_number": 1,
+      "commitment_count": 6,
+      "root": "265bc01d5e6990f6d67de74cd84cb5940f5ac95b5640d952f43371fed433bb25"
+    },
+    "backing_sats": 240424,
+    "batch_number": 1,
+    "commitment_count": 6,
+    "nullifier_next_index": 7,
+    "pending": 0,
+    "rollup_id": "0836ee4a3697aae32d46013847e6df15e3cf0027bdb41ffa4a88ab4b92d774f5",
+    "settling": false,
+    "state_root": "4ef78a204780f7b9cb0c75dd2ff0236f19548eb51e26e9d85a3e801cb53c9ad5",
+    "utxo": [
+      "f50b942548670af6f4aba12a9ba73dec05e6bde0118a1cef82e082969fc0508a",
+      0
+    ]
+  }
+}

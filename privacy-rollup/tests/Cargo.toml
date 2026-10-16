@@ -14,3 +14,7 @@ pr-wallet-core.workspace = true
 pr-mempool.workspace = true
 pr-scanner.workspace = true
 rand_core = { version = "0.6.4", features = ["getrandom"] }
+
+[dev-dependencies]
+serde_json.workspace = true
+pr-indexed-nullifier-tree.workspace = true

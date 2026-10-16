@@ -1,5 +1,6 @@
 //! End-to-end native scenarios and negative transition cases.
 use pr_bitcoin_adapter::PlainTx;
+use pr_indexed_nullifier_tree::NullifierError;
 use pr_mempool::{EscrowCoin, MempoolError};
 use pr_protocol_types::{Annex, Canonical, Outpoint, TxOut};
 use pr_scanner::{Replica, ScanError};
@@ -256,12 +257,13 @@ fn transition_rejects_every_settlement_tamper() {
     );
     expect(
         &|w| {
-            w.nullifier_witnesses.pop();
+            w.nullifier_witness.lows.pop();
         },
-        TransitionError::NullifierWitnessCount,
+        TransitionError::Nullifier(NullifierError::Coverage),
     );
     expect(&|w| w.frontier = None, TransitionError::FrontierMissing);
     expect(&|w| w.old_state.commitment_count += 1, TransitionError::Frontier);
+    expect(&|w| w.old_state.commitment_frontier[0] ^= 1, TransitionError::Frontier);
     expect(&|w| w.old_state.backing_sats += 1, TransitionError::PredecessorAmount);
     expect(&|w| w.anchor_slot[0][0] ^= 1, TransitionError::AnchorHistoryMismatch);
     expect(&|w| w.anchor_slot.pop().map(|_| ()).unwrap(), TransitionError::AnchorHistoryMismatch);
@@ -270,7 +272,7 @@ fn transition_rejects_every_settlement_tamper() {
     expect(&|w| w.anchor_proofs[0].path[3][0] ^= 1, TransitionError::UnknownAnchor);
     expect(&|w| w.old_state.protocol_version = 2, TransitionError::UnsupportedVersion);
     let mut w = good.clone();
-    w.nullifier_witnesses.swap(0, 1);
+    w.nullifier_witness.lows[0].path[0][0] ^= 1;
     assert!(matches!(apply_batch(&w), Err(TransitionError::Nullifier(_))));
 }
 

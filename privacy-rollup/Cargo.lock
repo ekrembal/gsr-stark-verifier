@@ -3458,6 +3458,7 @@ dependencies = [
  "pr-crypto",
  "pr-protocol-types",
  "serde",
+ "sha2 0.10.9",
 ]
 
 [[package]]
@@ -3468,6 +3469,7 @@ dependencies = [
  "ark-ff 0.6.0",
  "hex",
  "pr-protocol-types",
+ "risc0-bigint2",
 ]
 
 [[package]]
@@ -3520,6 +3522,7 @@ dependencies = [
 name = "pr-protocol-types"
 version = "0.1.0"
 dependencies = [
+ "once_cell",
  "serde",
  "sha2 0.10.9",
 ]
@@ -3578,12 +3581,14 @@ version = "0.1.0"
 dependencies = [
  "pr-bitcoin-adapter",
  "pr-crypto",
+ "pr-indexed-nullifier-tree",
  "pr-mempool",
  "pr-protocol-types",
  "pr-scanner",
  "pr-state-transition",
  "pr-wallet-core",
  "rand_core 0.6.4",
+ "serde_json",
 ]
 
 [[package]]
@@ -4377,6 +4382,14 @@ dependencies = [
  "libc",
  "untrusted",
  "windows-sys 0.52.0",
+]
+
+[[package]]
+name = "risc0-bigint2"
+version = "1.4.14"
+dependencies = [
+ "include_bytes_aligned",
+ "stability",
 ]
 
 [[package]]

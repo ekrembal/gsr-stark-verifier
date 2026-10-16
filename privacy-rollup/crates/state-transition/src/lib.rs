@@ -9,7 +9,7 @@ pub mod escrow;
 
 use pr_bitcoin_adapter::{PlainTx, SettlementTx};
 use pr_commitment_tree::Frontier;
-use pr_indexed_nullifier_tree::{verify_insertion, InsertionWitness, NullifierError};
+use pr_indexed_nullifier_tree::{verify_batch_insertion, BatchInsertionWitness, NullifierError};
 use pr_protocol_types::hash::sha256;
 use pr_protocol_types::{
     anchor_leaf, anchor_root_from_path, ciphertext_kind, next_data_history, AnchorEntry, AnchorHistory, AnchorProof,
@@ -39,8 +39,8 @@ pub struct BatchWitness {
     /// Canonical frontier of the old commitment tree; required iff the batch appends commitments.
     pub frontier: Option<Frontier>,
     pub transactions: Vec<BatchTransaction>,
-    /// One insertion witness per nullifier, in ascending nullifier order.
-    pub nullifier_witnesses: Vec<InsertionWitness>,
+    /// Insertion witness for the batch's nullifiers, inserted together in ascending order.
+    pub nullifier_witness: BatchInsertionWitness,
     pub settlement: SettlementTx,
     /// The transaction that created the rollup coin spent by input 0 (the previous settlement, or
     /// the genesis transaction), without witnesses. Its txid must be input 0's prevout txid.
@@ -74,7 +74,6 @@ pub enum TransitionError {
     WithdrawalMismatch,
     DuplicateNullifier,
     ZeroNullifier,
-    NullifierWitnessCount,
     Nullifier(NullifierError),
     DuplicateCommitment,
     FrontierMissing,
@@ -118,6 +117,7 @@ pub fn genesis(descriptor: &RollupDescriptor) -> (RollupState, AnchorHistory, Fr
         batch_number: 0,
         commitment_root: frontier.root(),
         commitment_count: 0,
+        commitment_frontier: frontier.digest(),
         nullifier_root: pr_indexed_nullifier_tree::IndexedTree::new().root(),
         nullifier_next_index: 1,
         anchor_history_commitment: anchors.commitment(),
@@ -224,16 +224,10 @@ pub fn apply_batch(w: &BatchWitness) -> Result<BatchEffects, TransitionError> {
     if nullifiers.windows(2).any(|p| p[0] == p[1]) {
         return Err(TransitionError::DuplicateNullifier);
     }
-    if w.nullifier_witnesses.len() != nullifiers.len() {
-        return Err(TransitionError::NullifierWitnessCount);
-    }
-    let mut nullifier_root = old.nullifier_root;
-    let mut nullifier_next_index = old.nullifier_next_index;
-    for (nf, iw) in nullifiers.iter().zip(&w.nullifier_witnesses) {
-        nullifier_root =
-            verify_insertion(&nullifier_root, nullifier_next_index, nf, iw).map_err(TransitionError::Nullifier)?;
-        nullifier_next_index += 1;
-    }
+    let nullifier_root =
+        verify_batch_insertion(&old.nullifier_root, old.nullifier_next_index, &nullifiers, &w.nullifier_witness)
+            .map_err(TransitionError::Nullifier)?;
+    let nullifier_next_index = old.nullifier_next_index + nullifiers.len() as u64;
 
     // Output notes: globally sorted by commitment, distinct, appended in that order.
     let mut outputs: Vec<NoteOutput> = txs
@@ -280,15 +274,15 @@ pub fn apply_batch(w: &BatchWitness) -> Result<BatchEffects, TransitionError> {
         None
     } else {
         let mut f = w.frontier.clone().ok_or(TransitionError::FrontierMissing)?;
-        f.authenticate(&old.commitment_root, old.commitment_count).map_err(|_| TransitionError::Frontier)?;
+        f.authenticate_digest(&old.commitment_frontier, old.commitment_count).map_err(|_| TransitionError::Frontier)?;
         for o in &outputs {
             f.append(o.commitment).map_err(|_| TransitionError::Frontier)?;
         }
         Some(f)
     };
-    let (commitment_root, commitment_count) = match &frontier {
-        Some(f) => (f.root(), f.count),
-        None => (old.commitment_root, old.commitment_count),
+    let (commitment_root, commitment_count, commitment_frontier) = match &frontier {
+        Some(f) => (f.root(), f.count, f.digest()),
+        None => (old.commitment_root, old.commitment_count, old.commitment_frontier),
     };
 
     // Bitcoin layout: inputs [rollup, funding.., escrows..], outputs [rollup, withdrawals.., changes.., reward?].
@@ -397,6 +391,7 @@ pub fn apply_batch(w: &BatchWitness) -> Result<BatchEffects, TransitionError> {
         batch_number: next,
         commitment_root,
         commitment_count,
+        commitment_frontier,
         nullifier_root,
         nullifier_next_index,
         anchor_history_commitment,

@@ -20,7 +20,7 @@ use pr_sdk::api::{
     Anchor, BatchReport, EscrowRegistration, EscrowState, EscrowTerms, FundingInput, MerklePath, NoteBatch, Notes,
     Stage, Submission, SubmitResponse,
 };
-use pr_sdk::pr_mempool::{escrow_weight, EscrowCoin};
+use pr_sdk::pr_mempool::{entry_weight, escrow_weight, Entry, EscrowCoin};
 use pr_sdk::pr_protocol_types::{
     ciphertext_kind, DUST_LIMIT, EMPTY_SETTLEMENT_WEIGHT, MAX_BATCH_ESCROWS, MAX_MONEY, MAX_SETTLEMENT_WEIGHT,
 };
@@ -28,7 +28,8 @@ use pr_sdk::pr_state_transition::escrow;
 use pr_sdk::{decode_receipt, decode_transaction};
 use serde::{Deserialize, Serialize};
 
-use crate::rpc::Rpc;
+use crate::fees::{self, FeePlan, FeeQuote, SettlePolicy};
+use crate::rpc::{btc, Rpc};
 use crate::tx::{display_txid, serialize_segwit, weight};
 
 pub const MAX_FUNDING_INPUTS: usize = 16;
@@ -41,7 +42,26 @@ pub enum Broadcast {
     Send,
     /// `generateblock <address> [raw]` (regtest: mines the settlement directly).
     Mine(String),
+    /// `sendrawtransaction` / `submitpackage` on a miner's node: settlements carry an annex and are
+    /// nonstandard, so public relay drops them.
+    Direct(Rpc),
 }
+
+/// Where the feerate comes from.
+#[derive(Clone, Debug)]
+pub enum FeeRate {
+    Fixed(f64),
+    /// `estimatesmartfee <target_blocks>`, never below `floor` (and `floor` without an estimate).
+    Estimate {
+        target_blocks: u16,
+        floor: f64,
+    },
+}
+
+/// Blocks searched back from the tip for a settlement that spent the rollup output.
+pub const SPENDER_SEARCH_DEPTH: u64 = 288;
+/// vsize of the CPFP child: one P2TR key-path input, one P2TR output.
+pub const CPFP_CHILD_VSIZE: u64 = 111;
 
 #[derive(Clone, Debug)]
 pub struct Config {
@@ -56,6 +76,13 @@ pub struct Config {
     /// Smallest escrow refund delay (blocks) accepted; escrows are swept only while their age is at
     /// most half their refund delay, so a refund cannot race a sweep.
     pub min_refund_delay: u16,
+    pub fee_rate: FeeRate,
+    /// Receives fee surplus; also the CPFP anchor, so it should be a key of the node's wallet.
+    pub reward_script: Option<Vec<u8>>,
+    /// Batch size the verifier spend is priced over in quotes, and that triggers an automatic settlement.
+    pub target_transactions: usize,
+    /// Longest an admitted transaction waits for an automatic settlement once fees cover it.
+    pub max_wait: Duration,
 }
 
 impl Config {
@@ -71,6 +98,10 @@ impl Config {
             poll: Duration::from_secs(2),
             min_transactions: 1,
             min_refund_delay: 144,
+            fee_rate: FeeRate::Fixed(1.0),
+            reward_script: None,
+            target_transactions: 8,
+            max_wait: Duration::from_secs(3600),
         }
     }
 }
@@ -103,6 +134,41 @@ pub struct Inflight {
     #[serde(default)]
     pub escrows: Vec<String>,
     pub broadcast: bool,
+    #[serde(default)]
+    pub miner_fee: u64,
+    #[serde(default)]
+    pub weight: u64,
+    /// Output index, value and scriptPubKey of the reward (CPFP anchor) output.
+    #[serde(default)]
+    pub reward: Option<(u32, u64, String)>,
+    /// CPFP children broadcast with the settlement, hex.
+    #[serde(default)]
+    pub bumps: Vec<String>,
+}
+
+/// `POST /v1/bump`.
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct BumpRequest {
+    pub sat_per_vb: f64,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct BumpResponse {
+    pub child_txid: String,
+    pub child_fee: u64,
+    pub package_sat_per_vb: f64,
+}
+
+/// What an automatic settlement would carry now.
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct Readiness {
+    pub ready: bool,
+    pub transactions: usize,
+    pub escrows: usize,
+    pub fees: u64,
+    pub required: u64,
+    pub oldest_age_secs: u64,
+    pub sat_per_vb: f64,
 }
 
 /// A registered escrow output.
@@ -121,6 +187,20 @@ pub struct Batcher {
     reports: Mutex<BTreeMap<u64, BatchReport>>,
     witnesses: Mutex<BTreeMap<String, Vec<String>>>,
     escrows: Mutex<BTreeMap<String, Registered>>,
+    rate: Mutex<f64>,
+    /// Admission time (unix) by first output commitment or escrow outpoint.
+    received: Mutex<BTreeMap<String, u64>>,
+}
+
+fn initial_rate(r: &FeeRate) -> f64 {
+    match *r {
+        FeeRate::Fixed(f) => f,
+        FeeRate::Estimate { floor, .. } => floor,
+    }
+}
+
+fn entry_key(e: &Entry) -> String {
+    hex::encode(e.tx.public.output_commitments[0].0)
 }
 
 fn now() -> u64 {
@@ -142,6 +222,8 @@ impl Batcher {
         let reports: BTreeMap<u64, BatchReport> = read_or_default(&dir.join("reports.json"))?;
         let witnesses = read_or_default(&dir.join("funding-witnesses.json"))?;
         let escrows = read_or_default(&dir.join("escrows.json"))?;
+        let received = read_or_default(&dir.join("received.json"))?;
+        let rate = Mutex::new(initial_rate(&cfg.fee_rate));
         Ok(Arc::new(Batcher {
             store,
             cfg,
@@ -151,11 +233,14 @@ impl Batcher {
             reports: Mutex::new(reports),
             witnesses: Mutex::new(witnesses),
             escrows: Mutex::new(escrows),
+            rate,
+            received: Mutex::new(received),
         }))
     }
 
     /// A batcher over a directory without genesis or RPC: only the covenant helpers are usable.
     pub fn open_uninitialized(dir: &Path, cfg: Config) -> Result<Arc<Batcher>> {
+        let rate = Mutex::new(initial_rate(&cfg.fee_rate));
         Ok(Arc::new(Batcher {
             store: Store::new(dir),
             cfg,
@@ -165,6 +250,8 @@ impl Batcher {
             reports: Mutex::new(BTreeMap::new()),
             witnesses: Mutex::new(BTreeMap::new()),
             escrows: Mutex::new(BTreeMap::new()),
+            rate,
+            received: Mutex::new(BTreeMap::new()),
         }))
     }
 
@@ -211,6 +298,19 @@ impl Batcher {
     pub fn submit(&self, sub: Submission) -> Result<SubmitResponse, Rejection> {
         let tx = decode_transaction(&sub.transaction).map_err(|e| Rejection::Invalid(format!("{e:#}")))?;
         let funding = validate_funding(&sub.funding).map_err(|e| Rejection::Invalid(format!("{e:#}")))?;
+        let coins: Vec<_> = sub.funding.iter().map(|f| f.coin.clone()).collect();
+        let entry = Entry { tx, funding: coins, arrival: 0 };
+        let floor = fees::admission_floor(entry_weight(&entry), self.rate());
+        if entry.tx.public.fee_sats < floor {
+            return Err(Rejection::Invalid(format!(
+                "fee_sats {} is below the floor {floor} for {} WU at {} sat/vB",
+                entry.tx.public.fee_sats,
+                entry_weight(&entry),
+                self.rate()
+            )));
+        }
+        let key = entry_key(&entry);
+        let Entry { tx, .. } = entry;
         verify_receipt(&tx).map_err(|e| Rejection::Invalid(format!("receipt: {e:#}")))?;
         let _g = self.guard();
         let pending = self.store.submit(tx, sub.funding.iter().map(|f| f.coin.clone()).collect()).map_err(|e| {
@@ -224,6 +324,7 @@ impl Batcher {
         let mut w = self.witnesses.lock().unwrap_or_else(|p| p.into_inner());
         w.extend(funding);
         write_atomic(&self.path("funding-witnesses.json"), &serde_json::to_vec(&*w).map_err(anyhow::Error::from)?)?;
+        self.mark_received(key)?;
         Ok(SubmitResponse { pending })
     }
 
@@ -292,6 +393,16 @@ impl Batcher {
                     self.cfg.min_transactions
                 )));
             }
+            let escrows: Vec<EscrowCoin> = self.escrow_map().values().map(|r| r.coin.clone()).collect();
+            let entries = self.store.select(&replica, &escrows)?;
+            if let Err(s) = self.price(&entries, &escrows) {
+                return Err(Rejection::Conflict(format!(
+                    "fees {} do not cover the settlement: {} required at {} sat/vB",
+                    s.fees,
+                    s.required,
+                    self.rate()
+                )));
+            }
             Ok(replica.tip().state.batch_number + 1)
         };
         let n = match start() {
@@ -312,6 +423,7 @@ impl Batcher {
                 error: None,
                 prove: None,
                 weight: None,
+                fees: None,
                 started_unix: now(),
                 finished_unix: None,
             },
@@ -350,6 +462,11 @@ impl Batcher {
     }
 
     async fn settle(self: Arc<Self>, n: u64) -> Result<()> {
+        self.refresh_rate().await?;
+        if !self.sync().await?.is_empty() {
+            bail!("another settlement advanced the rollup; batch {n} is rebuilt on the new tip next time");
+        }
+        self.prune_spent_funding().await?;
         let escrows = self.sweepable_escrows().await?;
         let me = self.clone();
         let inflight = tokio::task::spawn_blocking(move || me.build_and_prove(n, escrows)).await??;
@@ -456,8 +573,10 @@ impl Batcher {
         }
         let coin = EscrowCoin { outpoint, amount, script_pubkey: spk, opening: e.clone() };
         let mut m = self.escrow_map();
-        m.insert(key, Registered { coin, refund_delay: delay });
+        m.insert(key.clone(), Registered { coin, refund_delay: delay });
         self.save_escrows(&m)?;
+        drop(m);
+        self.mark_received(key)?;
         Ok(EscrowState { outpoint: reg.outpoint, amount, confirmations, reserved_by: None })
     }
 
@@ -519,10 +638,21 @@ impl Batcher {
             ensure!(tip.batch_number + 1 == n, "tip moved to batch {}", tip.batch_number);
             let (rollup_id, old_root) = (hex::encode(tip.rollup_id.0), hex::encode(tip.root()));
             let spk = self.covenant_script_pubkey(&rollup_id, &old_root)?;
-            let first = self.store.build_with_escrows(spk.clone(), Vec::new(), &escrows, None)?;
+            let entries = self.store.select(&replica, &escrows)?;
+            let plan = self.price(&entries, &escrows).map_err(|s| {
+                anyhow::anyhow!(
+                    "fees {} do not cover the settlement: {} required at {} sat/vB",
+                    s.fees,
+                    s.required,
+                    self.rate()
+                )
+            })?;
+            let reward = plan.reward.clone();
+            self.update(n, |r| r.fees = serde_json::to_value(&plan).ok());
+            let first = self.store.build_with_escrows(spk.clone(), Vec::new(), &escrows, reward.clone())?;
             let new_root = hex::encode(first.effects.new_state.root());
             let successor = self.covenant_script_pubkey(&rollup_id, &new_root)?;
-            let b = self.store.build_with_escrows(spk, successor, &escrows, None)?;
+            let b = self.store.build_with_escrows(spk, successor, &escrows, reward)?;
             ensure!(hex::encode(b.effects.new_state.root()) == new_root, "new root depends on the successor");
             (b, old_root, rollup_id)
         };
@@ -577,6 +707,12 @@ impl Batcher {
         let raw = serialize_segwit(settlement, &stacks);
         let txid = display_txid(settlement);
         let wt = weight(settlement, &raw);
+        let paid_in: u64 = settlement.inputs.iter().map(|i| i.amount).sum();
+        let paid_out: u64 = settlement.outputs.iter().map(|o| o.value).sum();
+        let reward = self.cfg.reward_script.as_ref().and_then(|spk| {
+            let i = settlement.outputs.iter().rposition(|o| &o.script_pubkey == spk)?;
+            Some((i as u32, settlement.outputs[i].value, hex::encode(spk)))
+        });
         let inflight = Inflight {
             batch_number: n,
             raw: hex::encode(&raw),
@@ -587,6 +723,10 @@ impl Batcher {
             funding,
             escrows: swept,
             broadcast: false,
+            miner_fee: paid_in - paid_out,
+            weight: wt,
+            reward,
+            bumps: Vec::new(),
         };
         write_atomic(&self.path("inflight.json"), &serde_json::to_vec_pretty(&inflight)?)?;
         fs::write(dir.join("settlement.hex"), &inflight.raw)?;
@@ -605,6 +745,20 @@ impl Batcher {
                 Err(e) => Err(e),
             },
             Broadcast::Mine(address) => Ok(Some(self.rpc.generate_block(address, &f.raw).await?)),
+            Broadcast::Direct(miner) => {
+                if f.bumps.is_empty() {
+                    match miner.send_raw_transaction(&f.raw).await {
+                        Ok(_) => {}
+                        Err(e) if format!("{e}").contains("already") => {}
+                        Err(e) => return Err(e),
+                    }
+                } else {
+                    let mut package = vec![f.raw.clone()];
+                    package.extend(f.bumps.iter().cloned());
+                    miner.submit_package(&package).await?;
+                }
+                Ok(None)
+            }
         }
     }
 
@@ -613,6 +767,8 @@ impl Batcher {
         let n = f.batch_number;
         let known = self.rpc.confirmations(&f.txid, 0).await?;
         if known.is_none() {
+            self.ensure_current(&f).await?;
+            self.abandon_if_conflicted(&f).await?;
             let block = self.broadcast(&f).await?;
             self.update(n, |r| r.block_hash = block);
         }
@@ -627,6 +783,10 @@ impl Batcher {
                 None => {
                     misses += 1;
                     if misses > 3 {
+                        self.ensure_current(&f).await?;
+                        if let Some(g) = self.inflight()? {
+                            f.bumps = g.bumps;
+                        }
                         if let Err(e) = self.broadcast(&f).await {
                             self.abandon_if_conflicted(&f).await?;
                             bail!("settlement left the mempool and cannot be re-broadcast: {e:#}");
@@ -682,8 +842,264 @@ impl Batcher {
             m.remove(k);
         }
         self.save_escrows(&m)?;
+        drop(m);
+        self.drop_entries_funded_by(&spent)?;
         fs::remove_file(self.path("inflight.json"))?;
         bail!("settlement inputs {spent:?} were spent elsewhere; abandoned batch {}", f.batch_number)
+    }
+}
+
+impl Batcher {
+    pub fn rate(&self) -> f64 {
+        *self.rate.lock().unwrap_or_else(|p| p.into_inner())
+    }
+
+    /// Re-reads the feerate (`estimatesmartfee` for [`FeeRate::Estimate`]).
+    pub async fn refresh_rate(&self) -> Result<f64> {
+        let r = match self.cfg.fee_rate {
+            FeeRate::Fixed(f) => f,
+            FeeRate::Estimate { target_blocks, floor } => {
+                self.rpc.estimate_sat_per_vb(target_blocks).await?.map_or(floor, |e| e.max(floor))
+            }
+        };
+        *self.rate.lock().unwrap_or_else(|p| p.into_inner()) = r;
+        Ok(r)
+    }
+
+    pub fn quote(&self) -> FeeQuote {
+        fees::quote(self.rate(), self.cfg.target_transactions)
+    }
+
+    fn price(&self, entries: &[Entry], escrows: &[EscrowCoin]) -> Result<FeePlan, fees::Shortfall> {
+        let weight = entries.iter().map(entry_weight).sum::<u64>() + escrows.iter().map(escrow_weight).sum::<u64>();
+        let paid = entries.iter().map(|e| e.tx.public.fee_sats).sum::<u64>()
+            + escrows.iter().map(|c| c.opening.fee_sats).sum::<u64>();
+        fees::plan(weight, paid, self.rate(), self.cfg.reward_script.as_deref())
+    }
+
+    fn mark_received(&self, key: String) -> Result<()> {
+        let mut r = self.received.lock().unwrap_or_else(|p| p.into_inner());
+        r.entry(key).or_insert_with(now);
+        write_atomic(&self.path("received.json"), &serde_json::to_vec(&*r)?)
+    }
+
+    /// Whether an automatic settlement should start now (see [`SettlePolicy`]).
+    pub async fn readiness(&self) -> Result<Readiness> {
+        let sat_per_vb = self.refresh_rate().await?;
+        let escrows = self.sweepable_escrows().await?;
+        let entries = {
+            let _g = self.guard();
+            let (replica, _) = self.store.load()?;
+            self.store.select(&replica, &escrows)?
+        };
+        let received = self.received.lock().unwrap_or_else(|p| p.into_inner()).clone();
+        let t = now();
+        let oldest = entries
+            .iter()
+            .map(entry_key)
+            .chain(escrows.iter().map(|c| outpoint_key(&c.outpoint)))
+            .filter_map(|k| received.get(&k).copied())
+            .min()
+            .map_or(0, |r| t.saturating_sub(r));
+        let content = entries.iter().map(entry_weight).sum::<u64>() + escrows.iter().map(escrow_weight).sum::<u64>();
+        let (fees_paid, required, covered) = match self.price(&entries, &escrows) {
+            Ok(p) => (p.fees, p.miner_fee, true),
+            Err(s) => (s.fees, s.required, false),
+        };
+        let policy = SettlePolicy {
+            min_transactions: self.cfg.min_transactions,
+            target_transactions: self.cfg.target_transactions,
+            max_wait_secs: self.cfg.max_wait.as_secs(),
+        };
+        let pending = entries.len() + escrows.len();
+        Ok(Readiness {
+            ready: policy.ready(pending, content, covered, oldest),
+            transactions: entries.len(),
+            escrows: escrows.len(),
+            fees: fees_paid,
+            required,
+            oldest_age_secs: oldest,
+            sat_per_vb,
+        })
+    }
+
+    /// Starts a settlement if [`Batcher::readiness`] says so.
+    pub async fn auto_settle(self: &Arc<Self>) -> Result<Option<u64>> {
+        if self.settling.load(Ordering::SeqCst) || self.inflight()?.is_some() {
+            return Ok(None);
+        }
+        self.sync().await?;
+        if !self.readiness().await?.ready {
+            return Ok(None);
+        }
+        match self.start_settlement() {
+            Ok(n) => Ok(Some(n)),
+            Err(Rejection::Conflict(_)) => Ok(None),
+            Err(Rejection::Internal(e)) => Err(e),
+            Err(e) => bail!("{e:?}"),
+        }
+    }
+
+    fn drop_entries_funded_by(&self, spent: &[String]) -> Result<()> {
+        let _g = self.guard();
+        let (replica, _) = self.store.load()?;
+        let mut pool = self.store.load_pool(&replica)?;
+        let before = pool.entries.len();
+        pool.entries.retain(|e| !e.funding.iter().any(|c| spent.contains(&outpoint_key(&c.outpoint))));
+        if pool.entries.len() != before {
+            eprintln!("dropped {} pool transactions whose funding was spent elsewhere", before - pool.entries.len());
+            self.store.save_pool(&pool)?;
+        }
+        let mut w = self.witnesses.lock().unwrap_or_else(|p| p.into_inner());
+        for k in spent {
+            w.remove(k);
+        }
+        write_atomic(&self.path("funding-witnesses.json"), &serde_json::to_vec(&*w)?)
+    }
+
+    /// Drops pool transactions whose funding coins are no longer unspent (a depositor double spend).
+    async fn prune_spent_funding(&self) -> Result<()> {
+        let coins: Vec<String> = {
+            let _g = self.guard();
+            let (replica, _) = self.store.load()?;
+            let pool = self.store.load_pool(&replica)?;
+            pool.entries.iter().flat_map(|e| e.funding.iter().map(|c| outpoint_key(&c.outpoint))).collect()
+        };
+        let mut spent = Vec::new();
+        for k in coins {
+            let (txid, vout) = k.split_once(':').context("outpoint key")?;
+            let txid = display_hex(&hex::decode(txid)?.try_into().map_err(|_| anyhow::anyhow!("txid"))?);
+            if self.rpc.txout(&txid, vout.parse()?).await?.is_none() {
+                spent.push(k);
+            }
+        }
+        if spent.is_empty() {
+            return Ok(());
+        }
+        self.drop_entries_funded_by(&spent)
+    }
+
+    /// Fails if `f` no longer spends the tip (another settlement advanced the rollup).
+    async fn ensure_current(&self, f: &Inflight) -> Result<()> {
+        self.sync().await?;
+        ensure!(
+            self.inflight()?.is_some_and(|g| g.txid == f.txid),
+            "batch {} was superseded by another settlement",
+            f.batch_number
+        );
+        Ok(())
+    }
+
+    /// Adopts settlements made by anyone else: while the tip's rollup output is spent by a confirmed
+    /// transaction that is not ours, records it (its annex is checked against the replica like any
+    /// settlement) and drops a conflicting in-flight settlement. Returns the adopted batch numbers.
+    pub async fn sync(&self) -> Result<Vec<u64>> {
+        let mut adopted = Vec::new();
+        loop {
+            let (utxo, n) = {
+                let _g = self.guard();
+                let (replica, _) = self.store.load()?;
+                (replica.tip().utxo, replica.tip().state.batch_number + 1)
+            };
+            if self.rpc.txout(&display_hex(&utxo.txid), utxo.vout).await?.is_some() {
+                break;
+            }
+            let ours = self.inflight()?;
+            if let Some(f) = &ours {
+                if self.rpc.confirmations(&f.txid, 0).await?.is_some() {
+                    break;
+                }
+            }
+            let Some((txid, raw, annex)) = self.find_spender(&utxo).await? else { break };
+            {
+                let _g = self.guard();
+                self.store
+                    .accept(Settled { annex, tx: raw })
+                    .with_context(|| format!("adopting settlement {txid} of batch {n}"))?;
+            }
+            eprintln!("batch {n}: adopted settlement {txid} made by another operator");
+            if ours.is_some_and(|f| f.batch_number == n) {
+                fs::remove_file(self.path("inflight.json"))?;
+                self.update(n, |r| {
+                    r.stage = Stage::Failed;
+                    r.error = Some(format!("superseded by {txid}"));
+                    r.finished_unix = Some(now());
+                });
+            }
+            adopted.push(n);
+        }
+        Ok(adopted)
+    }
+
+    /// The confirmed transaction spending `o` in the last [`SPENDER_SEARCH_DEPTH`] blocks: its txid,
+    /// raw hex and input-zero annex.
+    async fn find_spender(&self, o: &Outpoint) -> Result<Option<(String, String, String)>> {
+        let tip = self.rpc.block_count().await?;
+        let txid = display_hex(&o.txid);
+        for h in (tip.saturating_sub(SPENDER_SEARCH_DEPTH)..=tip).rev() {
+            let b = self.rpc.block_at(h).await?;
+            for t in b["tx"].as_array().context("getblock tx")? {
+                let i = &t["vin"][0];
+                if i["txid"].as_str() == Some(txid.as_str()) && i["vout"].as_u64() == Some(o.vout as u64) {
+                    let annex = i["txinwitness"]
+                        .as_array()
+                        .and_then(|w| w.last())
+                        .and_then(|a| a.as_str())
+                        .filter(|a| a.starts_with("50"))
+                        .context("spender of the rollup output carries no annex")?;
+                    let raw = t["hex"].as_str().context("getblock hex")?;
+                    let id = t["txid"].as_str().context("getblock txid")?;
+                    return Ok(Some((id.to_owned(), raw.to_owned(), annex.to_owned())));
+                }
+            }
+        }
+        Ok(None)
+    }
+
+    /// CPFP: spends the reward output of the broadcast settlement with a wallet-signed child so the
+    /// package pays `sat_per_vb`, and submits both as a package.
+    pub async fn bump(&self, sat_per_vb: f64) -> Result<BumpResponse, Rejection> {
+        let mut f = self.inflight()?.ok_or_else(|| Rejection::NotFound("no settlement awaits confirmation".into()))?;
+        if !f.broadcast {
+            return Err(Rejection::Conflict("the settlement is not broadcast yet".into()));
+        }
+        let (vout, value, spk) =
+            f.reward.clone().ok_or_else(|| Rejection::Conflict("the settlement has no reward output".into()))?;
+        let parent_vsize = f.weight.div_ceil(4);
+        let total = (sat_per_vb * (parent_vsize + CPFP_CHILD_VSIZE) as f64).ceil() as u64;
+        let child_fee = total.saturating_sub(f.miner_fee).max(CPFP_CHILD_VSIZE);
+        if child_fee + fees::DUST_SATS > value {
+            return Err(Rejection::Invalid(format!("reward {value} sats cannot pay a {child_fee} sat child")));
+        }
+        let address = self.rpc.call("getnewaddress", serde_json::json!(["cpfp", "bech32m"])).await?;
+        let input = serde_json::json!([{"txid": f.txid, "vout": vout}]);
+        let unsigned = self
+            .rpc
+            .call(
+                "createrawtransaction",
+                serde_json::json!([input, [{ address.as_str().unwrap_or(""): btc(value - child_fee) }]]),
+            )
+            .await?;
+        let prev = serde_json::json!([{"txid": f.txid, "vout": vout, "scriptPubKey": spk, "amount": btc(value)}]);
+        let signed = self.rpc.call("signrawtransactionwithwallet", serde_json::json!([unsigned, prev])).await?;
+        if signed["complete"].as_bool() != Some(true) {
+            return Err(Rejection::Internal(anyhow::anyhow!("wallet cannot sign the reward output: {signed}")));
+        }
+        let child = signed["hex"].as_str().context("signed hex")?.to_owned();
+        let package = [f.raw.clone(), child.clone()];
+        let r = match &self.cfg.broadcast {
+            Broadcast::Direct(miner) => miner.submit_package(&package).await?,
+            _ => self.rpc.submit_package(&package).await?,
+        };
+        let child_txid = r["tx-results"]
+            .as_object()
+            .and_then(|m| m.values().filter_map(|v| v["txid"].as_str()).find(|t| *t != f.txid))
+            .map(str::to_owned)
+            .ok_or_else(|| Rejection::Internal(anyhow::anyhow!("submitpackage: {r}")))?;
+        f.bumps.push(child);
+        write_atomic(&self.path("inflight.json"), &serde_json::to_vec_pretty(&f).map_err(anyhow::Error::from)?)?;
+        let package_sat_per_vb = (f.miner_fee + child_fee) as f64 / (parent_vsize + CPFP_CHILD_VSIZE) as f64;
+        Ok(BumpResponse { child_txid, child_fee, package_sat_per_vb })
     }
 }
 

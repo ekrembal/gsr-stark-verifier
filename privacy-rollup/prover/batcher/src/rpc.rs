@@ -14,6 +14,12 @@ pub struct Rpc {
     http: reqwest::Client,
 }
 
+impl std::fmt::Debug for Rpc {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Rpc").field("url", &self.url).finish_non_exhaustive()
+    }
+}
+
 impl Rpc {
     pub fn new(url: &str, user: &str, password: &str) -> Result<Rpc> {
         let http = reqwest::Client::builder().timeout(Duration::from_secs(120)).build()?;
@@ -21,7 +27,12 @@ impl Rpc {
     }
 
     pub fn from_env() -> Result<Rpc> {
-        let url = std::env::var("BITCOIN_RPC_URL").context("BITCOIN_RPC_URL is not set")?;
+        Rpc::from_env_with_url(&std::env::var("BITCOIN_RPC_URL").context("BITCOIN_RPC_URL is not set")?)
+    }
+
+    /// The environment's credentials against another node (e.g. a miner's, for direct submission).
+    pub fn from_env_with_url(url: &str) -> Result<Rpc> {
+        let url = url.to_owned();
         if let Ok(cookie) = std::env::var("BITCOIN_RPC_COOKIE") {
             let c = std::fs::read_to_string(&cookie).with_context(|| format!("reading {cookie}"))?;
             let (user, password) = c.trim().split_once(':').context("malformed cookie")?;
@@ -70,4 +81,30 @@ impl Rpc {
         let spk = hex::decode(v["scriptPubKey"]["hex"].as_str().context("gettxout scriptPubKey")?)?;
         Ok(Some(((btc * 1e8).round() as u64, spk, v["confirmations"].as_u64().unwrap_or(0))))
     }
+
+    /// `estimatesmartfee` in sat/vB; `None` while the node has too little data (e.g. regtest).
+    pub async fn estimate_sat_per_vb(&self, target_blocks: u16) -> Result<Option<f64>> {
+        let v = self.call("estimatesmartfee", json!([target_blocks])).await?;
+        Ok(v["feerate"].as_f64().map(|btc_per_kvb| btc_per_kvb * 1e5))
+    }
+
+    pub async fn block_count(&self) -> Result<u64> {
+        self.call("getblockcount", json!([])).await?.as_u64().context("getblockcount")
+    }
+
+    /// `getblock <hash at height> 2`.
+    pub async fn block_at(&self, height: u64) -> Result<Value> {
+        let hash = self.call("getblockhash", json!([height])).await?;
+        self.call("getblock", json!([hash, 2])).await
+    }
+
+    /// `submitpackage [raw..]` (parent first).
+    pub async fn submit_package(&self, raws: &[String]) -> Result<Value> {
+        self.call("submitpackage", json!([raws])).await
+    }
+}
+
+/// An RPC amount (BTC, as a string so no float rounding is involved).
+pub fn btc(sats: u64) -> String {
+    format!("{}.{:08}", sats / 100_000_000, sats % 100_000_000)
 }

@@ -3,7 +3,7 @@
 //! The mempool admits a rollup transaction only if its proof verifies, it passes every per-transaction
 //! rule of the next batch against the current tip, and none of its nullifiers, output commitments or
 //! funding outpoints is already spent (nullifiers) or reserved by another pending transaction. Batch
-//! selection is greedy by fee, bounded by `MAX_BATCH_TRANSACTIONS`, and the selection always passes the
+//! selection is greedy by fee, bounded by `MAX_BATCH_TRANSACTIONS` and a weight budget, and the selection always passes the
 //! full transition: the operator never builds a batch the guest would reject.
 use std::collections::BTreeSet;
 
@@ -11,8 +11,8 @@ use serde::{Deserialize, Serialize};
 
 use pr_bitcoin_adapter::{SettlementTx, TxInput};
 use pr_protocol_types::{
-    Fe, Outpoint, RollupTransaction, TxOut, ESCROW_INPUT_SEQUENCE, FUNDING_INPUT_SEQUENCE, MAX_BATCH_TRANSACTIONS,
-    ROLLUP_INPUT_SEQUENCE, TX_VERSION,
+    Canonical, Fe, Outpoint, RollupTransaction, TxOut, EMPTY_SETTLEMENT_WEIGHT, ESCROW_INPUT_SEQUENCE,
+    FUNDING_INPUT_SEQUENCE, MAX_BATCH_TRANSACTIONS, MAX_SETTLEMENT_WEIGHT, ROLLUP_INPUT_SEQUENCE, TX_VERSION,
 };
 use pr_scanner::Replica;
 use pr_state_transition::escrow::EscrowDeposit;
@@ -87,7 +87,8 @@ impl Mempool {
     fn admissible(&self, tx: &RollupTransaction, replica: &Replica) -> Result<(), MempoolError> {
         let tip = replica.tip();
         let bt = BatchTransaction { public: tx.public, external: tx.external.clone() };
-        check_transaction(&tip.state, &tip.anchors, tip.state.batch_number + 1, &bt).map_err(MempoolError::Rule)?;
+        check_transaction(&tip.state, tip.anchors.find(tx.public.anchor_batch_number), tip.state.batch_number + 1, &bt)
+            .map_err(MempoolError::Rule)?;
         let (nfs, cms, funding) = keys(tx);
         if nfs[0] == nfs[1] || cms[0] == cms[1] || funding.iter().collect::<BTreeSet<_>>().len() != funding.len() {
             return Err(MempoolError::DuplicateInTransaction);
@@ -130,7 +131,7 @@ impl Mempool {
         Ok(())
     }
 
-    /// Drops entries the new tip invalidates (spent nullifiers, expiry, anchors outside the window).
+    /// Drops entries the new tip invalidates (spent nullifiers, expiry, anchors no longer in the history).
     /// Called after every accepted settlement and after a rollback.
     pub fn revalidate(&mut self, replica: &Replica) {
         let entries = std::mem::take(&mut self.entries);
@@ -143,8 +144,22 @@ impl Mempool {
 
     /// Highest fee first, ties by arrival; at most `MAX_BATCH_TRANSACTIONS`.
     pub fn select(&self) -> Vec<Entry> {
+        self.select_within(MAX_SETTLEMENT_WEIGHT - EMPTY_SETTLEMENT_WEIGHT)
+    }
+
+    /// Greedy by fee: at most `MAX_BATCH_TRANSACTIONS` entries whose [`entry_weight`]s fit `budget`.
+    pub fn select_within(&self, budget: u64) -> Vec<Entry> {
         let mut v = self.entries.clone();
         v.sort_by(|a, b| b.tx.public.fee_sats.cmp(&a.tx.public.fee_sats).then(a.arrival.cmp(&b.arrival)));
+        let mut left = budget;
+        v.retain(|e| {
+            let w = entry_weight(e);
+            let keep = w <= left;
+            if keep {
+                left -= w;
+            }
+            keep
+        });
         v.truncate(MAX_BATCH_TRANSACTIONS);
         v
     }
@@ -152,6 +167,31 @@ impl Mempool {
     pub fn remove_settled(&mut self, settled: &[Entry]) {
         self.entries.retain(|e| !settled.iter().any(|s| s.arrival == e.arrival));
     }
+}
+
+/// Base weight of one funding input (outpoint, empty script, sequence) plus a witness allowance.
+pub const FUNDING_INPUT_WEIGHT: u64 = 4 * 41 + 256;
+
+fn output_weight(o: &TxOut) -> u64 {
+    4 * (8 + 1 + o.script_pubkey.len() as u64)
+}
+
+/// Upper bound on the weight a transaction adds to a settlement: its statement and external data
+/// in the annex (1 WU/B), its withdrawal and change outputs, and its funding inputs.
+pub fn entry_weight(e: &Entry) -> u64 {
+    let x = &e.tx.external;
+    let annex = (e.tx.public.encode().len() + x.encode().len()) as u64;
+    let change = x.deposit.as_ref().and_then(|d| d.change.as_ref());
+    annex
+        + x.withdrawals.iter().chain(change).map(output_weight).sum::<u64>()
+        + e.funding.len() as u64 * FUNDING_INPUT_WEIGHT
+}
+
+/// Upper bound on the weight an escrow sweep adds: its input, its sweep witness (leaf, control
+/// block) and its opening in the annex.
+pub fn escrow_weight(c: &EscrowCoin) -> u64 {
+    let o = &c.opening;
+    4 * 41 + 8 + o.sweep_leaf.len() as u64 + 65 + 32 * 3 + 16 + 1 + o.ciphertext.len() as u64
 }
 
 /// The settlement transaction for `selected` on top of `replica`'s tip: inputs `[rollup, funding..]`,
@@ -218,11 +258,7 @@ pub fn assemble_settlement_with_escrows(
         (tip.state.backing_sats as u128 + minted + selected.iter().map(|e| p(e).deposit_sats as u128).sum::<u128>())
             .checked_sub(selected.iter().map(|e| p(e).withdrawal_sats as u128 + p(e).fee_sats as u128).sum())?;
     let mut outputs = vec![TxOut { value: u64::try_from(backing).ok()?, script_pubkey: successor_script_pubkey }];
-    for e in selected {
-        if let Some(s) = &e.tx.external.withdrawal_script {
-            outputs.push(TxOut { value: e.tx.public.withdrawal_sats, script_pubkey: s.clone() });
-        }
-    }
+    outputs.extend(selected.iter().flat_map(|e| e.tx.external.withdrawals.iter().cloned()));
     outputs.extend(selected.iter().filter_map(|e| e.tx.external.deposit.as_ref().and_then(|d| d.change.clone())));
     outputs.extend(reward);
     Some(SettlementTx { version: TX_VERSION, lock_time: 0, inputs, outputs })

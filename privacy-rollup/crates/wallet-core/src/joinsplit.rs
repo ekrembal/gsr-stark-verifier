@@ -3,11 +3,11 @@ use std::fmt::Write as _;
 
 pub use pr_joinsplit::JoinSplitWitness;
 use pr_protocol_types::{
-    DepositDeclaration, ExternalData, Fe, JoinSplitPublic, COMMITMENT_TREE_DEPTH, PROTOCOL_VERSION,
+    DepositDeclaration, ExternalData, Fe, JoinSplitPublic, TxOut, COMMITMENT_TREE_DEPTH, PROTOCOL_VERSION,
 };
 use rand_core::{CryptoRng, RngCore};
 
-use crate::encryption::{encrypt_note, NotePlaintext};
+use crate::encryption::{encrypt_note, encrypt_self, NotePlaintext};
 use crate::keys::Address;
 use crate::{Note, OwnedNote};
 
@@ -83,6 +83,9 @@ pub struct OutputSpec {
     pub value: u64,
     pub recipient: Address,
     pub memo: [u8; 32],
+    /// The sender's outgoing key when the output is the sender's own (change): the note is then
+    /// published with a 120-byte self ciphertext instead of an ML-KEM one.
+    pub self_key: Option<[u8; 32]>,
 }
 
 pub struct JoinSplitBuilder {
@@ -92,7 +95,7 @@ pub struct JoinSplitBuilder {
     pub anchor_batch_number: u64,
     pub expiry_batch_number: u64,
     pub deposit: Option<(DepositDeclaration, u64)>,
-    pub withdrawal: Option<(Vec<u8>, u64)>,
+    pub withdrawals: Vec<TxOut>,
     pub fee_sats: u64,
 }
 
@@ -157,12 +160,15 @@ impl JoinSplitBuilder {
             out_auth[j] = pt.authority;
             out_randomness[j] = pt.randomness;
             commitments[j] = pt.note().commitment(&self.rollup_id);
-            ciphertexts[j] = encrypt_note(rng, &o.recipient.encapsulation_key, &self.rollup_id, &pt);
+            ciphertexts[j] = match &o.self_key {
+                Some(k) => encrypt_self(k, &self.rollup_id, &pt),
+                None => encrypt_note(rng, &o.recipient.encapsulation_key, &self.rollup_id, &pt),
+            };
             output_notes[j] = pt.note();
         }
         let external = ExternalData {
             deposit: self.deposit.as_ref().map(|d| d.0.clone()),
-            withdrawal_script: self.withdrawal.as_ref().map(|w| w.0.clone()),
+            withdrawals: self.withdrawals.clone(),
             ciphertexts,
         };
         let public = JoinSplitPublic {
@@ -174,7 +180,11 @@ impl JoinSplitBuilder {
             nullifiers,
             output_commitments: commitments,
             deposit_sats: self.deposit.as_ref().map_or(0, |d| d.1),
-            withdrawal_sats: self.withdrawal.as_ref().map_or(0, |w| w.1),
+            withdrawal_sats: self
+                .withdrawals
+                .iter()
+                .try_fold(0u64, |a, o| a.checked_add(o.value))
+                .ok_or("withdrawals overflow")?,
             fee_sats: self.fee_sats,
             external_data_commitment: external.commitment(),
             expiry_batch_number: self.expiry_batch_number,

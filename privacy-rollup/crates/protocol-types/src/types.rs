@@ -104,45 +104,100 @@ impl Canonical for AnchorEntry {
     }
 }
 
-/// The last `ANCHOR_WINDOW` accepted commitment roots, oldest first.
+/// Leaf of the anchor history tree.
+pub fn anchor_leaf(e: &AnchorEntry) -> [u8; 32] {
+    tagged(tags::ANCHORS, &[&e.encode()])
+}
+
+fn anchor_node(l: &[u8; 32], r: &[u8; 32]) -> [u8; 32] {
+    tagged(tags::ANCHOR_NODE, &[l, r])
+}
+
+/// Root of the anchor history tree given `leaf` at `index` and its `ANCHOR_TREE_DEPTH` siblings,
+/// bottom-up. Unused leaves are all-zero.
+pub fn anchor_root_from_path(leaf: &[u8; 32], index: u64, path: &[[u8; 32]]) -> Option<[u8; 32]> {
+    if path.len() != ANCHOR_TREE_DEPTH || index >> ANCHOR_TREE_DEPTH != 0 {
+        return None;
+    }
+    let mut h = *leaf;
+    for (level, sib) in path.iter().enumerate() {
+        h = if (index >> level) & 1 == 0 { anchor_node(&h, sib) } else { anchor_node(sib, &h) };
+    }
+    Some(h)
+}
+
+/// Membership of one anchor in the history tree.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct AnchorProof {
+    pub entry: AnchorEntry,
+    pub path: Vec<[u8; 32]>,
+}
+
+impl AnchorProof {
+    /// The entry, if it is leaf `entry.batch_number` of the tree with root `root`.
+    pub fn verify(&self, root: &[u8; 32]) -> Option<&AnchorEntry> {
+        (anchor_root_from_path(&anchor_leaf(&self.entry), self.entry.batch_number, &self.path).as_ref() == Some(root))
+            .then_some(&self.entry)
+    }
+}
+
+/// Every accepted commitment root, oldest first: entry `i` is the anchor after batch `i` and leaf
+/// `i` of an append-only SHA-256 Merkle tree of depth `ANCHOR_TREE_DEPTH`, whose root the state
+/// holds. Anchors never leave the history; a statement's own expiry bounds its lifetime.
 #[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct AnchorHistory(pub Vec<AnchorEntry>);
 
 impl AnchorHistory {
     pub fn commitment(&self) -> [u8; 32] {
-        tagged(tags::ANCHORS, &[&self.encode()])
+        self.root_and_path(None).0
     }
     pub fn find(&self, batch_number: u64) -> Option<&AnchorEntry> {
-        self.0.iter().find(|e| e.batch_number == batch_number)
+        usize::try_from(batch_number).ok().and_then(|i| self.0.get(i)).filter(|e| e.batch_number == batch_number)
     }
     pub fn push(&mut self, e: AnchorEntry) {
         self.0.push(e);
-        if self.0.len() > ANCHOR_WINDOW {
-            self.0.remove(0);
+    }
+    /// Siblings of leaf `index` (which may be the next, still empty, slot).
+    pub fn path(&self, index: u64) -> Vec<[u8; 32]> {
+        self.root_and_path(Some(index)).1
+    }
+    fn root_and_path(&self, index: Option<u64>) -> ([u8; 32], Vec<[u8; 32]>) {
+        let mut layer: Vec<[u8; 32]> = self.0.iter().map(anchor_leaf).collect();
+        let mut empty = [0u8; 32];
+        let mut path = Vec::new();
+        let mut at = index;
+        for _ in 0..ANCHOR_TREE_DEPTH {
+            if let Some(i) = at {
+                path.push(layer.get((i ^ 1) as usize).copied().unwrap_or(empty));
+                at = Some(i >> 1);
+            }
+            if layer.len() % 2 == 1 {
+                layer.push(empty);
+            }
+            layer = layer.chunks(2).map(|c| anchor_node(&c[0], &c[1])).collect();
+            empty = anchor_node(&empty, &empty);
         }
+        (layer.first().copied().unwrap_or(empty), path)
     }
 }
 
 impl Canonical for AnchorHistory {
     fn encode_to(&self, w: &mut Writer) {
-        w.u8(self.0.len() as u8);
+        w.u32(self.0.len() as u32);
         for e in &self.0 {
             e.encode_to(w);
         }
     }
     fn decode_from(r: &mut Reader<'_>) -> Result<Self, DecodeError> {
-        let n = r.u8()? as usize;
-        if n == 0 || n > ANCHOR_WINDOW {
+        let n = r.u32()? as usize;
+        if n == 0 {
             return Err(DecodeError::LengthOutOfRange);
         }
-        let mut v = Vec::with_capacity(n);
-        for _ in 0..n {
+        let mut v = Vec::new();
+        for i in 0..n {
             let e = AnchorEntry::decode_from(r)?;
-            if let Some(prev) = v.last() {
-                let prev: &AnchorEntry = prev;
-                if e.batch_number != prev.batch_number + 1 {
-                    return Err(DecodeError::BadOrder);
-                }
+            if e.batch_number != i as u64 {
+                return Err(DecodeError::BadOrder);
             }
             v.push(e);
         }
@@ -240,7 +295,8 @@ pub struct DepositDeclaration {
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ExternalData {
     pub deposit: Option<DepositDeclaration>,
-    pub withdrawal_script: Option<Vec<u8>>,
+    /// Withdrawal outputs (at most `MAX_WITHDRAWALS_PER_TX`); their values sum to `withdrawal_sats`.
+    pub withdrawals: Vec<TxOut>,
     pub ciphertexts: [Vec<u8>; 2],
 }
 
@@ -272,16 +328,12 @@ impl Canonical for ExternalData {
                 }
             }
         }
-        match &self.withdrawal_script {
-            None => {
-                w.u8(0);
-            }
-            Some(s) => {
-                w.u8(1).var_bytes(s);
-            }
+        w.u8(self.withdrawals.len() as u8);
+        for o in &self.withdrawals {
+            o.encode_to(w);
         }
         for c in &self.ciphertexts {
-            w.bytes(c);
+            encode_ciphertext(w, c);
         }
     }
     fn decode_from(r: &mut Reader<'_>) -> Result<Self, DecodeError> {
@@ -299,10 +351,40 @@ impl Canonical for ExternalData {
         } else {
             None
         };
-        let withdrawal_script = if r.bool()? { Some(r.var_bytes(MAX_SCRIPT_PUBKEY_LEN)?.to_vec()) } else { None };
-        let ciphertexts = [r.take(NOTE_CIPHERTEXT_LEN)?.to_vec(), r.take(NOTE_CIPHERTEXT_LEN)?.to_vec()];
-        Ok(ExternalData { deposit, withdrawal_script, ciphertexts })
+        let n = r.u8()? as usize;
+        if n > MAX_WITHDRAWALS_PER_TX {
+            return Err(DecodeError::LengthOutOfRange);
+        }
+        let mut withdrawals = Vec::with_capacity(n);
+        for _ in 0..n {
+            withdrawals.push(TxOut::decode_from(r)?);
+        }
+        let ciphertexts = [decode_ciphertext(r)?, decode_ciphertext(r)?];
+        Ok(ExternalData { deposit, withdrawals, ciphertexts })
     }
+}
+
+/// A note ciphertext with its kind byte: 0 for an ML-KEM ciphertext (`NOTE_CIPHERTEXT_LEN`), 1 for a
+/// self ciphertext (`SELF_CIPHERTEXT_LEN`). Any other length is not encodable.
+pub fn ciphertext_kind(c: &[u8]) -> Option<u8> {
+    match c.len() {
+        NOTE_CIPHERTEXT_LEN => Some(0),
+        SELF_CIPHERTEXT_LEN => Some(1),
+        _ => None,
+    }
+}
+
+fn encode_ciphertext(w: &mut Writer, c: &[u8]) {
+    w.u8(ciphertext_kind(c).unwrap_or(0xff)).bytes(c);
+}
+
+fn decode_ciphertext(r: &mut Reader<'_>) -> Result<Vec<u8>, DecodeError> {
+    let len = match r.u8()? {
+        0 => NOTE_CIPHERTEXT_LEN,
+        1 => SELF_CIPHERTEXT_LEN,
+        _ => return Err(DecodeError::LengthOutOfRange),
+    };
+    Ok(r.take(len)?.to_vec())
 }
 
 /// Public statement of one 2-input/2-output join-split proof.
@@ -465,7 +547,7 @@ impl Canonical for BatchBody {
         }
         for o in &self.outputs {
             o.commitment.encode_to(w);
-            w.bytes(&o.ciphertext);
+            encode_ciphertext(w, &o.ciphertext);
         }
     }
     fn decode_from(r: &mut Reader<'_>) -> Result<Self, DecodeError> {
@@ -483,7 +565,7 @@ impl Canonical for BatchBody {
         let n = layout.transactions as usize;
         if n > MAX_BATCH_TRANSACTIONS
             || layout.funding_inputs as usize > n * MAX_FUNDING_INPUTS
-            || layout.withdrawals as usize > n
+            || layout.withdrawals as usize > n * MAX_WITHDRAWALS_PER_TX
             || layout.changes as usize > n
             || layout.escrows as usize > MAX_BATCH_ESCROWS
         {
@@ -504,7 +586,7 @@ impl Canonical for BatchBody {
             if outputs.last().is_some_and(|p| p.commitment >= commitment) {
                 return Err(DecodeError::BadOrder);
             }
-            outputs.push(NoteOutput { commitment, ciphertext: r.take(NOTE_CIPHERTEXT_LEN)?.to_vec() });
+            outputs.push(NoteOutput { commitment, ciphertext: decode_ciphertext(r)? });
         }
         Ok(BatchBody { rollup_id, batch_number, predecessor, layout, nullifiers, outputs })
     }

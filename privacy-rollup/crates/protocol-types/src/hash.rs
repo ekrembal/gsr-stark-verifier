@@ -25,6 +25,7 @@ pub fn tagged(tag: &str, parts: &[&[u8]]) -> [u8; 32] {
 pub mod tags {
     pub const STATE: &str = "gsr-privacy-rollup/state";
     pub const ANCHORS: &str = "gsr-privacy-rollup/anchors";
+    pub const ANCHOR_NODE: &str = "gsr-privacy-rollup/anchor-node";
     pub const BATCH_BODY: &str = "gsr-privacy-rollup/batch-body";
     pub const DATA_HISTORY: &str = "gsr-privacy-rollup/data-history";
     pub const EXTERNAL_DATA: &str = "gsr-privacy-rollup/external-data";

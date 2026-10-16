@@ -28,6 +28,7 @@ user: joinsplit guest (private witness) -> zero-knowledge receipt (`identity_zk`
 | `apply_batch` guest | Implemented; `env::verify` per transaction; journal equals the native transition byte for byte |
 | `resolve_zk.zkr` | Built with patched Zirgen and added to the allowed control root (`5edc9538…5b01`) |
 | Batches containing join-splits | **Proven and settled on regtest** (image `00eb5e47…e50f`): a real deposit join-split, 15 segments, 24.8 min to the padded receipt; mined, altered spends rejected. See [reports/zk-joinsplit.md](reports/zk-joinsplit.md) |
+| P3: anchors, ciphertexts, batches | Append-only anchor tree (no anchor expiry), 120-byte self/change ciphertexts, up to 4 withdrawal outputs per join-split, 16-transaction weight-bounded batches; four-deposit and transfer + 4-output-withdrawal batches proven and mined on `gsr` (333,850 / 335,724 WU). See [reports/p3-anchors-ciphertexts.md](reports/p3-anchors-ciphertexts.md) |
 | Empty batches | **Proven** and settled consecutively on activated regtest |
 | Covenant (`OP_TX` binding, successor leaf, `1 CSV`) | Implemented, metered, mined on regtest; altered spends rejected |
 | Relay | Consensus-valid; **nonstandard** under the pinned node's policy (annex) |
@@ -71,7 +72,9 @@ Earlier ProveKit pipeline (kept for reference):
 | Seal | 222,668 bytes |
 
 Settlement weight does not depend on batch contents beyond the annex (one nullifier is 32 bytes, one output
-32 bytes plus a 1,232-byte ciphertext), because the receipt is constant-size.
+33 bytes plus a 1,232-byte recipient ciphertext or a 120-byte self/change ciphertext) and the funding,
+escrow and withdrawal inputs/outputs, because the receipt is constant-size. Batch selection keeps each
+settlement under 400,000 WU (`MAX_SETTLEMENT_WEIGHT`, budgeted from the measured 331,699 WU empty settlement).
 
 ## Layout
 

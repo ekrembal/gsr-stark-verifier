@@ -12,11 +12,11 @@ use pr_commitment_tree::Frontier;
 use pr_indexed_nullifier_tree::{verify_insertion, InsertionWitness, NullifierError};
 use pr_protocol_types::hash::sha256;
 use pr_protocol_types::{
-    next_data_history, AnchorEntry, AnchorHistory, Annex, BatchBody, BatchJournal, Canonical, ExternalData, Fe,
-    JoinSplitPublic, NoteOutput, Outpoint, RollupDescriptor, RollupState, SettlementLayout, TxOut, ANCHOR_WINDOW,
-    DUST_LIMIT, ESCROW_INPUT_SEQUENCE, FUNDING_INPUT_SEQUENCE, MAX_BATCH_ESCROWS, MAX_BATCH_TRANSACTIONS,
-    MAX_FUNDING_INPUTS, MAX_MONEY, MAX_SCRIPT_PUBKEY_LEN, NOTE_CIPHERTEXT_LEN, PROTOCOL_VERSION, ROLLUP_INPUT_SEQUENCE,
-    TX_VERSION,
+    anchor_leaf, anchor_root_from_path, ciphertext_kind, next_data_history, AnchorEntry, AnchorHistory, AnchorProof,
+    Annex, BatchBody, BatchJournal, Canonical, ExternalData, Fe, JoinSplitPublic, NoteOutput, Outpoint,
+    RollupDescriptor, RollupState, SettlementLayout, TxOut, DUST_LIMIT, ESCROW_INPUT_SEQUENCE, FUNDING_INPUT_SEQUENCE,
+    MAX_BATCH_ESCROWS, MAX_BATCH_TRANSACTIONS, MAX_FUNDING_INPUTS, MAX_MONEY, MAX_SCRIPT_PUBKEY_LEN,
+    MAX_WITHDRAWALS_PER_TX, PROTOCOL_VERSION, ROLLUP_INPUT_SEQUENCE, TX_VERSION,
 };
 use serde::{Deserialize, Serialize};
 
@@ -32,7 +32,10 @@ pub struct BatchTransaction {
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct BatchWitness {
     pub old_state: RollupState,
-    pub anchors: AnchorHistory,
+    /// Siblings of the next (empty) anchor slot, leaf `old_state.batch_number + 1`.
+    pub anchor_slot: Vec<[u8; 32]>,
+    /// Membership of each transaction's anchor, in transaction order.
+    pub anchor_proofs: Vec<AnchorProof>,
     /// Canonical frontier of the old commitment tree; required iff the batch appends commitments.
     pub frontier: Option<Frontier>,
     pub transactions: Vec<BatchTransaction>,
@@ -49,7 +52,8 @@ pub struct BatchWitness {
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct BatchEffects {
     pub new_state: RollupState,
-    pub anchors: AnchorHistory,
+    /// The anchor this batch appends to the history.
+    pub anchor: AnchorEntry,
     pub frontier: Option<Frontier>,
     pub annex: Annex,
     pub annex_bytes: Vec<u8>,
@@ -139,10 +143,11 @@ pub fn check_lineage(old: &RollupState, rollup_in: &Outpoint, predecessor: &Plai
     Ok(())
 }
 
-/// Per-transaction rules that only need the old state and the anchor window (also run by mempools).
+/// Per-transaction rules that only need the old state and the transaction's authenticated anchor
+/// (also run by mempools).
 pub fn check_transaction(
     old: &RollupState,
-    anchors: &AnchorHistory,
+    anchor: Option<&AnchorEntry>,
     next: u64,
     t: &BatchTransaction,
 ) -> Result<(), TransitionError> {
@@ -156,14 +161,14 @@ pub fn check_transaction(
     if p.expiry_batch_number < next {
         return Err(TransitionError::Expired);
     }
-    match anchors.find(p.anchor_batch_number) {
+    match anchor.filter(|e| e.batch_number == p.anchor_batch_number) {
         Some(e) if e.commitment_root == p.anchor_root && e.commitment_count == p.anchor_commitment_count => {}
         _ => return Err(TransitionError::UnknownAnchor),
     }
     if t.external.commitment() != p.external_data_commitment {
         return Err(TransitionError::ExternalDataMismatch);
     }
-    if t.external.ciphertexts.iter().any(|c| c.len() != NOTE_CIPHERTEXT_LEN) {
+    if t.external.ciphertexts.iter().any(|c| ciphertext_kind(c).is_none()) {
         return Err(TransitionError::BadCiphertext);
     }
     match &t.external.deposit {
@@ -177,14 +182,15 @@ pub fn check_transaction(
         }
         _ => return Err(TransitionError::DepositMismatch),
     }
-    match &t.external.withdrawal_script {
-        None if p.withdrawal_sats == 0 => {}
-        Some(s) if p.withdrawal_sats > 0 && s.len() <= MAX_SCRIPT_PUBKEY_LEN => {
-            if p.withdrawal_sats < DUST_LIMIT {
-                return Err(TransitionError::Dust);
-            }
-        }
-        _ => return Err(TransitionError::WithdrawalMismatch),
+    let ws = &t.external.withdrawals;
+    if ws.len() > MAX_WITHDRAWALS_PER_TX
+        || ws.iter().any(|o| o.script_pubkey.len() > MAX_SCRIPT_PUBKEY_LEN)
+        || ws.iter().try_fold(0u64, |a, o| a.checked_add(o.value)) != Some(p.withdrawal_sats)
+    {
+        return Err(TransitionError::WithdrawalMismatch);
+    }
+    if ws.iter().any(|o| o.value < DUST_LIMIT) {
+        return Err(TransitionError::Dust);
     }
     if p.nullifiers.iter().any(Fe::is_zero) {
         return Err(TransitionError::ZeroNullifier);
@@ -198,19 +204,18 @@ pub fn apply_batch(w: &BatchWitness) -> Result<BatchEffects, TransitionError> {
     if old.protocol_version != PROTOCOL_VERSION {
         return Err(TransitionError::UnsupportedVersion);
     }
-    if w.anchors.0.is_empty()
-        || w.anchors.0.len() > ANCHOR_WINDOW
-        || w.anchors.commitment() != old.anchor_history_commitment
-    {
-        return Err(TransitionError::AnchorHistoryMismatch);
-    }
     let txs = &w.transactions;
     if txs.len() > MAX_BATCH_TRANSACTIONS {
         return Err(TransitionError::TooManyTransactions);
     }
     let next = old.batch_number.checked_add(1).ok_or(TransitionError::Overflow)?;
-    for t in txs {
-        check_transaction(old, &w.anchors, next, t)?;
+    if anchor_root_from_path(&[0; 32], next, &w.anchor_slot) != Some(old.anchor_history_commitment)
+        || w.anchor_proofs.len() != txs.len()
+    {
+        return Err(TransitionError::AnchorHistoryMismatch);
+    }
+    for (t, a) in txs.iter().zip(&w.anchor_proofs) {
+        check_transaction(old, a.verify(&old.anchor_history_commitment), next, t)?;
     }
 
     // Nullifiers: globally sorted, distinct, each inserted with an authenticated witness.
@@ -248,7 +253,7 @@ pub fn apply_batch(w: &BatchWitness) -> Result<BatchEffects, TransitionError> {
     let mut escrowed = 0u64;
     let mut escrow_fees = 0u64;
     for (e, input) in w.escrows.iter().zip(&s.inputs[escrow_start..]) {
-        if e.ciphertext.len() != NOTE_CIPHERTEXT_LEN {
+        if ciphertext_kind(&e.ciphertext).is_none() {
             return Err(TransitionError::BadCiphertext);
         }
         if !input.script_sig.is_empty()
@@ -333,9 +338,7 @@ pub fn apply_batch(w: &BatchWitness) -> Result<BatchEffects, TransitionError> {
             }
             change_outs.extend(d.change.clone());
         }
-        if let Some(script) = &t.external.withdrawal_script {
-            withdrawal_outs.push(TxOut { value: p.withdrawal_sats, script_pubkey: script.clone() });
-        }
+        withdrawal_outs.extend(t.external.withdrawals.iter().cloned());
     }
     let gross_in = add(old.backing_sats, deposits)?;
     let gross_out = add(withdrawals_total, fees)?;
@@ -385,8 +388,9 @@ pub fn apply_batch(w: &BatchWitness) -> Result<BatchEffects, TransitionError> {
         nullifiers,
         outputs,
     };
-    let mut anchors = w.anchors.clone();
-    anchors.push(AnchorEntry { batch_number: next, commitment_root, commitment_count });
+    let anchor = AnchorEntry { batch_number: next, commitment_root, commitment_count };
+    let anchor_history_commitment = anchor_root_from_path(&anchor_leaf(&anchor), next, &w.anchor_slot)
+        .ok_or(TransitionError::AnchorHistoryMismatch)?;
     let new_state = RollupState {
         rollup_id: old.rollup_id,
         protocol_version: old.protocol_version,
@@ -395,7 +399,7 @@ pub fn apply_batch(w: &BatchWitness) -> Result<BatchEffects, TransitionError> {
         commitment_count,
         nullifier_root,
         nullifier_next_index,
-        anchor_history_commitment: anchors.commitment(),
+        anchor_history_commitment,
         data_history_commitment: next_data_history(&old.data_history_commitment, next, &body.digest()),
         backing_sats,
         parent: rollup_in.prevout,
@@ -411,5 +415,5 @@ pub fn apply_batch(w: &BatchWitness) -> Result<BatchEffects, TransitionError> {
         transaction_outputs_digest: s.outputs_digest(),
         annex_digest: sha256(&annex_bytes),
     };
-    Ok(BatchEffects { new_state, anchors, frontier, annex, annex_bytes, journal })
+    Ok(BatchEffects { new_state, anchor, frontier, annex, annex_bytes, journal })
 }

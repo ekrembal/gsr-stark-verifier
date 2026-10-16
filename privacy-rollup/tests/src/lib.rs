@@ -59,7 +59,12 @@ impl Wallet {
         }
     }
     pub fn pay(&self, value: u64) -> OutputSpec {
-        OutputSpec { value, recipient: self.keys.address(), memo: [0; 32] }
+        OutputSpec { value, recipient: self.keys.address(), memo: [0; 32], self_key: None }
+    }
+
+    /// An output to this wallet sealed under its outgoing key (compact change ciphertext).
+    pub fn change(&self, value: u64) -> OutputSpec {
+        OutputSpec { value, recipient: self.keys.address(), memo: [0; 32], self_key: Some(self.keys.outgoing_key) }
     }
 }
 
@@ -106,7 +111,7 @@ impl Harness {
             anchor_batch_number: a.batch_number,
             expiry_batch_number: tip.state.batch_number + 10,
             deposit: None,
-            withdrawal: None,
+            withdrawals: Vec::new(),
             fee_sats: fee,
         }
     }

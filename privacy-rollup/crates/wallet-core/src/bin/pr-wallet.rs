@@ -69,7 +69,7 @@ fn main() {
         anchor_batch_number: anchor["batch_number"].as_u64().expect("anchor batch"),
         expiry_batch_number: batch + 10,
         deposit: Some((DepositDeclaration { funding: vec![Outpoint { txid, vout }], change: None }, deposit)),
-        withdrawal: None,
+        withdrawals: Vec::new(),
         fee_sats: fee,
     };
     let built = b
@@ -77,8 +77,8 @@ fn main() {
             &mut rand_core::OsRng,
             [SpendInput::Dummy, SpendInput::Dummy],
             [
-                OutputSpec { value: deposit - fee, recipient: keys.address(), memo: [0; 32] },
-                OutputSpec { value: 0, recipient: keys.address(), memo: [0; 32] },
+                OutputSpec { value: deposit - fee, recipient: keys.address(), memo: [0; 32], self_key: None },
+                OutputSpec { value: 0, recipient: keys.address(), memo: [0; 32], self_key: None },
             ],
         )
         .expect("valid join-split");

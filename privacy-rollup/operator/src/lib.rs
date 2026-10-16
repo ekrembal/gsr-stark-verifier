@@ -7,8 +7,12 @@ use std::path::{Path, PathBuf};
 
 use anyhow::{bail, ensure, Context, Result};
 use pr_bitcoin_adapter::PlainTx;
-use pr_mempool::{assemble_settlement_with_escrows, batch_transactions, Entry, EscrowCoin, FundingCoin, Mempool};
-use pr_protocol_types::{Canonical, Outpoint, RollupDescriptor, RollupTransaction, TxOut};
+use pr_mempool::{
+    assemble_settlement_with_escrows, batch_transactions, escrow_weight, Entry, EscrowCoin, FundingCoin, Mempool,
+};
+use pr_protocol_types::{
+    Canonical, Outpoint, RollupDescriptor, RollupTransaction, TxOut, EMPTY_SETTLEMENT_WEIGHT, MAX_SETTLEMENT_WEIGHT,
+};
 use pr_scanner::Replica;
 use pr_state_transition::{apply_batch, BatchEffects, BatchWitness};
 use risc0_zkvm::{sha::Digestible, ReceiptClaim, SuccinctReceipt, VerifierContext};
@@ -167,7 +171,9 @@ impl Store {
         reward: Option<TxOut>,
     ) -> Result<BuiltBatch> {
         let (replica, _) = self.load()?;
-        let entries = self.load_pool(&replica)?.select();
+        let swept: u64 = escrows.iter().map(escrow_weight).sum();
+        let budget = (MAX_SETTLEMENT_WEIGHT - EMPTY_SETTLEMENT_WEIGHT).saturating_sub(swept);
+        let entries = self.load_pool(&replica)?.select_within(budget);
         let settlement =
             assemble_settlement_with_escrows(&replica, rollup_script_pubkey, successor, &entries, escrows, reward)
                 .context("batch withdraws more than it backs")?;

@@ -20,8 +20,10 @@ use pr_sdk::api::{
     Anchor, BatchReport, EscrowRegistration, EscrowState, EscrowTerms, FundingInput, MerklePath, NoteBatch, Notes,
     Stage, Submission, SubmitResponse,
 };
-use pr_sdk::pr_mempool::EscrowCoin;
-use pr_sdk::pr_protocol_types::{DUST_LIMIT, MAX_BATCH_ESCROWS, MAX_MONEY, NOTE_CIPHERTEXT_LEN};
+use pr_sdk::pr_mempool::{escrow_weight, EscrowCoin};
+use pr_sdk::pr_protocol_types::{
+    ciphertext_kind, DUST_LIMIT, EMPTY_SETTLEMENT_WEIGHT, MAX_BATCH_ESCROWS, MAX_MONEY, MAX_SETTLEMENT_WEIGHT,
+};
 use pr_sdk::pr_state_transition::escrow;
 use pr_sdk::{decode_receipt, decode_transaction};
 use serde::{Deserialize, Serialize};
@@ -428,7 +430,7 @@ impl Batcher {
         if e.sweep_leaf.len() != 34 + body.len() || e.sweep_leaf[34..] != body[..] {
             return Err(invalid("sweep leaf does not use this batcher's sweep body".into()));
         }
-        if e.ciphertext.len() != NOTE_CIPHERTEXT_LEN || e.value < DUST_LIMIT || e.value > MAX_MONEY {
+        if ciphertext_kind(&e.ciphertext).is_none() || e.value < DUST_LIMIT || e.value > MAX_MONEY {
             return Err(invalid("escrow note is malformed or dust".into()));
         }
         let refund = hex::decode(&reg.refund_leaf).map_err(|_| invalid("refund leaf is not hex".into()))?;
@@ -480,6 +482,7 @@ impl Batcher {
         let list: Vec<(String, Registered)> = self.escrow_map().iter().map(|(k, v)| (k.clone(), v.clone())).collect();
         let mut gone = Vec::new();
         let mut out = Vec::new();
+        let mut escrow_budget = (MAX_SETTLEMENT_WEIGHT - EMPTY_SETTLEMENT_WEIGHT) / 2;
         for (k, r) in list {
             let o = &r.coin.outpoint;
             match self.rpc.txout(&display_hex(&o.txid), o.vout).await? {
@@ -488,7 +491,9 @@ impl Batcher {
                     if c >= self.cfg.confirmations
                         && c.saturating_mul(2) <= r.refund_delay as u64
                         && out.len() < MAX_BATCH_ESCROWS
+                        && escrow_budget >= escrow_weight(&r.coin)
                     {
+                        escrow_budget -= escrow_weight(&r.coin);
                         out.push(r.coin);
                     }
                 }

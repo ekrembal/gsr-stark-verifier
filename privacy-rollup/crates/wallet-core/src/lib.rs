@@ -3,7 +3,7 @@ pub mod encryption;
 pub mod joinsplit;
 pub mod keys;
 
-pub use encryption::{decrypt_note, encrypt_note, NotePlaintext};
+pub use encryption::{decrypt_any, decrypt_note, encrypt_note, encrypt_self, NotePlaintext};
 pub use joinsplit::{BuiltJoinSplit, JoinSplitBuilder, JoinSplitWitness, OutputSpec, ProverToml, SpendInput};
 pub use keys::{Address, Keys};
 
@@ -45,7 +45,7 @@ pub fn scan_outputs(
         .iter()
         .enumerate()
         .filter_map(|(k, o)| {
-            let pt = decrypt_note(keys, rollup_id, &o.commitment, &o.ciphertext)?;
+            let pt = decrypt_any(keys, rollup_id, &o.commitment, &o.ciphertext)?;
             let note = pt.note();
             if note.authority != keys.spend_authority || note.commitment(rollup_id) != o.commitment {
                 return None;

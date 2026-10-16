@@ -29,7 +29,11 @@ state_root = tagged("gsr-privacy-rollup/state", encode(state))
 * commitment tree: depth-32 append-only Poseidon2 Merkle tree of note commitments (`pr-commitment-tree`);
 * nullifier tree: depth-32 indexed (linked-list) Merkle tree over SHA-256 (`pr-indexed-nullifier-tree`);
   insertion is authenticated by the low leaf whose interval brackets the new value, Aztec style;
-* anchor history: the last 64 `(batch_number, commitment_root, commitment_count)` entries;
+* anchor history: the root of an append-only SHA-256 Merkle tree of depth 32 whose leaf `i` is
+  `tagged("…/anchors", batch_number || commitment_root || commitment_count)` for the anchor after batch `i`
+  (unused leaves are zero, nodes `tagged("…/anchor-node", left || right)`). Anchors never leave the history,
+  so filling batches with empty settlements cannot invalidate a pending transaction; only the statement's
+  own `expiry_batch_number` ends it;
 * data history: `next = tagged("…/data-history", prev || batch_number || body_digest)`, a hash chain of
   every published batch body;
 * `backing_sats`: exactly the value of the rollup output.
@@ -43,21 +47,29 @@ authority), randomness, 0)`; `authority = H(TAG_OWNER, secret)`, `nk = H(TAG_NK,
 `nullifier = H(TAG_NULLIFIER, nk, commitment, leaf_index)`. `H` is Poseidon2 over BN254 (t = 4, rate 3, tag
 in the capacity lane), identical in `pr-crypto` and the Noir circuit. Note plaintexts are encrypted to the
 recipient with ML-KEM-768 + XChaCha20-Poly1305 (`pr-wallet-core::encryption`), associated data
-`rollup_id || commitment`, 1,232-byte ciphertexts.
+`rollup_id || commitment`, 1,232-byte ciphertexts (kind 0). A note the sender pays to itself (change) is
+instead sealed with XChaCha20-Poly1305 under the wallet's outgoing key `tagged("…/note-key", "outgoing" ||
+seed)`, nonce `sha256(commitment)[..24]`, same associated data: 120 bytes (kind 1). Each commitment, and so
+each nonce, is used once per key; scanners trial-decrypt kind 1 with their outgoing key and kind 0 with
+their ML-KEM key.
 
 ## Transactions
 
 Each user transaction is a 2-input / 2-output join-split proof (`joinsplit.md`) plus `ExternalData`:
-an optional deposit declaration (funding outpoints, optional change), an optional withdrawal script and the
-two output ciphertexts, committed through `external_data_commitment`. Accounting is
+an optional deposit declaration (funding outpoints, optional change), up to `MAX_WITHDRAWALS_PER_TX = 4`
+withdrawal outputs `(value, script_pubkey)` whose values sum to the proven `withdrawal_sats`, and the two
+output ciphertexts, committed through `external_data_commitment`. Accounting is
 `in0 + in1 + deposit = out0 + out1 + withdrawal + fee`, every term ≤ `MAX_MONEY`.
 
 ## Batch transition (`apply_batch`)
 
-For up to 8 transactions, all of which must be valid against the old state:
+For up to `MAX_BATCH_TRANSACTIONS = 16` transactions, all of which must be valid against the old state.
+The witness carries the siblings of the next empty anchor slot (leaf `batch_number + 1`), which must hash
+to the old anchor root, and one membership path per transaction anchor:
 
-1. statement checks (`check_transaction`): version, rollup id, expiry, anchor ∈ window with matching root and
-   count, external-data commitment, ciphertext lengths, deposit/withdrawal declarations, dust, nonzero
+1. statement checks (`check_transaction`): version, rollup id, expiry, anchor a member of the history tree with
+   matching root and count, external-data commitment, ciphertext kinds, deposit/withdrawal declarations (each
+   withdrawal ≥ dust, Σ = `withdrawal_sats`), nonzero
    nullifiers;
 2. all nullifiers sorted, distinct, each inserted with a verified insertion witness;
 3. all output commitments sorted, distinct, appended in that order to the authenticated frontier;
@@ -70,7 +82,7 @@ For up to 8 transactions, all of which must be valid against the old state:
    `deposit + change`;
 5. fees: `F = Σ fee_sats`, optional reward output `R ≥ dust`, miner fee `M = F − R ≥ 0`,
    `Σ inputs − Σ outputs = M`, new `backing_sats = old + deposits − withdrawals − F ≥ dust`;
-6. new anchor entry, data history, annex and the 196-byte journal (`bitcoin-binding.md`).
+6. new anchor leaf (written into the empty slot, giving the new root), data history, annex and the 196-byte journal (`bitcoin-binding.md`).
 
 ## Deposit escrows (non-interactive deposits)
 
@@ -78,7 +90,8 @@ A depositor needs no proof and no round trip: the SDK (`Wallet::deposit_address`
 taproot address `P2TR(NUMS, {sweep (leaf version 0xc2), refund (0xc0)})` that any wallet can pay.
 
 * `D = sha256("GSR-rollup/escrow-v1" || rollup_id || authority || randomness || value || fee_sats ||
-  sha256(ciphertext))`; the sweep leaf is `0x20 D OP_DROP || body`, where `body` (`covenant_cli escrow-body`,
+  sha256(ciphertext))`, where the ciphertext may be either kind (a depositor paying its own wallet can use a
+  120-byte self ciphertext); the sweep leaf is `0x20 D OP_DROP || body`, where `body` (`covenant_cli escrow-body`,
   served at `GET /v1/escrow`) uses `OP_TX` to require that the sweeping transaction's input 0 is a script-path
   spend of this rollup's covenant (this image and rollup id, any state root) with an annex, and that the escrow
   input itself has sequence `ESCROW_INPUT_SEQUENCE = 0xfffffffd`.

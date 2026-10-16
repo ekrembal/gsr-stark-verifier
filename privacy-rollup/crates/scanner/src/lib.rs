@@ -5,8 +5,8 @@ use pr_bitcoin_adapter::{PlainTx, SettlementTx};
 use pr_commitment_tree::Tree;
 use pr_indexed_nullifier_tree::IndexedTree;
 use pr_protocol_types::{
-    next_data_history, AnchorEntry, AnchorHistory, Annex, Canonical, Fe, Outpoint, RollupDescriptor, RollupState,
-    DUST_LIMIT,
+    next_data_history, AnchorEntry, AnchorHistory, AnchorProof, Annex, Canonical, Fe, Outpoint, RollupDescriptor,
+    RollupState, DUST_LIMIT,
 };
 use pr_state_transition::escrow::EscrowDeposit;
 use pr_state_transition::{apply_batch, genesis, BatchEffects, BatchTransaction, BatchWitness, TransitionError};
@@ -93,7 +93,19 @@ impl Replica {
         let tip = self.tip();
         BatchWitness {
             old_state: tip.state,
-            anchors: tip.anchors.clone(),
+            anchor_slot: tip.anchors.path(tip.state.batch_number + 1),
+            anchor_proofs: transactions
+                .iter()
+                .map(|t| {
+                    let b = t.public.anchor_batch_number;
+                    let entry = tip.anchors.find(b).copied().unwrap_or(AnchorEntry {
+                        batch_number: b,
+                        commitment_root: t.public.anchor_root,
+                        commitment_count: t.public.anchor_commitment_count,
+                    });
+                    AnchorProof { entry, path: tip.anchors.path(b) }
+                })
+                .collect(),
             frontier: if transactions.is_empty() && escrows.is_empty() {
                 None
             } else {

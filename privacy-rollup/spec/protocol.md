@@ -90,7 +90,8 @@ A depositor needs no proof and no round trip: the SDK (`Wallet::deposit_address`
 taproot address `P2TR(NUMS, {sweep (leaf version 0xc2), refund (0xc0)})` that any wallet can pay.
 
 * `D = sha256("GSR-rollup/escrow-v1" || rollup_id || authority || randomness || value || fee_sats ||
-  sha256(ciphertext))`; the sweep leaf is `0x20 D OP_DROP || body`, where `body` (`covenant_cli escrow-body`,
+  sha256(ciphertext))`, where the ciphertext may be either kind (a depositor paying its own wallet can use a
+  120-byte self ciphertext); the sweep leaf is `0x20 D OP_DROP || body`, where `body` (`covenant_cli escrow-body`,
   served at `GET /v1/escrow`) uses `OP_TX` to require that the sweeping transaction's input 0 is a script-path
   spend of this rollup's covenant (this image and rollup id, any state root) with an annex, and that the escrow
   input itself has sequence `ESCROW_INPUT_SEQUENCE = 0xfffffffd`.

@@ -9,11 +9,11 @@
 //! wallet register <url> <deposit-address.json> <txid> <vout>      register the paid escrow output
 //! wallet scan    <url> <seed-hex>
 //! wallet send    <url> <seed-hex> <leaf> <to-address|self> <amount-sats> <fee-sats> [po2]
-//! wallet withdraw <url> <seed-hex> <leaf> <script-pubkey-hex> <amount-sats> <fee-sats> [po2]
+//! wallet withdraw <url> <seed-hex> <leaf> <script-pubkey-hex>[:<sats>,<script-pubkey-hex>:<sats>..] <amount-sats> <fee-sats> [po2]
 //! wallet settle  <url>                                                 request a batch, wait for it
 use std::time::{Duration, Instant};
 
-use anyhow::{bail, Context, Result};
+use anyhow::{bail, ensure, Context, Result};
 use pr_sdk::api::{EscrowRegistration, FundingInput, Stage};
 use pr_sdk::client::Client;
 use pr_sdk::pr_protocol_types::TxOut;
@@ -94,7 +94,18 @@ fn main() -> Result<()> {
                 let recipient = if a[4] == "self" { w.address() } else { decode_address(&a[4])? };
                 (vec![OutputSpec { value: amount, recipient, memo: [0; 32], self_key: None }], Vec::new())
             } else {
-                (Vec::new(), vec![TxOut { value: amount, script_pubkey: hex::decode(&a[4]).context("script-pubkey")? }])
+                let outs = if a[4].contains(':') {
+                    a[4].split(',')
+                        .map(|o| {
+                            let (spk, v) = o.split_once(':').context("<script-pubkey>:<sats>")?;
+                            Ok(TxOut { value: v.parse()?, script_pubkey: hex::decode(spk).context("script-pubkey")? })
+                        })
+                        .collect::<Result<Vec<_>>>()?
+                } else {
+                    vec![TxOut { value: amount, script_pubkey: hex::decode(&a[4]).context("script-pubkey")? }]
+                };
+                ensure!(outs.iter().map(|o| o.value).sum::<u64>() == amount, "withdrawal outputs must sum to <sats>");
+                (Vec::new(), outs)
             };
             let t = Instant::now();
             let path = client.path(leaf)?;

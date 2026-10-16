@@ -1,0 +1,109 @@
+{
+ "deposit_seconds": 190.9,
+ "settlement_seconds": 532.9,
+ "killed_after_broadcast": {
+  "txid": "d78bac0c0f15c295af9ffcbd272550b8239c3b4fb79921223b5795af06207ebe",
+  "weight": 332411
+ },
+ "tampered": {
+  "successor_value_minus_1": "d: block-script-verify-flag-failed (Script failed an OP_VERIFY operation), input 0 of 69067faf95df33a366feb365f2de5df09d33101522912e3a41f0a0e4b51a293b (wtxid 6f18d7ced92af1cb5b684d067ddd93877c12ba6129c3ef08f4c87fbf9b36d523), spending 72b648f72985704d36bdd0448af7b713d6634f266fd26cd545da461cc07b65b3:0",
+  "last_output_value_minus_1": "d: block-script-verify-flag-failed (Script failed an OP_VERIFY operation), input 0 of 977e1170c6b7f81da67b962e020fcc1daefd9236c9699de542b9a139bc7753f9 (wtxid 571b4957a4a8b72e7bf39a1952723decb9fb368ed5ab51fd772fc11b6994f54d), spending 72b648f72985704d36bdd0448af7b713d6634f266fd26cd545da461cc07b65b3:0",
+  "last_output_redirected": "d: block-script-verify-flag-failed (Script failed an OP_VERIFY operation), input 0 of 3a90d6ce02de38c4fec2a30f37f5b4ff3a3ca3421f6f2c7d62a4900b6be2dd83 (wtxid df8e4f7ef5a3b012e71be142eab124eb52f4538b41bece19b192d40851e903f3), spending 72b648f72985704d36bdd0448af7b713d6634f266fd26cd545da461cc07b65b3:0",
+  "extra_output": "d: block-script-verify-flag-failed (Script failed an OP_VERIFY operation), input 0 of a509ae16afad45a61918e50035bce12097cb53ac4098c7de2375ff4bc88ca020 (wtxid bedb281db8fe0a5f7a6ac23c70f871b8f98655f95ccf19ed4900797e8f61bff6), spending 72b648f72985704d36bdd0448af7b713d6634f266fd26cd545da461cc07b65b3:0",
+  "funding_input_dropped": "error code: -25\nerror message:\nTestBlockValidity failed: bad-txns-in-belowout, value in (0.001) < value out (0.00141671) in transaction 29d391ba44bf84213663f3a2abb4caa8192b00030e6286fafb633165c46d5a67",
+  "annex_byte_flipped": "d: block-script-verify-flag-failed (Script failed an OP_VERIFY operation), input 0 of d78bac0c0f15c295af9ffcbd272550b8239c3b4fb79921223b5795af06207ebe (wtxid f63a7ea459af4fb87d976fc2b6e93a872abbeb62e9d2274c3fe28a795f38830f), spending 72b648f72985704d36bdd0448af7b713d6634f266fd26cd545da461cc07b65b3:0",
+  "annex_padded_100kB": "d: block-script-verify-flag-failed (Script failed an OP_VERIFY operation), input 0 of d78bac0c0f15c295af9ffcbd272550b8239c3b4fb79921223b5795af06207ebe (wtxid fd12852ba238d70c7e3e4e54c7ff28e8cbd96dafb6ba17bc2122cc350221ffd2), spending 72b648f72985704d36bdd0448af7b713d6634f266fd26cd545da461cc07b65b3:0",
+  "seal_byte_flipped": "d: block-script-verify-flag-failed (Script failed an OP_VERIFY operation), input 0 of d78bac0c0f15c295af9ffcbd272550b8239c3b4fb79921223b5795af06207ebe (wtxid ab074af7e2ac48c2ee2f3ed0c92c3197f7f6eb67005e8ceaca32df23a2da3c6c), spending 72b648f72985704d36bdd0448af7b713d6634f266fd26cd545da461cc07b65b3:0",
+  "covenant_copy_input": "d: block-script-verify-flag-failed (Script failed an OP_VERIFY operation), input 0 of 63e6f78430099d801a84571f98775271d56218197dae60de64af2ec9c9bb31b4 (wtxid 1de0e43dbbc4776642ef507e4a576080b4b2e83e00d2d818a5bc14ecc7afe2f5), spending 4690679bcbdb3802a46ad804cf20acd40e5c263862949935f7a00467bc2f0300:0"
+ },
+ "resumed": {
+  "batch": {
+   "batch_number": 1,
+   "stage": "confirmed",
+   "transactions": 1,
+   "txid": "d78bac0c0f15c295af9ffcbd272550b8239c3b4fb79921223b5795af06207ebe",
+   "block_hash": null,
+   "error": null,
+   "prove": {
+    "cycles_total": 4194304,
+    "cycles_user": 3892586,
+    "identity_sha256_padded_seconds": 6.119955152,
+    "lift_join_seconds": 66.059919789,
+    "resolve_zk_seconds": 9.380094946,
+    "seal_words": 55667,
+    "segment_proving_seconds": 336.1909143,
+    "segments": 4,
+    "transactions": 1,
+    "workers": 1
+   },
+   "weight": 332411,
+   "fees": {
+    "fees": 9000,
+    "miner_fee": 8329,
+    "reward": {
+     "script_pubkey": [
+      81,
+      32,
+      229,
+      86,
+      142,
+      194,
+      131,
+      11,
+      6,
+      196,
+      213,
+      166,
+      131,
+      100,
+      225,
+      186,
+      85,
+      252,
+      192,
+      47,
+      44,
+      118,
+      91,
+      74,
+      79,
+      17,
+      253,
+      41,
+      81,
+      243,
+      234,
+      113,
+      38,
+      84
+     ],
+     "value": 671
+    },
+    "weight": 333150
+   },
+   "started_unix": 1792185646,
+   "finished_unix": 1792186181
+  },
+  "status": {
+   "anchor": {
+    "batch_number": 1,
+    "commitment_count": 2,
+    "root": "00eb1abd97d9401b09fc959c47b07345750a9e444ac42f31d8b03cab24ae16d0"
+   },
+   "backing_sats": 141000,
+   "batch_number": 1,
+   "commitment_count": 2,
+   "nullifier_next_index": 3,
+   "pending": 0,
+   "rollup_id": "0836ee4a3697aae32d46013847e6df15e3cf0027bdb41ffa4a88ab4b92d774f5",
+   "settling": false,
+   "state_root": "b4cbb72b367e5a51b120f5a91081ac9ec0c145acec0313488066cddc275270e2",
+   "utxo": [
+    "be7e2006af95573b222199b74f3b9c23b8502527bdfc9faf95c2150f0cac8bd7",
+    0
+   ]
+  }
+ },
+ "replay": "error code: -27\nerror message:\nTransaction outputs already in utxo set",
+ "replay_in_block": "error code: -25\nerror message:\nTestBlockValidity failed: bad-txns-BIP30, tried to overwrite transaction"
+}

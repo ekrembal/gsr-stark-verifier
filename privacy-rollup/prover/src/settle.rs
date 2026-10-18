@@ -12,9 +12,9 @@ use anyhow::{ensure, Context, Result};
 use pr_protocol_types::Canonical;
 use pr_state_transition::{apply_batch, BatchWitness};
 use risc0_zkvm::{
-    default_executor, get_prover_server, recursion, sha::Digestible, Assumption, ExecutorEnv, ExecutorImpl,
-    InnerReceipt, MaybePruned, Output, ProverOpts, Receipt, ReceiptClaim, Segment, SegmentReceipt, SuccinctReceipt,
-    SuccinctReceiptVerifierParameters, VerifierContext,
+    default_executor, get_prover_server, recursion, sha::Digest, sha::Digestible, Assumption, ExecutorEnv,
+    ExecutorImpl, InnerReceipt, MaybePruned, Output, ProverOpts, Receipt, ReceiptClaim, Segment, SegmentReceipt,
+    SuccinctReceipt, SuccinctReceiptVerifierParameters, VerifierContext,
 };
 use serde::{Deserialize, Serialize};
 
@@ -23,6 +23,11 @@ use crate::Clock;
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
 pub struct SettlementStats {
     pub transactions: usize,
+    /// How the predecessor settlement was proven: `genesis`, `receipt` or `seal`.
+    #[serde(default)]
+    pub lineage: String,
+    #[serde(default)]
+    pub resolve_predecessor_seconds: f64,
     pub cycles_total: u64,
     pub cycles_user: u64,
     pub segments: usize,
@@ -88,10 +93,15 @@ pub struct Conditional {
 /// Executes and proves the `apply_batch` guest with `claims` as assumptions, up to the joined
 /// conditional receipt. Segments are proven directly: the composite prover would require a receipt
 /// for every assumption, while here they are discharged later by `resolve_zk`.
-pub fn prove_conditional(witness: &BatchWitness, claims: &[ReceiptClaim], workers: usize) -> Result<Conditional> {
+pub fn prove_conditional(
+    witness: &BatchWitness,
+    claims: &[ReceiptClaim],
+    predecessor: Option<&PredecessorProof>,
+    workers: usize,
+) -> Result<Conditional> {
     let expected = expected_journal(witness)?;
     let mut env = ExecutorEnv::builder();
-    env.write_frame(&postcard::to_allocvec(witness)?);
+    write_frames(&mut env, witness, predecessor)?;
     for c in claims {
         env.add_assumption(c.clone());
     }
@@ -123,6 +133,12 @@ pub fn prove_conditional(witness: &BatchWitness, claims: &[ReceiptClaim], worker
         segment_proving_seconds,
         lift_join_seconds: t.seconds(),
         workers,
+        lineage: match predecessor {
+            None => "genesis",
+            Some(PredecessorProof::Receipt(_)) => "receipt",
+            Some(PredecessorProof::Seal(_)) => "seal",
+        }
+        .to_owned(),
         ..SettlementStats::default()
     };
     Ok(Conditional { receipt, assumed, journal: expected, stats })
@@ -130,6 +146,9 @@ pub fn prove_conditional(witness: &BatchWitness, claims: &[ReceiptClaim], worker
 
 /// A padded-SHA settlement receipt and the journal it proves.
 pub struct Settlement {
+    /// The unconditional poseidon2 receipt before the padded-SHA identity step: the next
+    /// settlement's cheapest [`PredecessorProof`].
+    pub unconditional: SuccinctReceipt<ReceiptClaim>,
     pub receipt: SuccinctReceipt<ReceiptClaim>,
     pub params: SuccinctReceiptVerifierParameters,
     pub journal: Vec<u8>,
@@ -189,9 +208,104 @@ fn assumptions(
     Ok(receipts.to_vec())
 }
 
-fn env<'a>(witness: &BatchWitness, assumptions: &[SuccinctReceipt<ReceiptClaim>]) -> Result<ExecutorEnv<'a>> {
-    let mut env = ExecutorEnv::builder();
+/// How a settlement proves that its predecessor settlement was valid (not needed at genesis).
+#[derive(Clone, Debug)]
+pub enum PredecessorProof {
+    /// The predecessor's unconditional poseidon2 receipt ([`Settlement::unconditional`]): the guest
+    /// assumes its claim and recursion discharges it with `resolve`.
+    Receipt(SuccinctReceipt<ReceiptClaim>),
+    /// The predecessor's on-chain `sha-256-padded` receipt, verified inside the guest; rebuilt from
+    /// the chain by anyone, at a much higher cycle cost.
+    Seal(SuccinctReceipt<ReceiptClaim>),
+}
+
+impl PredecessorProof {
+    fn receipt(&self) -> &SuccinctReceipt<ReceiptClaim> {
+        match self {
+            PredecessorProof::Receipt(r) | PredecessorProof::Seal(r) => r,
+        }
+    }
+}
+
+/// Rebuilds a padded-SHA settlement receipt from `receipt.json` (as [`Settlement::receipt_json`]
+/// writes it) and `seal.bin`; the claim stays pruned to its digest.
+pub fn seal_receipt(receipt_json: &serde_json::Value, seal: &[u8]) -> Result<SuccinctReceipt<ReceiptClaim>> {
+    use hex::FromHex;
+    use serde_json::{json, Value};
+    let d = |v: &Value| -> Result<Value> {
+        let digest = Digest::from_hex(v.as_str().context("digest")?).map_err(|e| anyhow::anyhow!("digest: {e:?}"))?;
+        Ok(serde_json::to_value(digest)?)
+    };
+    let r = receipt_json;
+    ensure!(seal.len().is_multiple_of(4), "seal is not whole words");
+    let words: Vec<u32> = seal.chunks_exact(4).map(|c| u32::from_le_bytes([c[0], c[1], c[2], c[3]])).collect();
+    let digests: Vec<Value> = r["control_inclusion_proof"]["digests"]
+        .as_array()
+        .context("control_inclusion_proof")?
+        .iter()
+        .map(d)
+        .collect::<Result<_>>()?;
+    Ok(serde_json::from_value(json!({
+        "seal": words,
+        "control_id": d(&r["control_id"])?,
+        "claim": {"Pruned": d(&r["claim_digest"])?},
+        "hashfn": r["hashfn"],
+        "verifier_parameters": d(&r["verifier_parameters"])?,
+        "control_inclusion_proof": {"index": r["control_inclusion_proof"]["index"], "digests": digests},
+    }))?)
+}
+
+/// Mode byte of the guest's second frame for [`PredecessorProof::Seal`].
+const SEAL_MODE: u8 = 1;
+
+/// The claim a valid predecessor receipt must prove for `witness`, if it is not at genesis.
+pub fn predecessor_claim(witness: &BatchWitness) -> Result<Option<ReceiptClaim>> {
+    let effects = apply_batch(witness).map_err(|e| anyhow::anyhow!("native transition: {e:?}"))?;
+    Ok(effects.lineage.map(|l| ReceiptClaim::ok(Digest::from_bytes(l.image_id), l.journal.encode())))
+}
+
+/// Checks that `predecessor` is given exactly when needed and proves the predecessor journal.
+fn check_predecessor(witness: &BatchWitness, predecessor: Option<&PredecessorProof>) -> Result<()> {
+    match (predecessor_claim(witness)?, predecessor) {
+        (None, None) => Ok(()),
+        (Some(claim), Some(p)) => {
+            ensure!(p.receipt().claim.digest() == claim.digest(), "predecessor receipt is for another journal");
+            Ok(())
+        }
+        (None, Some(_)) => anyhow::bail!("the old state is genesis; no predecessor proof is needed"),
+        (Some(_), None) => anyhow::bail!("the old state is not genesis; a predecessor proof is required"),
+    }
+}
+
+fn write_frames(
+    env: &mut risc0_zkvm::ExecutorEnvBuilder<'_>,
+    witness: &BatchWitness,
+    predecessor: Option<&PredecessorProof>,
+) -> Result<()> {
+    check_predecessor(witness, predecessor)?;
     env.write_frame(&postcard::to_allocvec(witness)?);
+    match predecessor {
+        None => {
+            env.write_frame(&[]);
+        }
+        Some(PredecessorProof::Receipt(r)) => {
+            env.write_frame(&[]);
+            env.add_assumption(r.claim.as_value()?.clone());
+        }
+        Some(PredecessorProof::Seal(r)) => {
+            env.write_frame(&[&[SEAL_MODE][..], &postcard::to_allocvec(r)?].concat());
+        }
+    }
+    Ok(())
+}
+
+fn env<'a>(
+    witness: &BatchWitness,
+    assumptions: &[SuccinctReceipt<ReceiptClaim>],
+    predecessor: Option<&PredecessorProof>,
+) -> Result<ExecutorEnv<'a>> {
+    let mut env = ExecutorEnv::builder();
+    write_frames(&mut env, witness, predecessor)?;
     for r in assumptions {
         env.add_assumption(r.claim.clone());
     }
@@ -208,30 +322,40 @@ pub fn expected_journal(witness: &BatchWitness) -> Result<Vec<u8>> {
 pub fn execute_settlement(
     witness: &BatchWitness,
     receipts: &[SuccinctReceipt<ReceiptClaim>],
+    predecessor: Option<&PredecessorProof>,
 ) -> Result<(Vec<u8>, u64, usize)> {
     let expected = expected_journal(witness)?;
     let assumptions = assumptions(witness, receipts)?;
-    let info = default_executor().execute(env(witness, &assumptions)?, pr_methods::APPLY_BATCH_ELF)?;
+    let info = default_executor().execute(env(witness, &assumptions, predecessor)?, pr_methods::APPLY_BATCH_ELF)?;
     ensure!(info.journal.bytes == expected, "guest journal differs from the native transition");
     Ok((expected, info.cycles(), info.segments.len()))
 }
 
-pub fn prove_settlement(witness: &BatchWitness, receipts: &[SuccinctReceipt<ReceiptClaim>]) -> Result<Settlement> {
+pub fn prove_settlement(
+    witness: &BatchWitness,
+    receipts: &[SuccinctReceipt<ReceiptClaim>],
+    predecessor: Option<&PredecessorProof>,
+) -> Result<Settlement> {
     let assumptions = assumptions(witness, receipts)?;
     let claims: Vec<ReceiptClaim> =
         assumptions.iter().map(|r| r.claim.as_value().cloned()).collect::<Result<_, _>>()?;
     let Conditional { receipt: mut conditional, assumed, journal: expected, mut stats } =
-        prove_conditional(witness, &claims, prove_workers())?;
-    let t = Clock::start();
+        prove_conditional(witness, &claims, predecessor, prove_workers())?;
     // The executor prepends each verified claim, so resolve in the session's (head-first) order.
     for a in &assumed {
+        let t = Clock::start();
+        if let Some(PredecessorProof::Receipt(r)) = predecessor.filter(|p| p.receipt().claim.digest() == a.claim) {
+            conditional = recursion::resolve(&conditional, r)?;
+            stats.resolve_predecessor_seconds += t.seconds();
+            continue;
+        }
         let r = assumptions
             .iter()
             .find(|r| r.claim.digest() == a.claim)
             .context("no join-split receipt for an assumption")?;
         conditional = recursion::resolve_zk(&conditional, r)?;
+        stats.resolve_zk_seconds += t.seconds();
     }
-    stats.resolve_zk_seconds = t.seconds();
     let t = Clock::start();
     let (receipt, params) = recursion::identity_sha256_padded(&conditional)?;
     stats.identity_sha256_padded_seconds = t.seconds();
@@ -242,7 +366,7 @@ pub fn prove_settlement(witness: &BatchWitness, receipts: &[SuccinctReceipt<Rece
         .verify_with_context(&vctx, pr_methods::APPLY_BATCH_ID)
         .context("native verification of the padded receipt")?;
     stats.seal_words = receipt.seal.len();
-    Ok(Settlement { receipt, params, journal: expected, stats })
+    Ok(Settlement { unconditional: conditional, receipt, params, journal: expected, stats })
 }
 
 #[cfg(test)]

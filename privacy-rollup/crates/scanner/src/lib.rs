@@ -5,11 +5,13 @@ use pr_bitcoin_adapter::{PlainTx, SettlementTx};
 use pr_commitment_tree::Tree;
 use pr_indexed_nullifier_tree::IndexedTree;
 use pr_protocol_types::{
-    next_data_history, AnchorEntry, AnchorHistory, AnchorProof, Annex, Canonical, Fe, Outpoint, RollupDescriptor,
-    RollupState, DUST_LIMIT,
+    hash::sha256, next_data_history, AnchorEntry, AnchorHistory, AnchorProof, Annex, Canonical, Fe, Outpoint,
+    RollupDescriptor, RollupState, TxOut, DUST_LIMIT,
 };
 use pr_state_transition::escrow::EscrowDeposit;
-use pr_state_transition::{apply_batch, genesis, BatchEffects, BatchTransaction, BatchWitness, TransitionError};
+use pr_state_transition::{
+    apply_batch, genesis, BatchEffects, BatchTransaction, BatchWitness, PredecessorSettlement, TransitionError,
+};
 use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -36,6 +38,12 @@ pub struct Checkpoint {
     pub utxo: Outpoint,
     /// The genesis transaction or the settlement that created `utxo`, without witnesses.
     pub creating_tx: PlainTx,
+    /// The outputs `creating_tx` spent, in input order (empty for genesis or when not yet known).
+    #[serde(default)]
+    pub creating_spent: Vec<TxOut>,
+    /// SHA-256 of `creating_tx`'s input-0 annex (zero for genesis).
+    #[serde(default)]
+    pub creating_annex_digest: [u8; 32],
 }
 
 #[derive(Clone, Debug)]
@@ -62,7 +70,14 @@ impl Replica {
             descriptor,
             commitments: Tree::new(),
             nullifiers: IndexedTree::new(),
-            history: vec![Checkpoint { state, anchors, utxo, creating_tx: genesis_tx }],
+            history: vec![Checkpoint {
+                state,
+                anchors,
+                utxo,
+                creating_tx: genesis_tx,
+                creating_spent: Vec::new(),
+                creating_annex_digest: [0; 32],
+            }],
         })
     }
 
@@ -116,13 +131,27 @@ impl Replica {
             settlement,
             predecessor_tx: tip.creating_tx.clone(),
             escrows,
+            descriptor: self.descriptor.clone(),
+            predecessor: self.predecessor(),
         }
+    }
+
+    /// The data rebuilding the tip's creating settlement's journal; `None` at genesis.
+    pub fn predecessor(&self) -> Option<PredecessorSettlement> {
+        let [.., prev, tip] = self.history.as_slice() else { return None };
+        Some(PredecessorSettlement {
+            spent: tip.creating_spent.clone(),
+            old_state_root: prev.state.root(),
+            annex_digest: tip.creating_annex_digest,
+        })
     }
 
     /// Operator path: checks a batch with the full transition and commits it.
     pub fn apply_witness(&mut self, w: &BatchWitness) -> Result<BatchEffects, ScanError> {
         let effects = apply_batch(w).map_err(ScanError::Transition)?;
-        self.accept_annex(&effects.annex, &w.settlement.plain())?;
+        let spent =
+            w.settlement.inputs.iter().map(|i| TxOut { value: i.amount, script_pubkey: i.script_pubkey.clone() });
+        self.accept_settlement(&effects.annex_bytes, &w.settlement.plain(), spent.collect())?;
         Ok(effects)
     }
 
@@ -185,7 +214,14 @@ impl Replica {
         }
         self.commitments = commitments;
         self.nullifiers = nullifiers;
-        self.history.push(Checkpoint { state, anchors, utxo, creating_tx: tx.clone() });
+        self.history.push(Checkpoint {
+            state,
+            anchors,
+            utxo,
+            creating_tx: tx.clone(),
+            creating_spent: Vec::new(),
+            creating_annex_digest: sha256(&annex.encode()),
+        });
         Ok(())
     }
 
@@ -193,6 +229,19 @@ impl Replica {
     pub fn accept_annex_bytes(&mut self, annex: &[u8], tx: &PlainTx) -> Result<(), ScanError> {
         let annex = Annex::decode(annex).map_err(|_| ScanError::BadAnnex)?;
         self.accept_annex(&annex, tx)
+    }
+
+    /// [`Self::accept_annex_bytes`], also recording the outputs `tx` spent (in input order), which
+    /// the next settlement needs to rebuild this one's journal for the lineage proof.
+    pub fn accept_settlement(&mut self, annex: &[u8], tx: &PlainTx, spent: Vec<TxOut>) -> Result<(), ScanError> {
+        if spent.len() != tx.inputs.len() {
+            return Err(ScanError::WrongPredecessor);
+        }
+        self.accept_annex_bytes(annex, tx)?;
+        if let Some(tip) = self.history.last_mut() {
+            tip.creating_spent = spent;
+        }
+        Ok(())
     }
 
     /// Reorg: forget the most recent settlement and restore the trees.

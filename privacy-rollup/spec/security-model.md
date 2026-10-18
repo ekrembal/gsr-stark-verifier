@@ -32,15 +32,32 @@
 
 ## Copies of the covenant
 
-Anyone can pay to the leaf of an existing state root, creating a second coin with the same script. The covenant
-only sees its own prevout, but `apply_batch` proves lineage by induction: the state commits to `parent`, the
-outpoint spent to create the coin holding it, and a settlement must spend output 0 of a transaction
-(`predecessor_tx`, a private witness hashed to input 0's txid, which the journal's input digest commits) whose
-input 0 spent `parent`. At genesis `parent = genesis_nonce`, which only the genesis transaction can spend; each
-genuine settlement spends the previous genuine output, which nothing else can spend. A copy coin, at the
-current or any older root, was created by some other transaction, so no receipt for spending it exists: paying
-to a copied leaf burns the coins. This is what lets deposit escrows (P2b) trust "input 0 is the rollup leaf".
-Tests: `lineage_rejects_covenant_copies_and_forged_predecessors` in `tests/tests/scenario.rs`.
+Anyone can pay to the leaf of an existing state root, creating a second coin with the same script, or pay to
+the leaf of a root they made up. The covenant only sees its own prevout, so `apply_batch` proves lineage
+recursively:
+
+1. The state commits to `parent`, the outpoint spent by input 0 of the transaction that created the coin. A
+   settlement must spend output 0 of `predecessor_tx` (a private, witness-free witness hashed to input 0's
+   txid, which the journal's input digest commits), whose input 0 spent `parent`.
+2. At batch 0 the old state must equal `genesis(descriptor)`, whose `parent` is `genesis_nonce`; no
+   predecessor proof is taken.
+3. Past genesis, the guest rebuilds the predecessor settlement's journal from `predecessor_tx`, the outputs its
+   inputs spent (`PredecessorSettlement::spent`), the predecessor's old root and annex digest, and
+   `new_state_root = old.root()`. It then verifies a receipt for `ReceiptClaim::ok(descriptor.image_id, journal)`:
+   either `env::verify` on an assumption that recursion discharges with the predecessor's unconditional
+   receipt, or the predecessor's on-chain `sha-256-padded` receipt verified inside the guest.
+
+The rebuilt journal names the predecessor's real inputs, outputs and annex, so a valid receipt for it exists
+only if `predecessor_tx` was itself a valid settlement of `old`. By induction from genesis every proven state
+descends from `genesis_nonce`. A copy coin, or a coin paying a made-up root, has no such predecessor receipt,
+so paying to it burns the coins. This is what lets deposit escrows trust "input 0 is the rollup leaf".
+
+Without step 3 (the P2a check alone), an attacker could choose `old` with the genuine rollup id and `parent`
+set to a coin of their own, create a coin paying the leaf of that state's root, and sweep escrows into it:
+the native transition accepted that before step 3. Tests: `tests/tests/lineage.rs`,
+`lineage_rejects_covenant_copies_and_forged_predecessors` in `tests/tests/scenario.rs`, and
+`tools/lineage_e2e.py` (real proofs: genesis, receipt and seal modes; missing, wrong and fabricated
+predecessors rejected).
 
 ## Deposit escrows
 

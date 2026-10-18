@@ -15,7 +15,7 @@ zero-knowledge RISC Zero receipt. A permissionless batcher composes up to 16 suc
 settlement receipt using RISC Zero assumptions (`add_assumption`, `env::verify`, `resolve_zk`). The pool's
 Tapscript v2 leaf is a complete RISC Zero succinct-receipt verifier written in Bitcoin Script. It uses `OP_TX`
 to bind the receipt's journal to the spending transaction's inputs, outputs and annex. No signature, operator
-key or federation can spend the pool. Genesis lineage, proven by induction inside the guest, makes copies of
+key or federation can spend the pool. Genesis lineage, proven recursively inside the guest, makes copies of
 the covenant unspendable. That also lets non-interactive deposit addresses trust that only the genuine pool
 sweeps them. On regtest, a settlement of three deposits weighs 333,485 WU, an empty one 331,699 WU, and a
 3-deposit batch went from batch request to confirmation in 640 s.
@@ -292,15 +292,22 @@ The guest reads the transaction from the same bytes whose digests the Script rec
 transaction the guest checked is the one being spent.
 
 **Lineage.** A script sees only its own coin, so anyone can create a *copy*: another output paying the same
-leaf. The guest closes this by induction:
+leaf, or the leaf of a state root they made up. The guest closes this recursively:
 1. `state.parent` is the outpoint that input 0 of the creating transaction spent.
-2. The settlement witness includes that transaction, `predecessor_tx`, without its witness data.
+2. The settlement witness includes that transaction, `predecessor_tx`, without its witness data, and the
+   outputs its inputs spent.
 3. The guest checks that `sha256d(predecessor_tx)` equals input 0's txid, that input 0 spends `vout 0`, and
-   that `predecessor_tx`'s own input 0 spent `state.parent`.
-4. The new state sets `parent` to input 0's prevout.
+   that `predecessor_tx`'s own input 0 spent `state.parent`. The new state sets `parent` to input 0's prevout.
+4. At batch 0 the old state must be `genesis(descriptor)` (`parent = genesis_nonce`).
+5. Past genesis, the guest rebuilds the predecessor's journal (its inputs and outputs digests from
+   `predecessor_tx` and the spent outputs, its old root and annex digest, and `new_state_root = old.root()`)
+   and verifies a receipt of the pool's own image for it. The batcher supplies the predecessor's unconditional
+   receipt as an assumption, which recursion discharges (`resolve`); anyone holding only the chain can instead
+   pass the predecessor's on-chain padded-SHA receipt, which the guest verifies itself.
 
-At genesis, `parent = genesis_nonce`. Only the genuine chain of outputs satisfies this, so no receipt can exist
-for a copy, and paying to a copied leaf burns the coins. This costs no extra on-chain bytes.
+Steps 1–3 alone are not enough: an attacker can choose a state with the genuine rollup id and its own coin as
+`parent`. Step 5 makes every proven state descend from the genuine genesis, so no receipt can exist for a copy,
+and paying to a copied leaf burns the coins. This costs no extra on-chain bytes; the guest and proving cost is measured in `reports/lineage.md`.
 
 **Cadence.** `1 CSV` stops the successor being spent in the block that creates it, so there is at most one
 settlement per block.
@@ -438,6 +445,9 @@ Native tests (`cargo test --workspace`):
 - `transition_rejects_every_settlement_tamper`: every input, output, sequence, locktime, amount, anchor,
   nullifier and frontier field tampered;
 - `lineage_rejects_covenant_copies_and_forged_predecessors`;
+- in `tests/tests/lineage.rs`: genesis needs no predecessor receipt, a genuine chain rebuilds every
+  predecessor journal, a fabricated genesis state and a fabricated state with an attacker-made predecessor
+  are rejected, and past genesis a predecessor settlement is required;
 - `double_spend_is_rejected_by_mempool_and_transition`;
 - `old_anchor_still_spends_after_many_batches`;
 - the escrow, fee, dust, batch-cap and ciphertext cases;
@@ -474,7 +484,7 @@ The restarted batcher resumed the in-flight settlement and recorded it once mine
 | value conserved, no overflow | range checks + checked arithmetic |
 | the transaction is the one proven | `OP_TX` digests in the journal |
 | state continuity, verifier can't be replaced | leaf prefix + successor derived in Script, single leaf under NUMS |
-| only the genuine pool settles | lineage induction |
+| only the genuine pool settles | recursive lineage (predecessor receipt) |
 | data availability | annex bound by the journal |
 | ≤ 1 settlement per block | `1 CSV` |
 

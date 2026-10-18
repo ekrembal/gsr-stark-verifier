@@ -15,7 +15,7 @@ use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use anyhow::{bail, ensure, Context, Result};
 use pr_operator::{verify_receipt, write_atomic, Settled, Store};
-use pr_protocol_types::{Annex, Canonical, Outpoint};
+use pr_protocol_types::{Annex, Canonical, Outpoint, TxOut};
 use pr_sdk::api::{
     Anchor, BatchReport, EscrowRegistration, EscrowState, EscrowTerms, FundingInput, MerklePath, NoteBatch, Notes,
     Stage, Submission, SubmitResponse,
@@ -134,6 +134,9 @@ pub struct Inflight {
     pub miner_fee: u64,
     #[serde(default)]
     pub weight: u64,
+    /// The output each settlement input spends, in input order.
+    #[serde(default)]
+    pub spent: Vec<TxOut>,
 }
 
 /// What an automatic settlement would carry now.
@@ -607,6 +610,29 @@ impl Batcher {
         Ok(out)
     }
 
+    /// How batch `n` proves batch `n - 1`: its poseidon2 receipt if this batcher proved it, else its
+    /// padded-SHA receipt (`receipt.json` + `seal.bin`), verified in the guest. Batch 1 spends genesis.
+    fn predecessor_proof(&self, n: u64) -> Result<Option<pr_prover::settle::PredecessorProof>> {
+        use pr_prover::settle::{seal_receipt, PredecessorProof};
+        if n <= 1 {
+            return Ok(None);
+        }
+        let dir = self.path(&format!("batches/{}", n - 1));
+        let unconditional = dir.join("unconditional.bin");
+        if unconditional.exists() {
+            return Ok(Some(PredecessorProof::Receipt(decode_receipt(&fs::read(unconditional)?)?)));
+        }
+        let (json, seal) = (dir.join("receipt.json"), dir.join("seal.bin"));
+        ensure!(
+            json.exists() && seal.exists(),
+            "no proof of batch {} (expected {} or receipt.json + seal.bin)",
+            n - 1,
+            dir.join("unconditional.bin").display()
+        );
+        let json: serde_json::Value = serde_json::from_slice(&fs::read(json)?)?;
+        Ok(Some(PredecessorProof::Seal(seal_receipt(&json, &fs::read(seal)?)?)))
+    }
+
     fn build_and_prove(&self, n: u64, escrows: Vec<EscrowCoin>) -> Result<Inflight> {
         let (b, old_root, rollup_id) = {
             let _g = self.guard();
@@ -651,10 +677,12 @@ impl Batcher {
         }
         self.update(n, |r| r.transactions = b.entries.len());
         let receipts = b.entries.iter().map(|e| decode_receipt(&e.tx.receipt)).collect::<Result<Vec<_>>>()?;
-        let proof = pr_prover::settle::prove_settlement(&b.witness, &receipts)?;
+        let predecessor = self.predecessor_proof(n)?;
+        let proof = pr_prover::settle::prove_settlement(&b.witness, &receipts, predecessor.as_ref())?;
         ensure!(proof.journal == b.effects.journal.encode(), "proven journal is not the operator's");
         let dir = self.path(&format!("batches/{n}"));
         fs::create_dir_all(&dir)?;
+        fs::write(dir.join("unconditional.bin"), postcard::to_allocvec(&proof.unconditional)?)?;
         fs::write(dir.join("witness.json"), serde_json::to_vec(&b.witness)?)?;
         fs::write(dir.join("stats.json"), serde_json::to_vec_pretty(&proof.stats)?)?;
         fs::write(dir.join("seal.bin"), proof.seal_bytes())?;
@@ -697,6 +725,11 @@ impl Batcher {
             broadcast: false,
             miner_fee: paid_in - paid_out,
             weight: wt,
+            spent: settlement
+                .inputs
+                .iter()
+                .map(|i| TxOut { value: i.amount, script_pubkey: i.script_pubkey.clone() })
+                .collect(),
         };
         write_atomic(&self.path("inflight.json"), &serde_json::to_vec_pretty(&inflight)?)?;
         fs::write(dir.join("settlement.hex"), &inflight.raw)?;
@@ -757,7 +790,7 @@ impl Batcher {
         }
         {
             let _g = self.guard();
-            self.store.accept(Settled { annex: f.annex.clone(), tx: f.raw.clone() })?;
+            self.store.accept(Settled { annex: f.annex.clone(), tx: f.raw.clone(), spent: f.spent.clone() })?;
             fs::remove_file(self.path("inflight.json"))?;
             let mut w = self.witnesses.lock().unwrap_or_else(|p| p.into_inner());
             for k in &f.funding {
@@ -975,11 +1008,11 @@ impl Batcher {
                     break;
                 }
             }
-            let Some((txid, raw, annex)) = self.find_spender(&utxo).await? else { break };
+            let Some((txid, raw, annex, spent)) = self.find_spender(&utxo).await? else { break };
             {
                 let _g = self.guard();
                 self.store
-                    .accept(Settled { annex, tx: raw })
+                    .accept(Settled { annex, tx: raw, spent })
                     .with_context(|| format!("adopting settlement {txid} of batch {n}"))?;
             }
             eprintln!("batch {n}: adopted settlement {txid} made by another operator");
@@ -997,8 +1030,8 @@ impl Batcher {
     }
 
     /// The confirmed transaction spending `o` in the last [`SPENDER_SEARCH_DEPTH`] blocks: its txid,
-    /// raw hex and input-zero annex.
-    async fn find_spender(&self, o: &Outpoint) -> Result<Option<(String, String, String)>> {
+    /// raw hex, input-zero annex and the outputs its inputs spent.
+    async fn find_spender(&self, o: &Outpoint) -> Result<Option<(String, String, String, Vec<TxOut>)>> {
         let tip = self.rpc.block_count().await?;
         let txid = display_hex(&o.txid);
         for h in (tip.saturating_sub(SPENDER_SEARCH_DEPTH)..=tip).rev() {
@@ -1014,7 +1047,18 @@ impl Batcher {
                         .context("spender of the rollup output carries no annex")?;
                     let raw = t["hex"].as_str().context("getblock hex")?;
                     let id = t["txid"].as_str().context("getblock txid")?;
-                    return Ok(Some((id.to_owned(), raw.to_owned(), annex.to_owned())));
+                    let spent = t["vin"]
+                        .as_array()
+                        .context("getblock vin")?
+                        .iter()
+                        .map(|i| {
+                            let p = &i["prevout"];
+                            let sats = (p["value"].as_f64().context("prevout value")? * 1e8).round() as u64;
+                            let spk = hex::decode(p["scriptPubKey"]["hex"].as_str().context("prevout script")?)?;
+                            Ok(TxOut { value: sats, script_pubkey: spk })
+                        })
+                        .collect::<Result<Vec<_>>>()?;
+                    return Ok(Some((id.to_owned(), raw.to_owned(), annex.to_owned(), spent)));
                 }
             }
         }

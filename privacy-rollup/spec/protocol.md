@@ -14,7 +14,7 @@ tree holding only the zero sentinel (`nullifier_next_index = 1`), a one-entry an
 history and `backing_sats = seed_sats`. The genesis transaction must spend `genesis_nonce` (which makes the
 id unique: an outpoint can be spent once) and pay `seed_sats` to the covenant leaf of the genesis state root.
 The genesis transaction must spend `genesis_nonce` as input 0 and hold the rollup at output 0; the genesis
-state's `parent` is `genesis_nonce`. Every settlement proves lineage by induction (below), so only coins
+state's `parent` is `genesis_nonce`. Every settlement proves lineage recursively (below), so only coins
 descending from that genesis output can settle (see `security-model.md`).
 
 ## State
@@ -84,7 +84,10 @@ to the old anchor root, and one membership path per transaction anchor:
    declaration order, sequence `FUNDING_INPUT_SEQUENCE = 1`; escrows as below, sequence `ESCROW_INPUT_SEQUENCE = 2`),
    input 0 sequence 1 with empty scriptSig and amount `backing_sats`, spending output 0 of the private
    witness `predecessor_tx` (witness-free; `sha256d(predecessor_tx) = input 0 txid`) whose own input 0
-   spent `old.parent`; the new state's `parent` is input 0's prevout (`check_lineage`). Outputs
+   spent `old.parent`; the new state's `parent` is input 0's prevout (`check_lineage`). At batch 0 `old` must
+   be `genesis(descriptor)`; past it, the guest verifies a receipt of `descriptor.image_id` for the
+   predecessor journal rebuilt from `predecessor_tx`, the outputs it spent, its old root and annex digest
+   (`LineageClaim`). Outputs
    `[rollup successor, withdrawals..]`, each funding set paying exactly `deposit`, each withdrawal output
    `P2TR(NUMS, {leaf})` for its committed leaf;
 5. fees: `F = Σ fee_sats` is the miner fee, `Σ inputs − Σ outputs = F`,

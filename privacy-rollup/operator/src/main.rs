@@ -102,7 +102,8 @@ fn main() -> Result<()> {
         "submit" => println!("{}", submit(&store, Path::new(&a[3]), a.get(4))?),
         "build" => build(&store, Path::new(&a[3]), Path::new(&a[4]))?,
         "accept" => {
-            let s = Settled { annex: a[3].clone(), tx: a[4].clone() };
+            let spent = a.get(5).map(|j| serde_json::from_str(j)).transpose()?.unwrap_or_default();
+            let s = Settled { annex: a[3].clone(), tx: a[4].clone(), spent };
             let replica = store.accept(s)?;
             println!("{}", store.status(&replica)?);
         }

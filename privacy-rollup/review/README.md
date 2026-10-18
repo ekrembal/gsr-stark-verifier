@@ -75,7 +75,7 @@ The node is built from `jmoik/bitcoin` `gsr` with `-DENABLE_IPC=OFF` into `build
 2. Is it sound to admit `resolve_zk.zkr` to the control root next to the stock recursion programs?
 3. Does any public field of the join-split statement (amounts, expiry, anchor choice) leak more than intended?
    Fixed denominations are not enforced.
-4. Is genesis lineage by induction (`spec/security-model.md`, "Copies of the covenant") complete, including
+4. Is recursive genesis lineage (`spec/security-model.md`, "Copies of the covenant") complete, including
    across reorgs?
 5. Does the escrow sweep leaf's `OP_TX` check of input 0 admit any spend other than a genuine settlement?
 6. Are there consensus edge cases in `OP_TX` on the pinned `gsr` commit that change what the journal digests cover?

@@ -7,7 +7,7 @@
 //! canonical annex and the 196-byte [`BatchJournal`] the covenant rebuilds from `OP_TX`.
 pub mod escrow;
 
-use pr_bitcoin_adapter::{PlainTx, SettlementTx};
+use pr_bitcoin_adapter::{PlainTx, SettlementTx, TxInput};
 use pr_commitment_tree::Frontier;
 use pr_indexed_nullifier_tree::{verify_batch_insertion, BatchInsertionWitness, NullifierError};
 use pr_protocol_types::hash::sha256;
@@ -50,6 +50,29 @@ pub struct BatchWitness {
     pub predecessor_tx: PlainTx,
     /// Openings of the escrow inputs, which follow the funding inputs in order.
     pub escrows: Vec<escrow::EscrowDeposit>,
+    /// The rollup's descriptor; its `rollup_id()` must be `old_state.rollup_id`.
+    pub descriptor: RollupDescriptor,
+    /// What rebuilds the journal of `predecessor_tx`: required iff `old_state` is not genesis.
+    pub predecessor: Option<PredecessorSettlement>,
+}
+
+/// The private data that, with `predecessor_tx`, rebuilds the journal the predecessor settlement
+/// committed to.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct PredecessorSettlement {
+    /// The output each input of `predecessor_tx` spent, in input order.
+    pub spent: Vec<TxOut>,
+    pub old_state_root: [u8; 32],
+    /// SHA-256 of the predecessor's input-0 annex.
+    pub annex_digest: [u8; 32],
+}
+
+/// The statement the guest still has to prove for `old_state` to be genuine: `journal` is the
+/// journal of a valid `apply_batch` receipt under `image_id`. Absent when `old_state` is genesis.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct LineageClaim {
+    pub image_id: [u8; 32],
+    pub journal: BatchJournal,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -61,6 +84,7 @@ pub struct BatchEffects {
     pub annex: Annex,
     pub annex_bytes: Vec<u8>,
     pub journal: BatchJournal,
+    pub lineage: Option<LineageClaim>,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -97,7 +121,8 @@ pub enum TransitionError {
     Dust,
     FeeShortfall,
     Overflow,
-    /// The rollup input is not output 0 of a transaction whose input 0 spent `old_state.parent`.
+    /// The rollup input is not output 0 of a transaction whose input 0 spent `old_state.parent`,
+    /// or `old_state` is neither the descriptor's genesis nor backed by a predecessor journal.
     Lineage,
     /// An escrow input does not open to the declared deposit, or there are too many.
     Escrow,
@@ -133,19 +158,64 @@ pub fn genesis(descriptor: &RollupDescriptor) -> (RollupState, AnchorHistory, Fr
     (state, anchors, frontier)
 }
 
-/// Inductive lineage: the coin holding `old` is output 0 of `predecessor`, and `predecessor`'s input
-/// 0 spent `old.parent`. `rollup_in`'s txid is committed by the journal's input digest, so the
-/// private `predecessor` is bound to the transaction the covenant actually spends. By induction from
-/// `genesis_nonce` (spendable once), every accepted coin descends from the genesis transaction;
-/// a copy of the covenant script can never satisfy this.
-pub fn check_lineage(old: &RollupState, rollup_in: &Outpoint, predecessor: &PlainTx) -> Result<(), TransitionError> {
-    if rollup_in.vout != 0
-        || predecessor.txid() != rollup_in.txid
-        || predecessor.inputs.first().map(|i| i.prevout) != Some(old.parent)
+/// Lineage: the coin holding `old` is output 0 of `predecessor_tx`, whose input 0 spent
+/// `old.parent`; `rollup_in`'s txid is committed by the journal's input digest, so the private
+/// `predecessor_tx` is bound to the transaction the covenant actually spends.
+///
+/// That local check alone does not authenticate `old`: `old.parent` is witness data. So unless `old`
+/// is exactly the descriptor's genesis state, this returns the predecessor's journal, rebuilt from
+/// `predecessor_tx` and [`PredecessorSettlement`] with `new_state_root = old.root()`, and the guest
+/// must verify an `apply_batch` receipt for it. By induction from genesis, every accepted state was
+/// produced by a chain of valid settlements of this rollup, each spending the previous one's coin.
+pub fn check_lineage(w: &BatchWitness, rollup_in: &Outpoint) -> Result<Option<LineageClaim>, TransitionError> {
+    let old = &w.old_state;
+    let pred = &w.predecessor_tx;
+    if w.descriptor.rollup_id() != old.rollup_id
+        || rollup_in.vout != 0
+        || pred.txid() != rollup_in.txid
+        || pred.inputs.first().map(|i| i.prevout) != Some(old.parent)
     {
         return Err(TransitionError::Lineage);
     }
-    Ok(())
+    if old.batch_number == 0 {
+        if w.predecessor.is_some() || *old != genesis(&w.descriptor).0 {
+            return Err(TransitionError::Lineage);
+        }
+        return Ok(None);
+    }
+    let p = w.predecessor.as_ref().ok_or(TransitionError::Lineage)?;
+    if p.spent.len() != pred.inputs.len() {
+        return Err(TransitionError::Lineage);
+    }
+    let tx = SettlementTx {
+        version: pred.version,
+        lock_time: pred.lock_time,
+        inputs: pred
+            .inputs
+            .iter()
+            .zip(&p.spent)
+            .map(|(i, o)| TxInput {
+                prevout: i.prevout,
+                amount: o.value,
+                script_pubkey: o.script_pubkey.clone(),
+                script_sig: i.script_sig.clone(),
+                sequence: i.sequence,
+            })
+            .collect(),
+        outputs: pred.outputs.clone(),
+    };
+    Ok(Some(LineageClaim {
+        image_id: w.descriptor.image_id,
+        journal: BatchJournal {
+            protocol_version: old.protocol_version,
+            rollup_id: old.rollup_id,
+            old_state_root: p.old_state_root,
+            new_state_root: old.root(),
+            transaction_inputs_digest: tx.inputs_digest(),
+            transaction_outputs_digest: tx.outputs_digest(),
+            annex_digest: p.annex_digest,
+        },
+    }))
 }
 
 /// Per-transaction rules that only need the old state and the transaction's authenticated anchor
@@ -328,7 +398,7 @@ pub fn apply_batch(w: &BatchWitness) -> Result<BatchEffects, TransitionError> {
     if rollup_in.amount != old.backing_sats {
         return Err(TransitionError::PredecessorAmount);
     }
-    check_lineage(old, &rollup_in.prevout, &w.predecessor_tx)?;
+    let lineage = check_lineage(w, &rollup_in.prevout)?;
     let mut funded = vec![0u64; txs.len()];
     for ((i, o), input) in funding.iter().zip(&s.inputs[1..]) {
         if input.prevout != **o || input.sequence != FUNDING_INPUT_SEQUENCE {
@@ -428,7 +498,7 @@ pub fn apply_batch(w: &BatchWitness) -> Result<BatchEffects, TransitionError> {
         transaction_outputs_digest: s.outputs_digest(),
         annex_digest: sha256(&annex_bytes),
     };
-    Ok(BatchEffects { new_state, anchor, frontier, annex, annex_bytes, journal })
+    Ok(BatchEffects { new_state, anchor, frontier, annex, annex_bytes, journal, lineage })
 }
 
 #[cfg(test)]

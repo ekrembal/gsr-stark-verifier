@@ -92,10 +92,10 @@ impl Rpc {
         self.call("getblockcount", json!([])).await?.as_u64().context("getblockcount")
     }
 
-    /// `getblock <hash at height> 2`.
+    /// `getblock <hash at height> 3` (transactions with their prevouts).
     pub async fn block_at(&self, height: u64) -> Result<Value> {
         let hash = self.call("getblockhash", json!([height])).await?;
-        self.call("getblock", json!([hash, 2])).await
+        self.call("getblock", json!([hash, 3])).await
     }
 
     /// `submitpackage [raw..]` (parent first).

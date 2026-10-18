@@ -1,15 +1,16 @@
-//! `settle exec|prove <witness.json> <out-dir> [<joinsplit-receipt.bin>...]`
+//! `settle exec|prove <witness.json> <out-dir> [--receipt <unconditional.bin> | --seal <receipt.json> <seal.bin>] [<joinsplit-receipt.bin>...]`
 //! `settle id` prints `APPLY_BATCH_ID` (the receipt template's `claim.pre`).
 //!
 //! Runs the `apply_batch` guest on a batch witness (JSON `BatchWitness`, as written by the
 //! operator) with one zero-knowledge join-split receipt per transaction (from `joinsplit prove`)
 //! added as an assumption; with `prove`, proves it (see `pr_prover::settle`). Writes `journal.bin`
 //! and, when proving, `stats.json`, `receipt.json` / `seal.bin` in the format the GSR verifier
-//! generator reads.
+//! generator reads, plus `unconditional.bin` (the next settlement's `--receipt`). Past genesis, the
+//! predecessor settlement is proven by its `unconditional.bin` or its on-chain padded receipt.
 use std::{fs, path::Path, time::Instant};
 
 use anyhow::{ensure, Context, Result};
-use pr_prover::settle::{execute_settlement, prove_settlement};
+use pr_prover::settle::{execute_settlement, prove_settlement, seal_receipt, PredecessorProof};
 use pr_prover::user::decode_receipt;
 use pr_state_transition::BatchWitness;
 use risc0_zkvm::sha::Digestible;
@@ -27,24 +28,40 @@ fn main() -> Result<()> {
     let witness: BatchWitness = serde_json::from_str(&fs::read_to_string(&a[2])?)?;
     let out = Path::new(&a[3]);
     fs::create_dir_all(out)?;
+    let mut rest = &a[4..];
+    let predecessor = match rest.first().map(String::as_str) {
+        Some("--receipt") => {
+            let path = rest.get(1).context("--receipt <unconditional.bin>")?;
+            rest = &rest[2..];
+            Some(PredecessorProof::Receipt(decode_receipt(&fs::read(path)?).context("predecessor receipt")?))
+        }
+        Some("--seal") => {
+            let (json, seal) = (rest.get(1).context("--seal <receipt.json>")?, rest.get(2).context("<seal.bin>")?);
+            rest = &rest[3..];
+            let json: serde_json::Value = serde_json::from_str(&fs::read_to_string(json)?)?;
+            Some(PredecessorProof::Seal(seal_receipt(&json, &fs::read(seal)?)?))
+        }
+        _ => None,
+    };
     let mut receipts = Vec::new();
-    for path in &a[4..] {
+    for path in rest {
         receipts.push(decode_receipt(&fs::read(path)?).with_context(|| path.clone())?);
     }
     println!("image id {}", hex::encode(risc0_zkvm::sha::Digest::from(pr_methods::APPLY_BATCH_ID)));
     let t = Instant::now();
     if a[1] == "exec" {
-        let (journal, cycles, segments) = execute_settlement(&witness, &receipts)?;
+        let (journal, cycles, segments) = execute_settlement(&witness, &receipts, predecessor.as_ref())?;
         println!("executed: {cycles} cycles, {segments} segments, {:?}", t.elapsed());
         fs::write(out.join("journal.bin"), &journal)?;
         return Ok(());
     }
-    let s = prove_settlement(&witness, &receipts)?;
+    let s = prove_settlement(&witness, &receipts, predecessor.as_ref())?;
     let stats = serde_json::to_value(&s.stats)?;
     println!("{stats}");
     fs::write(out.join("stats.json"), serde_json::to_string_pretty(&stats)?)?;
     fs::write(out.join("journal.bin"), &s.journal)?;
     fs::write(out.join("seal.bin"), s.seal_bytes())?;
+    fs::write(out.join("unconditional.bin"), postcard::to_allocvec(&s.unconditional)?)?;
     fs::write(out.join("receipt.json"), serde_json::to_string_pretty(&s.receipt_json()?)?)?;
     println!("padded receipt verified natively; claim {}", s.receipt.claim.digest());
     Ok(())

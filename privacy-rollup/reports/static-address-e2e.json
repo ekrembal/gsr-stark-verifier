@@ -1,0 +1,218 @@
+{
+  "node": "/home/ubuntu/gsr-p3/build/bitcoin-annex/bin",
+  "batch_1": {
+    "batch_number": 1,
+    "stage": "broadcast",
+    "transactions": 0,
+    "txid": "55286ccbad86d85475b2214809f0bc46565f37a504ed2ecc01c7f06c8289ed0d",
+    "block_hash": null,
+    "error": null,
+    "prove": {
+      "cycles_total": 8388608,
+      "cycles_user": 7549263,
+      "identity_sha256_padded_seconds": 18.709259172,
+      "lift_join_seconds": 334.358576753,
+      "lineage": "genesis",
+      "resolve_predecessor_seconds": 0.0,
+      "resolve_zk_seconds": 0.0,
+      "seal_words": 55667,
+      "segment_proving_seconds": 2001.100472451,
+      "segments": 8,
+      "transactions": 0,
+      "workers": 1
+    },
+    "weight": 333251,
+    "fees": {
+      "fees": 10000,
+      "miner_fee": 10000,
+      "weight": 333682
+    },
+    "started_unix": 1792350194,
+    "finished_unix": null,
+    "wall_seconds": 2389.2,
+    "mempool": {
+      "vsize": 83313,
+      "weight": 333251,
+      "fee_sats": 10000,
+      "wtxid": "3ed1c9999eeb281350c50985b3bbe1ca4f4bf83640cb4c720f9fbe974e2932e9",
+      "bip125_replaceable": null
+    },
+    "confirmations": 1,
+    "inputs": 2,
+    "outputs": 2,
+    "stats": {
+      "transactions": 0,
+      "lineage": "genesis",
+      "resolve_predecessor_seconds": 0.0,
+      "cycles_total": 8388608,
+      "cycles_user": 7549263,
+      "segments": 8,
+      "segment_proving_seconds": 2001.100472451,
+      "lift_join_seconds": 334.358576753,
+      "resolve_zk_seconds": 0.0,
+      "identity_sha256_padded_seconds": 18.709259172,
+      "seal_words": 55667,
+      "workers": 1
+    },
+    "static_address": true,
+    "root_output": "6a201fd816ca9e18a7e9b7950c95b132842d67af8d67a434f4e44fd3a5bdaecec22b"
+  },
+  "batch_2": {
+    "batch_number": 2,
+    "stage": "broadcast",
+    "transactions": 0,
+    "txid": "90a046eeca0e0ccea527c6c07a78baad94e3d44e58a9ab6dcdfc6333bb94be82",
+    "block_hash": null,
+    "error": null,
+    "prove": {
+      "cycles_total": 7864320,
+      "cycles_user": 7338237,
+      "identity_sha256_padded_seconds": 17.712602125,
+      "lift_join_seconds": 313.517044652,
+      "lineage": "receipt",
+      "resolve_predecessor_seconds": 20.122245413,
+      "resolve_zk_seconds": 0.0,
+      "seal_words": 55667,
+      "segment_proving_seconds": 1768.509671993,
+      "segments": 8,
+      "transactions": 0,
+      "workers": 1
+    },
+    "weight": 333251,
+    "fees": {
+      "fees": 10000,
+      "miner_fee": 10000,
+      "weight": 333682
+    },
+    "started_unix": 1792352585,
+    "finished_unix": null,
+    "wall_seconds": 2153.7,
+    "mempool": {
+      "vsize": 83313,
+      "weight": 333251,
+      "fee_sats": 10000,
+      "wtxid": "62227d5ad27d83b2bd149267ba12bc498119050e7d84ced97cd3c0854572e2e0",
+      "bip125_replaceable": null
+    },
+    "confirmations": 1,
+    "inputs": 2,
+    "outputs": 2,
+    "stats": {
+      "transactions": 0,
+      "lineage": "receipt",
+      "resolve_predecessor_seconds": 20.122245413,
+      "cycles_total": 7864320,
+      "cycles_user": 7338237,
+      "segments": 8,
+      "segment_proving_seconds": 1768.509671993,
+      "lift_join_seconds": 313.517044652,
+      "resolve_zk_seconds": 0.0,
+      "identity_sha256_padded_seconds": 17.712602125,
+      "seal_words": 55667,
+      "workers": 1
+    },
+    "static_address": true,
+    "root_output": "6a20abc3d8ca7199c222a37a5955f8d40fadee5c2e74135af44727e782f388d6f54e"
+  },
+  "scans": {
+    "a": [
+      {
+        "leaf": 0,
+        "nullifier": "0882b022525d70fc3806ba818c8dd0703486b2408403c676e23b81838f824d23",
+        "value": 20000
+      }
+    ],
+    "b": [
+      {
+        "leaf": 1,
+        "nullifier": "021a11462822b60aa0eb9bee55320723f1a63f180355048262ba9aeed03f3d73",
+        "value": 20000
+      }
+    ]
+  },
+  "exec": {
+    "seal_mode": {
+      "ok": true,
+      "cycles": 30092571,
+      "segments": 32,
+      "seconds": 0.9,
+      "same_journal": true
+    },
+    "receipt_mode": {
+      "ok": true,
+      "cycles": 7338237,
+      "segments": 8
+    },
+    "no_predecessor": [
+      false,
+      "Error: the old state is not genesis; a predecessor proof is required"
+    ],
+    "wrong_predecessor_seal": [
+      false,
+      "Error: predecessor receipt is for another journal"
+    ],
+    "fabricated_parent": [
+      false,
+      "Error: native transition: Lineage"
+    ],
+    "predecessor_root_output_flipped": [
+      false,
+      "Error: native transition: Lineage"
+    ],
+    "predecessor_root_output_missing": [
+      false,
+      "Error: native transition: Lineage"
+    ],
+    "new_root_output_wrong": [
+      false,
+      "Error: native transition: RootOutput"
+    ],
+    "root_output_not_op_return": [
+      false,
+      "Error: native transition: RootOutput"
+    ],
+    "output0_other_address": [
+      false,
+      "Error: native transition: RollupScript"
+    ]
+  },
+  "meter": {
+    "covenant_script_bytes": 101432,
+    "1": {
+      "ok": true,
+      "transaction_weight": 333251,
+      "varops": 1794307640,
+      "budget": 3331510000,
+      "unrolled_bytes": 3361611,
+      "peak_entries": 2652,
+      "peak_payload_bytes": 333534,
+      "limits": {
+        "standard_weight": true,
+        "varops": true,
+        "unrolled_bytes": true,
+        "stack_entries": true,
+        "live_payload": true,
+        "single_element": true,
+        "verifier": true
+      }
+    },
+    "2": {
+      "ok": true,
+      "transaction_weight": 333251,
+      "varops": 1794243586,
+      "budget": 3331510000,
+      "unrolled_bytes": 3361611,
+      "peak_entries": 2652,
+      "peak_payload_bytes": 333530,
+      "limits": {
+        "standard_weight": true,
+        "varops": true,
+        "unrolled_bytes": true,
+        "stack_entries": true,
+        "live_payload": true,
+        "single_element": true,
+        "verifier": true
+      }
+    }
+  }
+}

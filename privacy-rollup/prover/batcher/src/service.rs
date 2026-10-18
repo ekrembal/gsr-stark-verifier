@@ -763,13 +763,17 @@ impl Batcher {
         }
         f.broadcast = true;
         write_atomic(&self.path("inflight.json"), &serde_json::to_vec_pretty(&f)?)?;
-        self.update(n, |r| r.stage = Stage::Broadcast);
+        self.update(n, |r| {
+            r.stage = Stage::Broadcast;
+            r.error = None;
+        });
         let mut misses = 0;
         loop {
-            match self.rpc.confirmations(&f.txid, 0).await? {
-                Some(c) if c >= self.cfg.confirmations => break,
-                Some(_) => misses = 0,
-                None => {
+            match self.rpc.confirmations(&f.txid, 0).await {
+                Err(e) => eprintln!("batch {n}: waiting for confirmations: {e:#}"),
+                Ok(Some(c)) if c >= self.cfg.confirmations => break,
+                Ok(Some(_)) => misses = 0,
+                Ok(None) => {
                     misses += 1;
                     if misses > 3 {
                         self.ensure_current(&f).await?;

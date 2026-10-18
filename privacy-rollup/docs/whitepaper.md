@@ -312,7 +312,7 @@ address (with any `OP_RETURN` root beside it), or a leaf of their own. The guest
 
 Steps 1–3 alone are not enough: an attacker can choose a state with the genuine rollup id and its own coin as
 `parent`. Step 5 makes every proven state descend from the genuine genesis, so no receipt can exist for a copy,
-and paying to the pool's address outside a settlement burns the coins. This costs no extra on-chain bytes; the guest and proving cost is measured in `reports/lineage.md`.
+and paying to the pool's address outside a settlement burns the coins. This costs no extra on-chain bytes; the guest and proving cost is measured in `reports/lineage.md`; the fixed-address layout (weight, varops, relay, RBF, mining) in `reports/static-address.md`.
 
 **Cadence.** `1 CSV` stops the new pool output being spent in the block that creates it, so there is at most one
 settlement per block.

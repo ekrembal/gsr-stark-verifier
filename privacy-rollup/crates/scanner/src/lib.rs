@@ -8,7 +8,9 @@ use pr_protocol_types::{
     hash::sha256, next_data_history, AnchorEntry, AnchorHistory, AnchorProof, Annex, Canonical, Fe, Outpoint,
     RollupDescriptor, RollupState, TxOut, DUST_LIMIT,
 };
+use pr_protocol_types::state_root_script;
 use pr_state_transition::escrow::EscrowDeposit;
+use pr_state_transition::successor_root;
 use pr_state_transition::{
     apply_batch, genesis, BatchEffects, BatchTransaction, BatchWitness, PredecessorSettlement, TransitionError,
 };
@@ -95,7 +97,22 @@ impl Replica {
     }
 
     /// [`Self::witness`] for a batch that also sweeps escrow deposits (inputs after the funding inputs).
+    /// Output 1 is overwritten with `OP_RETURN <new_state_root>` when the batch applies, so builders may pass
+    /// any placeholder there.
     pub fn witness_with_escrows(
+        &self,
+        transactions: Vec<BatchTransaction>,
+        escrows: Vec<EscrowDeposit>,
+        settlement: SettlementTx,
+    ) -> BatchWitness {
+        let mut w = self.unpublished_witness(transactions, escrows, settlement);
+        if let (Ok(root), Some(o)) = (successor_root(&w), w.settlement.outputs.get_mut(1)) {
+            o.script_pubkey = state_root_script(&root);
+        }
+        w
+    }
+
+    fn unpublished_witness(
         &self,
         transactions: Vec<BatchTransaction>,
         escrows: Vec<EscrowDeposit>,

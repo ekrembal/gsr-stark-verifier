@@ -533,8 +533,9 @@ impl SettlementLayout {
     pub fn input_count(&self) -> usize {
         1 + self.funding_inputs as usize + self.escrows as usize
     }
+    /// Rollup output, state-root `OP_RETURN`, then withdrawals and changes.
     pub fn output_count(&self) -> usize {
-        1 + self.withdrawals as usize + self.changes as usize + self.reward as usize
+        2 + self.withdrawals as usize + self.changes as usize + self.reward as usize
     }
 }
 

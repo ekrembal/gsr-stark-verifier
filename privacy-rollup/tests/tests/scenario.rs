@@ -61,7 +61,7 @@ fn lifecycle() -> (Harness, Wallet, Wallet, Published) {
     h.submit(&js, vec![]).unwrap();
     let w_settle = h.mempool.select();
     let s = h.settlement(&w_settle);
-    assert_eq!((s.outputs.len(), &s.outputs[1]), (2, &out));
+    assert_eq!((s.outputs.len(), &s.outputs[2]), (3, &out));
     let e = h.settle().unwrap();
     record(&h, &e);
     bob.scan(&h.replica, &e);
@@ -372,7 +372,7 @@ fn settlement_has_no_unconfirmed_spend_path() {
     h.submit(&js, funding.clone()).unwrap();
     let sel = h.mempool.select();
     let mut s = h.settlement(&sel);
-    assert_eq!(s.outputs.len(), 1);
+    assert_eq!(s.outputs.len(), 2);
     s.outputs.push(TxOut { value: 400, script_pubkey: [&[0x51, 0x20][..], &[7; 32]].concat() });
     let w = h.replica.witness(pr_mempool::batch_transactions(&sel), s);
     assert_eq!(apply_batch(&w).err(), Some(TransitionError::OutputCount), "reward / anchor output");
@@ -444,7 +444,7 @@ fn batch_withdrawals_pay_each_declared_script_in_order() {
     }
     let selected = h.mempool.select();
     let s = h.settlement(&selected);
-    let mut paid: Vec<TxOut> = s.outputs[1..].to_vec();
+    let mut paid: Vec<TxOut> = s.outputs[2..].to_vec();
     paid.sort_by_key(|o| o.value);
     let expected: Vec<TxOut> = locked.iter().map(|(o, _)| o.clone()).collect();
     assert_eq!(paid, expected);
@@ -474,11 +474,11 @@ fn withdrawal_dust_and_redirection_are_rejected() {
     h.submit(&js, vec![]).unwrap();
     let selected = h.mempool.select();
     let mut s = h.settlement(&selected);
-    s.outputs[1].script_pubkey = vec![0x51, 0x20, 0xee];
+    s.outputs[2].script_pubkey = vec![0x51, 0x20, 0xee];
     let wit = h.replica.witness(pr_mempool::batch_transactions(&selected), s.clone());
     assert!(apply_batch(&wit).is_err());
     s = h.settlement(&selected);
-    s.outputs[1].value -= 1;
+    s.outputs[2].value -= 1;
     let wit = h.replica.witness(pr_mempool::batch_transactions(&selected), s);
     assert!(apply_batch(&wit).is_err());
     h.settle().unwrap();
@@ -724,10 +724,10 @@ fn one_join_split_pays_several_withdrawal_outputs() {
     h.submit(&js, vec![]).unwrap();
     let selected = h.mempool.select();
     let s = h.settlement(&selected);
-    assert_eq!(s.outputs[1..=outs.len()], outs[..]);
+    assert_eq!(s.outputs[2..2 + outs.len()], outs[..]);
 
     let mut reordered = s.clone();
-    reordered.outputs.swap(1, 2);
+    reordered.outputs.swap(2, 3);
     let wit = h.replica.witness(pr_mempool::batch_transactions(&selected), reordered);
     assert!(apply_batch(&wit).is_err());
 

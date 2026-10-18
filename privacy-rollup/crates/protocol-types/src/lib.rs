@@ -53,3 +53,9 @@ pub const ESCROW_INPUT_SEQUENCE: u32 = 2;
 pub const WITHDRAWAL_LEAF_PREFIX: [u8; 3] = [0x51, 0xb2, 0x75];
 pub const WITHDRAWAL_LEAF_VERSION: u8 = 0xc0;
 pub const MAX_WITHDRAWAL_LEAF_LEN: usize = 1024;
+
+/// Output 1 of every settlement: `OP_RETURN <new_state_root>`, value 0. The rollup output itself pays the
+/// same fixed address in every state, so this is where the state root lives in non-witness data.
+pub fn state_root_script(root: &[u8; 32]) -> alloc::vec::Vec<u8> {
+    [&[0x6a, 0x20][..], root].concat()
+}

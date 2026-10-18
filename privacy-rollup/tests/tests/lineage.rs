@@ -2,12 +2,12 @@
 //! the journal of the settlement that created it, so a coin paying the covenant with a made-up
 //! state (genuine rollup id, attacker-chosen parent) can never settle or sweep escrows.
 use pr_bitcoin_adapter::{PlainInput, PlainTx};
-use pr_protocol_types::{Outpoint, TxOut};
-use pr_state_transition::{apply_batch, BatchWitness, PredecessorSettlement, TransitionError};
+use pr_protocol_types::{state_root_script, Outpoint, TxOut};
+use pr_state_transition::{apply_batch, successor_root, BatchWitness, PredecessorSettlement, TransitionError};
 use pr_tests::{escrow_coin, Harness, Wallet};
 
-/// Repoints `w` at an attacker coin that pays the covenant script and carries `w.old_state` with
-/// `parent = x`, as a copy of the covenant funded by the attacker would.
+/// Repoints `w` at an attacker coin that pays the rollup's fixed address, publishes `w.old_state` (with
+/// `parent = x`) in an `OP_RETURN` as a genuine settlement would, and republishes `w`'s new root.
 fn fabricate(w: &mut BatchWitness, x: Outpoint) {
     w.old_state.parent = x;
     let spk = w.predecessor_tx.outputs[0].script_pubkey.clone();
@@ -15,10 +15,19 @@ fn fabricate(w: &mut BatchWitness, x: Outpoint) {
         version: 2,
         lock_time: 0,
         inputs: vec![PlainInput { prevout: x, script_sig: Vec::new(), sequence: 0xffff_ffff }],
-        outputs: vec![TxOut { value: w.old_state.backing_sats, script_pubkey: spk }],
+        outputs: vec![
+            TxOut { value: w.old_state.backing_sats, script_pubkey: spk },
+            TxOut { value: 0, script_pubkey: state_root_script(&w.old_state.root()) },
+        ],
     };
     w.settlement.inputs[0].prevout = Outpoint { txid: attacker_tx.txid(), vout: 0 };
     w.predecessor_tx = attacker_tx;
+    if let Some(p) = w.predecessor.as_mut() {
+        p.spent = vec![TxOut { value: w.old_state.backing_sats, script_pubkey: vec![0x51] }];
+    }
+    if let Ok(root) = successor_root(w) {
+        w.settlement.outputs[1].script_pubkey = state_root_script(&root);
+    }
 }
 
 /// Two genuine settlements; returns the harness after the second and the first's effects.
@@ -84,7 +93,6 @@ fn fabricated_state_names_an_unprovable_predecessor_journal() {
 
     let mut w = genuine.clone();
     fabricate(&mut w, Outpoint { txid: [0xaa; 32], vout: 0 });
-    w.predecessor.as_mut().unwrap().spent = vec![TxOut { value: w.old_state.backing_sats, script_pubkey: vec![0x51] }];
     let forged = apply_batch(&w).unwrap().lineage.unwrap().journal;
     assert_ne!(forged.transaction_inputs_digest, first.journal.transaction_inputs_digest);
     assert_ne!(forged, first.journal);
@@ -98,6 +106,14 @@ fn fabricated_state_names_an_unprovable_predecessor_journal() {
         t(w.predecessor.as_mut().unwrap());
         assert_ne!(apply_batch(&w).unwrap().lineage.unwrap().journal, first.journal);
     }
+
+    // A predecessor that does not publish the old root in output 1 is not a settlement of this state.
+    let mut w = genuine.clone();
+    w.predecessor_tx.outputs[1].script_pubkey[2] ^= 1;
+    assert_eq!(apply_batch(&w).unwrap_err(), TransitionError::Lineage);
+    let mut w = genuine.clone();
+    w.predecessor_tx.outputs.remove(1);
+    assert_eq!(apply_batch(&w).unwrap_err(), TransitionError::Lineage);
 
     // A stale state (the one before the tip) on the tip's coin fails the local check.
     let mut w = genuine.clone();

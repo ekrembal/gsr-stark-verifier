@@ -145,7 +145,7 @@ impl Harness {
     }
 
     pub fn settlement(&self, selected: &[Entry]) -> SettlementTx {
-        assemble_settlement(&self.replica, ROLLUP_SPK.to_vec(), ROLLUP_SPK.to_vec(), selected).expect("assemble")
+        assemble_settlement(&self.replica, ROLLUP_SPK.to_vec(), selected).expect("assemble")
     }
 
     /// Settles the mempool's selection and applies it to the replica.
@@ -167,7 +167,6 @@ impl Harness {
         let selected = self.mempool.select();
         let settlement = assemble_settlement_with_escrows(
             &self.replica,
-            ROLLUP_SPK.to_vec(),
             ROLLUP_SPK.to_vec(),
             &selected,
             escrows,

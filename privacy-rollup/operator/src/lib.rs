@@ -155,22 +155,20 @@ impl Store {
         Ok(pool.entries.len())
     }
 
-    /// Assembles the next settlement from the pool. `successor` is the covenant output for the new
-    /// root; the new root never depends on it, so it may be empty for a first pass.
-    pub fn build(&self, rollup_script_pubkey: Vec<u8>, successor: Vec<u8>) -> Result<BuiltBatch> {
-        self.build_with_escrows(rollup_script_pubkey, successor, &[])
+    /// Assembles the next settlement from the pool; `rollup_script_pubkey` is the rollup's fixed address.
+    pub fn build(&self, rollup_script_pubkey: Vec<u8>) -> Result<BuiltBatch> {
+        self.build_with_escrows(rollup_script_pubkey, &[])
     }
 
     /// As [`Store::build`], also sweeping `escrows` (confirmed escrow outputs) into minted notes.
     pub fn build_with_escrows(
         &self,
         rollup_script_pubkey: Vec<u8>,
-        successor: Vec<u8>,
         escrows: &[EscrowCoin],
     ) -> Result<BuiltBatch> {
         let (replica, _) = self.load()?;
         let entries = self.select(&replica, escrows)?;
-        let settlement = assemble_settlement_with_escrows(&replica, rollup_script_pubkey, successor, &entries, escrows)
+        let settlement = assemble_settlement_with_escrows(&replica, rollup_script_pubkey, &entries, escrows)
             .context("batch withdraws more than it backs")?;
         let openings = escrows.iter().map(|c| c.opening.clone()).collect();
         let witness = replica.witness_with_escrows(batch_transactions(&entries), openings, settlement);

@@ -22,13 +22,11 @@ use pr_operator::{parse_transaction_json, Settled, Store, MAX_TX_JSON_BYTES};
 use pr_protocol_types::{Canonical, RollupDescriptor};
 use serde::Deserialize;
 
-/// Next-batch request; the batch is the pool's fee-ordered selection. `successor_script_pubkey` is
-/// derived by the covenant template from the new state root; without it `build` only reports the new
-/// root (the root never depends on it).
+/// Next-batch request; the batch is the pool's fee-ordered selection. `rollup_script_pubkey` is the
+/// rollup's fixed address, which the settlement spends and pays again.
 #[derive(Deserialize)]
 struct Request {
     rollup_script_pubkey: String,
-    successor_script_pubkey: Option<String>,
 }
 
 fn submit(store: &Store, tx: &Path, funding: Option<&String>) -> Result<usize> {
@@ -44,11 +42,7 @@ fn submit(store: &Store, tx: &Path, funding: Option<&String>) -> Result<usize> {
 
 fn build(store: &Store, request: &Path, out: &Path) -> Result<()> {
     let req: Request = serde_json::from_slice(&fs::read(request)?)?;
-    let successor = match &req.successor_script_pubkey {
-        Some(s) => hex::decode(s)?,
-        None => Vec::new(),
-    };
-    let b = store.build(hex::decode(&req.rollup_script_pubkey)?, successor)?;
+    let b = store.build(hex::decode(&req.rollup_script_pubkey)?)?;
     fs::create_dir_all(out)?;
     let mut frames = Vec::new();
     for (i, e) in b.entries.iter().enumerate() {
@@ -63,7 +57,6 @@ fn build(store: &Store, request: &Path, out: &Path) -> Result<()> {
         "new_state_root": hex::encode(effects.new_state.root()),
         "backing_sats": effects.new_state.backing_sats,
         "settlement_tx": hex::encode(witness.settlement.plain().serialize_legacy()),
-        "complete": req.successor_script_pubkey.is_some(),
         "transactions": b.entries.len(),
         "assumption_receipts": frames,
         "annex": hex::encode(&effects.annex_bytes),

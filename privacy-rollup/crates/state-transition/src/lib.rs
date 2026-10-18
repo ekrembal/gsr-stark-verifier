@@ -19,6 +19,7 @@ use pr_protocol_types::{
     MAX_WITHDRAWALS_PER_TX, MAX_WITHDRAWAL_LEAF_LEN, PROTOCOL_VERSION, ROLLUP_INPUT_SEQUENCE, TX_VERSION,
     WITHDRAWAL_LEAF_PREFIX, WITHDRAWAL_LEAF_VERSION,
 };
+use pr_protocol_types::state_root_script;
 use serde::{Deserialize, Serialize};
 
 /// One join-split as seen by the transition: its statement and the public data it commits to. The
@@ -118,6 +119,10 @@ pub enum TransitionError {
     WithdrawalOutput,
     ChangeOutput,
     RolloverOutput,
+    /// Output 0 does not pay the rollup input's own script.
+    RollupScript,
+    /// Output 1 is not `OP_RETURN <new_state_root>` with value 0.
+    RootOutput,
     Dust,
     FeeShortfall,
     Overflow,
@@ -184,7 +189,7 @@ pub fn check_lineage(w: &BatchWitness, rollup_in: &Outpoint) -> Result<Option<Li
         return Ok(None);
     }
     let p = w.predecessor.as_ref().ok_or(TransitionError::Lineage)?;
-    if p.spent.len() != pred.inputs.len() {
+    if pred.outputs.get(1) != Some(&root_output(&old.root())) || p.spent.len() != pred.inputs.len() {
         return Err(TransitionError::Lineage);
     }
     let tx = SettlementTx {
@@ -290,7 +295,26 @@ pub fn withdrawal_script_pubkey(leaf: &[u8]) -> Option<Vec<u8>> {
 }
 
 /// Applies one batch. Proof verification is the caller's job; everything else is checked here.
+fn root_output(root: &[u8; 32]) -> TxOut {
+    TxOut { value: 0, script_pubkey: state_root_script(root) }
+}
+
+/// The full transition, including that output 1 publishes the new state root.
 pub fn apply_batch(w: &BatchWitness) -> Result<BatchEffects, TransitionError> {
+    let e = transition(w)?;
+    if w.settlement.outputs[1] != root_output(&e.new_state.root()) {
+        return Err(TransitionError::RootOutput);
+    }
+    Ok(e)
+}
+
+/// The state root `w` settles to. It does not depend on output 1, so builders call this with a placeholder
+/// root output and then publish the returned root there.
+pub fn successor_root(w: &BatchWitness) -> Result<[u8; 32], TransitionError> {
+    transition(w).map(|e| e.new_state.root())
+}
+
+fn transition(w: &BatchWitness) -> Result<BatchEffects, TransitionError> {
     let old = &w.old_state;
     if old.protocol_version != PROTOCOL_VERSION {
         return Err(TransitionError::UnsupportedVersion);
@@ -432,18 +456,22 @@ pub fn apply_batch(w: &BatchWitness) -> Result<BatchEffects, TransitionError> {
         return Err(TransitionError::Dust);
     }
 
-    // No change and no reward output: besides the `1 CSV` successor, outputs are CSV-locked withdrawals.
-    let fixed = 1 + withdrawal_outs.len() + change_outs.len();
+    // No change and no reward output: besides the `1 CSV` successor at the rollup's fixed address and the
+    // state-root OP_RETURN (checked by `apply_batch`), outputs are CSV-locked withdrawals.
+    let fixed = 2 + withdrawal_outs.len() + change_outs.len();
     if s.outputs.len() != fixed {
         return Err(TransitionError::OutputCount);
     }
     if s.outputs[0].value != backing_sats {
         return Err(TransitionError::RolloverOutput);
     }
-    if s.outputs[1..1 + withdrawal_outs.len()] != withdrawal_outs[..] {
+    if s.outputs[0].script_pubkey != rollup_in.script_pubkey {
+        return Err(TransitionError::RollupScript);
+    }
+    if s.outputs[2..2 + withdrawal_outs.len()] != withdrawal_outs[..] {
         return Err(TransitionError::WithdrawalOutput);
     }
-    if s.outputs[1 + withdrawal_outs.len()..fixed] != change_outs[..] {
+    if s.outputs[2 + withdrawal_outs.len()..fixed] != change_outs[..] {
         return Err(TransitionError::ChangeOutput);
     }
     // Every committed fee goes to the miner.

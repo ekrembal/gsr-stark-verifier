@@ -293,7 +293,8 @@ impl RollupDescriptor {
 pub struct DepositDeclaration {
     /// Funding outpoints, consumed as consecutive settlement inputs in this order.
     pub funding: Vec<Outpoint>,
-    /// Optional change returned to the depositor; placed in the change section of the outputs.
+    /// Change returned to the depositor. The transition rejects it: an output spendable before the settlement
+    /// confirms could pin it.
     pub change: Option<TxOut>,
 }
 
@@ -479,6 +480,8 @@ pub struct RollupTransaction {
     pub external: ExternalData,
     /// `postcard(SuccinctReceipt<ReceiptClaim>)` produced by `joinsplit prove` (`identity_zk` seal).
     pub receipt: Vec<u8>,
+    /// The tapscript leaf behind each withdrawal output, in order (see `WITHDRAWAL_LEAF_PREFIX`).
+    pub withdrawal_leaves: Vec<Vec<u8>>,
 }
 
 impl Canonical for RollupTransaction {
@@ -486,12 +489,23 @@ impl Canonical for RollupTransaction {
         self.public.encode_to(w);
         self.external.encode_to(w);
         w.var_bytes(&self.receipt);
+        w.u8(self.withdrawal_leaves.len() as u8);
+        for l in &self.withdrawal_leaves {
+            w.var_bytes(l);
+        }
     }
     fn decode_from(r: &mut Reader<'_>) -> Result<Self, DecodeError> {
         Ok(RollupTransaction {
             public: JoinSplitPublic::decode_from(r)?,
             external: ExternalData::decode_from(r)?,
             receipt: r.var_bytes(MAX_RECEIPT_BYTES)?.to_vec(),
+            withdrawal_leaves: {
+                let n = r.u8()? as usize;
+                if n > MAX_WITHDRAWALS_PER_TX {
+                    return Err(DecodeError::LengthOutOfRange);
+                }
+                (0..n).map(|_| r.var_bytes(MAX_WITHDRAWAL_LEAF_LEN).map(<[u8]>::to_vec)).collect::<Result<_, _>>()?
+            },
         })
     }
 }
@@ -598,7 +612,7 @@ impl Canonical for BatchBody {
     }
 }
 
-/// The input-zero annex: `0x50 || "GSRP" || version || old_state_root || new_state_root || body`.
+/// The input-zero annex: `0x50 || 0x00 || "GSRP" || version || old_state_root || new_state_root || body`.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Annex {
     pub old_state_root: [u8; 32],
@@ -608,12 +622,16 @@ pub struct Annex {
 
 impl Canonical for Annex {
     fn encode_to(&self, w: &mut Writer) {
-        w.u8(ANNEX_TAG).bytes(&ANNEX_MAGIC).u8(ANNEX_ENCODING_VERSION);
+        w.u8(ANNEX_TAG).u8(ANNEX_UNSTRUCTURED).bytes(&ANNEX_MAGIC).u8(ANNEX_ENCODING_VERSION);
         w.bytes(&self.old_state_root).bytes(&self.new_state_root);
         self.body.encode_to(w);
     }
     fn decode_from(r: &mut Reader<'_>) -> Result<Self, DecodeError> {
-        if r.u8()? != ANNEX_TAG || r.array::<4>()? != ANNEX_MAGIC || r.u8()? != ANNEX_ENCODING_VERSION {
+        if r.u8()? != ANNEX_TAG
+            || r.u8()? != ANNEX_UNSTRUCTURED
+            || r.array::<4>()? != ANNEX_MAGIC
+            || r.u8()? != ANNEX_ENCODING_VERSION
+        {
             return Err(DecodeError::BadMagic);
         }
         Ok(Annex { old_state_root: r.array()?, new_state_root: r.array()?, body: BatchBody::decode_from(r)? })

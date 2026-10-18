@@ -1,5 +1,5 @@
 use pr_commitment_tree::Tree;
-use pr_protocol_types::{NoteOutput, Outpoint, TxOut};
+use pr_protocol_types::{NoteOutput, Outpoint};
 use rand_core::OsRng;
 
 use super::*;
@@ -120,7 +120,7 @@ fn scan_then_transfer_spends_the_deposit() {
             &s,
             &[(note.clone(), path.clone())],
             pay,
-            vec![TxOut { value: 4_000, script_pubkey: vec![0x51] }],
+            vec![pr_wallet_core::withdrawal(4_000, &pr_wallet_core::key_tail(&[9; 32])).unwrap()],
             300,
             10,
         )
@@ -160,7 +160,7 @@ mod receipts {
     #[test]
     fn fixture_receipt_is_a_zero_knowledge_receipt_of_its_statement() {
         let (receipt, public, external) = fixture();
-        let tx = RollupTransaction { public, external, receipt };
+        let tx = RollupTransaction { public, external, receipt, withdrawal_leaves: vec![] };
         verify_transaction(&tx).unwrap();
         assert_eq!(decode_transaction(&encode_transaction(&tx)).unwrap(), tx);
     }
@@ -169,7 +169,9 @@ mod receipts {
     fn receipt_of_another_statement_is_rejected() {
         let (receipt, mut public, external) = fixture();
         public.fee_sats += 1;
-        assert!(verify_transaction(&RollupTransaction { public, external, receipt }).is_err());
+        assert!(
+            verify_transaction(&RollupTransaction { public, external, receipt, withdrawal_leaves: vec![] }).is_err()
+        );
     }
 
     #[test]
@@ -177,7 +179,13 @@ mod receipts {
         let (mut receipt, public, external) = fixture();
         let n = receipt.len();
         receipt[n / 2] ^= 1;
-        assert!(verify_transaction(&RollupTransaction { public, external: external.clone(), receipt }).is_err());
+        assert!(verify_transaction(&RollupTransaction {
+            public,
+            external: external.clone(),
+            receipt,
+            withdrawal_leaves: vec![],
+        })
+        .is_err());
         assert!(decode_receipt(&vec![0; MAX_RECEIPT_BYTES + 1]).is_err());
     }
 

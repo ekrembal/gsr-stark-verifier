@@ -3,14 +3,13 @@
 //! pr-batcher serve <dir> [--listen ADDR] [--web DIR] [--interval SECS] [--mine-to ADDRESS]
 //!                        [--confirmations N] [--min-transactions N] [--min-refund-delay BLOCKS]
 //!                        [--fee-rate SAT_PER_VB | --fee-target BLOCKS [--fee-floor SAT_PER_VB]]
-//!                        [--reward-script HEX] [--target-transactions N] [--max-wait SECS]
+//!                        [--target-transactions N] [--max-wait SECS]
 //!                        [--auto SECS] [--submit-url URL]
 //!
 //! `--interval` starts a settlement every SECS whenever the pool is non-empty; `--auto` checks the
 //! fee policy every SECS instead (fees must cover the settlement; full batch or `--max-wait`).
-//! `PR_BATCHER_REWARD_KEY` (hex secret key) pays fee surplus to its BIP86 P2TR output and enables
-//! `POST /v1/bump` (CPFP); `--reward-script` pays surplus to any script without CPFP.
-//! `--submit-url` sends settlements and CPFP packages to that node (a miner) instead.
+//! Settlements have no reward, change or anchor output: all fees go to the miner.
+//! `--submit-url` sends settlements to that node (a miner) instead.
 //!
 //! Bitcoin Core RPC is configured from the environment (see `rpc.rs`).
 use std::path::PathBuf;
@@ -70,14 +69,6 @@ async fn main() -> Result<()> {
             if let Some(t) = flag(&a, "--fee-target") {
                 let floor = flag(&a, "--fee-floor").map(|f| f.parse()).transpose()?.unwrap_or(1.0);
                 cfg.fee_rate = FeeRate::Estimate { target_blocks: t.parse()?, floor };
-            }
-            if let Some(h) = flag(&a, "--reward-script") {
-                cfg.reward_script = Some(hex::decode(h)?);
-            }
-            if let Ok(k) = std::env::var("PR_BATCHER_REWARD_KEY") {
-                let k = hex::decode(k.trim()).context("PR_BATCHER_REWARD_KEY is not hex")?;
-                cfg.reward_script = Some(pr_batcher::cpfp::RewardKey::from_secret(&k)?.script_pubkey());
-                cfg.reward_key = Some(k);
             }
             if let Some(n) = flag(&a, "--target-transactions") {
                 cfg.target_transactions = n.parse()?;

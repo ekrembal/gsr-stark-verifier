@@ -3,8 +3,9 @@
 
 The sweep leaf is `0x20 D OP_DROP || body`. The body uses OP_TX to require that input 0 of the sweeping
 transaction is a taproot script-path spend of this rollup's covenant (this image and rollup id, any state
-root), with exactly the covenant's witness item count and an annex, and that the escrow input itself carries
-`ESCROW_INPUT_SEQUENCE`. The guest accepts that sequence only on escrow inputs, and only if the input's output
+root), with exactly the covenant's witness item count and an annex, that the escrow input itself carries
+`ESCROW_INPUT_SEQUENCE`, and that the escrow input's own annex is the one-byte marker `0x50` (bitcoin/bitcoin#36466
+requires an annex on every non-P2A input once one has it; pinning it stops a relayer inflating it). The guest accepts that sequence only on escrow inputs, and only if the input's output
 key opens to a sweep leaf committing to `D`; `D` commits to the rollup id, and P2a lineage means only the
 genuine rollup coin has receipts, so the escrow mints exactly its note in exactly this rollup. `python3 deposit_escrow.py node-test` checks the body's
 semantics on the gsr regtest node against a small stand-in covenant leaf.
@@ -31,7 +32,9 @@ SEL_SPK = bytes([0, 0, 0, 0x30, 0x08, 0])
 SEL_WITNESS_COUNT = bytes([0, 0, 0, 0x30, 0x40, 0])
 SEL_WITNESS_ITEMS = bytes([0, 0, 0, 0x30, 0x80, 0])
 SEL_CURRENT_SEQUENCE = bytes([0, 0, 0, 0x10, 0x20, 0])
-ESCROW_INPUT_SEQUENCE = 0xfffffffd  # pr_protocol_types::ESCROW_INPUT_SEQUENCE
+SEL_CURRENT_ANNEX = bytes([0, 0, 0x02, 0, 0, 0])
+ANNEX_MARKER = b"\x50"
+ESCROW_INPUT_SEQUENCE = 2  # pr_protocol_types::ESCROW_INPUT_SEQUENCE
 ROLLUP_ID_PUSH = b"\x24" + struct.pack("<I", 1)
 
 
@@ -61,9 +64,10 @@ def covenant_witness_items() -> int:
 
 def sweep_body(t: Template) -> bytes:
     d, n = t.d, t.length
-    seq = ESCROW_INPUT_SEQUENCE.to_bytes(4, "little")  # BIP 441 minimal unsigned number
+    seq = ESCROW_INPUT_SEQUENCE.to_bytes(4, "little").rstrip(b"\0")  # OP_TX pushes a BIP 441 minimal unsigned number
     drops = ["2DROP"] * ((t.k - 3) // 2) + ["DROP"] * ((t.k - 3) % 2)
     return bytes(assemble([
+        SEL_CURRENT_ANNEX, "TX", ANNEX_MARKER, "EQUALVERIFY",
         SEL_CURRENT_SEQUENCE, "TX", seq, "EQUALVERIFY",
         0, SEL_SPK, "TX", "SIZE", 34, "EQUALVERIFY", 0, 2, "SUBSTR", b"\x51\x20", "EQUALVERIFY",
         0, SEL_WITNESS_COUNT, "TX", t.k, "NUMEQUALVERIFY",
@@ -98,7 +102,7 @@ class Escrow:
         return bytes([version | self.taproot.negflag]) + NUMS + self.taproot.leaves[name].merklebranch
 
     def sweep_witness(self) -> list[bytes]:
-        return [self.sweep, self.control("sweep", SWEEP_LEAF)]
+        return [self.sweep, self.control("sweep", SWEEP_LEAF), ANNEX_MARKER]
 
 
 # ---- node test against a stand-in covenant leaf ----------------------------------------------------------
@@ -166,7 +170,7 @@ def node_test() -> dict:
         fid = fund.txid_hex
         coin = {s: i for i, s in reversed(list(enumerate(outs)))}
         escrow_vouts = list(range(5, 11))
-        annex = b"\x50" + b"\x00" * 10
+        annex = b"\x50\x00" + b"\x00" * 10
 
         def attempt(name, first_vout, first_wit, escrow_vout, expect, seq=ESCROW_INPUT_SEQUENCE, escrow_wit=None,
                     sign=False):
@@ -196,10 +200,13 @@ def node_test() -> dict:
             report[name] = {"accepted": ok, "expected": expect, **({"error": err} if err else {}),
                             "weight": tx.get_weight()}
             assert ok == expect, (name, err)
-            assert ok or first_vout is None or "input 1 of" in err, (name, err)
+            assert ok or first_vout is None or "input 1 of" in err or "non-BIP68-final" in err, (name, err)
             return ok
 
         good_wit = [standin(b"\x11" * 32, rid), good_ctl, annex]
+        # ESCROW_INPUT_SEQUENCE is also a BIP 68 lock of two blocks: a sweep never spends an unconfirmed escrow.
+        attempt("reject_sweep_escrow_one_confirmation", coin[good_spk], good_wit, escrow_vouts[0], False)
+        rpc("generatetoaddress", 1, miner)
         attempt("reject_template_mismatch", coin[bad_spk], [standin(b"\x11" * 32, rid, b"\x51\x51\x75"), bad_ctl, annex],
                 escrow_vouts[0], False)
         attempt("reject_non_nums_internal_key", coin[key_spk], [standin(b"\x11" * 32, rid), key_ctl, annex],
@@ -211,6 +218,10 @@ def node_test() -> dict:
         attempt("reject_refund_before_delay", None, None, escrow_vouts[0], False, seq=delay, sign=True)
         attempt("reject_sweep_without_escrow_sequence", coin[good_spk], good_wit, escrow_vouts[1], False,
                 seq=0xffffffff)
+        attempt("reject_escrow_without_annex", coin[good_spk], good_wit, escrow_vouts[0], False,
+                escrow_wit=escrow.sweep_witness()[:2])
+        attempt("reject_escrow_inflated_annex", coin[good_spk], good_wit, escrow_vouts[0], False,
+                escrow_wit=escrow.sweep_witness()[:2] + [b"\x50\x00" + bytes(20_000)])
         attempt("accept_sweep_genuine_template", coin[good_spk], good_wit, escrow_vouts[0], True)
         attempt("reject_sweep_other_rollup_id_same_image", coin[rid2_spk],
                 [standin(b"\x22" * 32, other_rid), rid2_ctl, annex], escrow_vouts[1], False)

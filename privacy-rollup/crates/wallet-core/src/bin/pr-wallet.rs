@@ -42,7 +42,7 @@ fn tx(dir: &Path) {
     let external: ExternalData =
         serde_json::from_slice(&fs::read(dir.join("external.json")).expect("external")).expect("external json");
     let receipt = fs::read(dir.join("receipt.bin")).expect("receipt.bin");
-    let tx = RollupTransaction { public: witness.public, external, receipt };
+    let tx = RollupTransaction { public: witness.public, external, receipt, withdrawal_leaves: Vec::new() };
     fs::write(dir.join("tx.json"), serde_json::to_vec(&tx).expect("tx")).expect("write");
 }
 
@@ -70,6 +70,7 @@ fn main() {
         expiry_batch_number: batch + 10,
         deposit: Some((DepositDeclaration { funding: vec![Outpoint { txid, vout }], change: None }, deposit)),
         withdrawals: Vec::new(),
+        withdrawal_leaves: Vec::new(),
         fee_sats: fee,
     };
     let built = b

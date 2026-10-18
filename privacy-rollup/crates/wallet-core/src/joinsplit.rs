@@ -4,6 +4,7 @@ use std::fmt::Write as _;
 pub use pr_joinsplit::JoinSplitWitness;
 use pr_protocol_types::{
     DepositDeclaration, ExternalData, Fe, JoinSplitPublic, TxOut, COMMITMENT_TREE_DEPTH, PROTOCOL_VERSION,
+    WITHDRAWAL_LEAF_PREFIX,
 };
 use rand_core::{CryptoRng, RngCore};
 
@@ -96,16 +97,36 @@ pub struct JoinSplitBuilder {
     pub expiry_batch_number: u64,
     pub deposit: Option<(DepositDeclaration, u64)>,
     pub withdrawals: Vec<TxOut>,
+    /// The leaf behind each of `withdrawals`, in order (see [`withdrawal`]).
+    pub withdrawal_leaves: Vec<Vec<u8>>,
     pub fee_sats: u64,
 }
 
 pub struct BuiltJoinSplit {
     pub witness: JoinSplitWitness,
     pub external: ExternalData,
+    pub withdrawal_leaves: Vec<Vec<u8>>,
     pub output_notes: [Note; 2],
 }
 
+/// A withdrawal of `value` to the tapscript `tail`: the output is `P2TR(NUMS, {OP_1 OP_CSV OP_DROP || tail})`,
+/// so the recipient spends it with `tail`'s witness one block after the settlement confirms.
+pub fn withdrawal(value: u64, tail: &[u8]) -> Option<(TxOut, Vec<u8>)> {
+    let leaf = [&WITHDRAWAL_LEAF_PREFIX[..], tail].concat();
+    let script_pubkey = pr_state_transition::withdrawal_script_pubkey(&leaf)?;
+    Some((TxOut { value, script_pubkey }, leaf))
+}
+
+/// The withdrawal tail `<xonly key> OP_CHECKSIG`.
+pub fn key_tail(xonly: &[u8; 32]) -> Vec<u8> {
+    [&[0x20][..], xonly, &[0xac]].concat()
+}
+
 impl JoinSplitBuilder {
+    pub fn set_withdrawals(&mut self, ws: Vec<(TxOut, Vec<u8>)>) {
+        (self.withdrawals, self.withdrawal_leaves) = ws.into_iter().unzip();
+    }
+
     pub fn build<R: RngCore + CryptoRng>(
         &self,
         rng: &mut R,
@@ -201,6 +222,6 @@ impl JoinSplitBuilder {
             out_randomness,
         };
         witness.check()?;
-        Ok(BuiltJoinSplit { witness, external, output_notes })
+        Ok(BuiltJoinSplit { witness, external, withdrawal_leaves: self.withdrawal_leaves.clone(), output_notes })
     }
 }

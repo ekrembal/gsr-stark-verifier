@@ -16,7 +16,8 @@ use pr_protocol_types::{
     Annex, BatchBody, BatchJournal, Canonical, ExternalData, Fe, JoinSplitPublic, NoteOutput, Outpoint,
     RollupDescriptor, RollupState, SettlementLayout, TxOut, DUST_LIMIT, ESCROW_INPUT_SEQUENCE, FUNDING_INPUT_SEQUENCE,
     MAX_BATCH_ESCROWS, MAX_BATCH_TRANSACTIONS, MAX_FUNDING_INPUTS, MAX_MONEY, MAX_SCRIPT_PUBKEY_LEN,
-    MAX_WITHDRAWALS_PER_TX, PROTOCOL_VERSION, ROLLUP_INPUT_SEQUENCE, TX_VERSION,
+    MAX_WITHDRAWALS_PER_TX, MAX_WITHDRAWAL_LEAF_LEN, PROTOCOL_VERSION, ROLLUP_INPUT_SEQUENCE, TX_VERSION,
+    WITHDRAWAL_LEAF_PREFIX, WITHDRAWAL_LEAF_VERSION,
 };
 use serde::{Deserialize, Serialize};
 
@@ -26,6 +27,8 @@ use serde::{Deserialize, Serialize};
 pub struct BatchTransaction {
     pub public: JoinSplitPublic,
     pub external: ExternalData,
+    /// The leaf behind each withdrawal output, in order.
+    pub withdrawal_leaves: Vec<Vec<u8>>,
 }
 
 /// Everything the transition needs besides proofs.
@@ -72,6 +75,8 @@ pub enum TransitionError {
     BadCiphertext,
     DepositMismatch,
     WithdrawalMismatch,
+    /// A withdrawal output is not `P2TR(NUMS, {leaf})` for its CSV-prefixed leaf.
+    WithdrawalLock,
     DuplicateNullifier,
     ZeroNullifier,
     Nullifier(NullifierError),
@@ -174,10 +179,8 @@ pub fn check_transaction(
     match &t.external.deposit {
         None if p.deposit_sats == 0 => {}
         Some(d) if p.deposit_sats > 0 && !d.funding.is_empty() && d.funding.len() <= MAX_FUNDING_INPUTS => {
-            if let Some(c) = &d.change {
-                if c.value < DUST_LIMIT || c.script_pubkey.len() > MAX_SCRIPT_PUBKEY_LEN {
-                    return Err(TransitionError::Dust);
-                }
+            if d.change.is_some() {
+                return Err(TransitionError::ChangeOutput);
             }
         }
         _ => return Err(TransitionError::DepositMismatch),
@@ -192,10 +195,28 @@ pub fn check_transaction(
     if ws.iter().any(|o| o.value < DUST_LIMIT) {
         return Err(TransitionError::Dust);
     }
+    if t.withdrawal_leaves.len() != ws.len()
+        || ws
+            .iter()
+            .zip(&t.withdrawal_leaves)
+            .any(|(o, l)| withdrawal_script_pubkey(l).as_ref() != Some(&o.script_pubkey))
+    {
+        return Err(TransitionError::WithdrawalLock);
+    }
     if p.nullifiers.iter().any(Fe::is_zero) {
         return Err(TransitionError::ZeroNullifier);
     }
     Ok(())
+}
+
+/// `P2TR(NUMS, {leaf})` for a withdrawal leaf, if the leaf starts with [`WITHDRAWAL_LEAF_PREFIX`]: every spend
+/// path then waits one confirmation, so a withdrawal output can't be spent while its settlement is unconfirmed.
+pub fn withdrawal_script_pubkey(leaf: &[u8]) -> Option<Vec<u8>> {
+    if !leaf.starts_with(&WITHDRAWAL_LEAF_PREFIX) || leaf.len() > MAX_WITHDRAWAL_LEAF_LEN {
+        return None;
+    }
+    let key = escrow::output_key(&escrow::tapleaf_hash(WITHDRAWAL_LEAF_VERSION, leaf))?;
+    Some([&[0x51, 0x20][..], &key].concat())
 }
 
 /// Applies one batch. Proof verification is the caller's job; everything else is checked here.
@@ -285,7 +306,7 @@ pub fn apply_batch(w: &BatchWitness) -> Result<BatchEffects, TransitionError> {
         None => (old.commitment_root, old.commitment_count, old.commitment_frontier),
     };
 
-    // Bitcoin layout: inputs [rollup, funding.., escrows..], outputs [rollup, withdrawals.., changes.., reward?].
+    // Bitcoin layout: inputs [rollup, funding.., escrows..], outputs [rollup, withdrawals..].
     if s.version != TX_VERSION {
         return Err(TransitionError::TxVersion);
     }
@@ -341,8 +362,9 @@ pub fn apply_batch(w: &BatchWitness) -> Result<BatchEffects, TransitionError> {
         return Err(TransitionError::Dust);
     }
 
+    // No change and no reward output: besides the `1 CSV` successor, outputs are CSV-locked withdrawals.
     let fixed = 1 + withdrawal_outs.len() + change_outs.len();
-    if s.outputs.len() != fixed && s.outputs.len() != fixed + 1 {
+    if s.outputs.len() != fixed {
         return Err(TransitionError::OutputCount);
     }
     if s.outputs[0].value != backing_sats {
@@ -354,12 +376,8 @@ pub fn apply_batch(w: &BatchWitness) -> Result<BatchEffects, TransitionError> {
     if s.outputs[1 + withdrawal_outs.len()..fixed] != change_outs[..] {
         return Err(TransitionError::ChangeOutput);
     }
-    // F = R + M: the optional reward output takes R, the miner keeps M = F - R >= 0.
-    let reward = s.outputs.get(fixed).map_or(0, |o| o.value);
-    if s.outputs.get(fixed).is_some_and(|o| o.value < DUST_LIMIT || o.script_pubkey.len() > MAX_SCRIPT_PUBKEY_LEN) {
-        return Err(TransitionError::Dust);
-    }
-    let miner_fee = fees.checked_sub(reward).ok_or(TransitionError::FeeShortfall)?;
+    // Every committed fee goes to the miner.
+    let miner_fee = fees;
     let sum_in = s.inputs.iter().try_fold(0u64, |a, i| add(a, i.amount))?;
     let sum_out = s.outputs.iter().try_fold(0u64, |a, o| add(a, o.value))?;
     if sum_in.checked_sub(sum_out) != Some(miner_fee) {
@@ -371,7 +389,7 @@ pub fn apply_batch(w: &BatchWitness) -> Result<BatchEffects, TransitionError> {
         funding_inputs: funding.len() as u8,
         withdrawals: withdrawal_outs.len() as u8,
         changes: change_outs.len() as u8,
-        reward: s.outputs.len() == fixed + 1,
+        reward: false,
         escrows: w.escrows.len() as u8,
     };
     let body = BatchBody {
@@ -411,4 +429,21 @@ pub fn apply_batch(w: &BatchWitness) -> Result<BatchEffects, TransitionError> {
         annex_digest: sha256(&annex_bytes),
     };
     Ok(BatchEffects { new_state, anchor, frontier, annex, annex_bytes, journal })
+}
+
+#[cfg(test)]
+mod withdrawal_tests {
+    use super::*;
+
+    /// Known answer from Bitcoin Core's `taproot_construct(NUMS, [OP_1 OP_CSV OP_DROP <[9; 32]> OP_CHECKSIG])`.
+    #[test]
+    fn withdrawal_script_pubkey_matches_bitcoin_core() {
+        let leaf = [&WITHDRAWAL_LEAF_PREFIX[..], &[0x20], &[9; 32], &[0xac]].concat();
+        assert_eq!(
+            hex::encode(withdrawal_script_pubkey(&leaf).unwrap()),
+            "5120c7ee13e21d5552077e7a0b06cc6aec21f6aecf832afcb02867304aa7f5bdc017"
+        );
+        assert!(withdrawal_script_pubkey(&leaf[3..]).is_none());
+        assert!(withdrawal_script_pubkey(&[&leaf[..], &[0; MAX_WITHDRAWAL_LEAF_LEN]].concat()).is_none());
+    }
 }

@@ -86,7 +86,11 @@ impl Mempool {
 
     fn admissible(&self, tx: &RollupTransaction, replica: &Replica) -> Result<(), MempoolError> {
         let tip = replica.tip();
-        let bt = BatchTransaction { public: tx.public, external: tx.external.clone() };
+        let bt = BatchTransaction {
+            public: tx.public,
+            external: tx.external.clone(),
+            withdrawal_leaves: tx.withdrawal_leaves.clone(),
+        };
         check_transaction(&tip.state, tip.anchors.find(tx.public.anchor_batch_number), tip.state.batch_number + 1, &bt)
             .map_err(MempoolError::Rule)?;
         let (nfs, cms, funding) = keys(tx);
@@ -177,14 +181,11 @@ fn output_weight(o: &TxOut) -> u64 {
 }
 
 /// Upper bound on the weight a transaction adds to a settlement: its statement and external data
-/// in the annex (1 WU/B), its withdrawal and change outputs, and its funding inputs.
+/// in the annex (1 WU/B), its withdrawal outputs, and its funding inputs.
 pub fn entry_weight(e: &Entry) -> u64 {
     let x = &e.tx.external;
     let annex = (e.tx.public.encode().len() + x.encode().len()) as u64;
-    let change = x.deposit.as_ref().and_then(|d| d.change.as_ref());
-    annex
-        + x.withdrawals.iter().chain(change).map(output_weight).sum::<u64>()
-        + e.funding.len() as u64 * FUNDING_INPUT_WEIGHT
+    annex + x.withdrawals.iter().map(output_weight).sum::<u64>() + e.funding.len() as u64 * FUNDING_INPUT_WEIGHT
 }
 
 /// Upper bound on the weight an escrow sweep adds: its input, its sweep witness (leaf, control
@@ -195,16 +196,14 @@ pub fn escrow_weight(c: &EscrowCoin) -> u64 {
 }
 
 /// The settlement transaction for `selected` on top of `replica`'s tip: inputs `[rollup, funding..]`,
-/// outputs `[rollup', withdrawals.., changes.., reward?]`, version 2, locktime 0, rollup sequence 1.
-/// The operator keeps `reward` of the batch fees as prover reward; the rest is the miner fee.
+/// outputs `[rollup', withdrawals..]`, version 2, locktime 0, rollup sequence 1. All batch fees go to the miner.
 pub fn assemble_settlement(
     replica: &Replica,
     rollup_script_pubkey: Vec<u8>,
     successor_script_pubkey: Vec<u8>,
     selected: &[Entry],
-    reward: Option<TxOut>,
 ) -> Option<SettlementTx> {
-    assemble_settlement_with_escrows(replica, rollup_script_pubkey, successor_script_pubkey, selected, &[], reward)
+    assemble_settlement_with_escrows(replica, rollup_script_pubkey, successor_script_pubkey, selected, &[])
 }
 
 /// A confirmed escrow output and its private opening.
@@ -224,7 +223,6 @@ pub fn assemble_settlement_with_escrows(
     successor_script_pubkey: Vec<u8>,
     selected: &[Entry],
     escrows: &[EscrowCoin],
-    reward: Option<TxOut>,
 ) -> Option<SettlementTx> {
     let tip = replica.tip();
     let mut inputs = vec![TxInput {
@@ -259,12 +257,17 @@ pub fn assemble_settlement_with_escrows(
             .checked_sub(selected.iter().map(|e| p(e).withdrawal_sats as u128 + p(e).fee_sats as u128).sum())?;
     let mut outputs = vec![TxOut { value: u64::try_from(backing).ok()?, script_pubkey: successor_script_pubkey }];
     outputs.extend(selected.iter().flat_map(|e| e.tx.external.withdrawals.iter().cloned()));
-    outputs.extend(selected.iter().filter_map(|e| e.tx.external.deposit.as_ref().and_then(|d| d.change.clone())));
-    outputs.extend(reward);
     Some(SettlementTx { version: TX_VERSION, lock_time: 0, inputs, outputs })
 }
 
 /// The batch transactions of a selection, in settlement order.
 pub fn batch_transactions(selected: &[Entry]) -> Vec<BatchTransaction> {
-    selected.iter().map(|e| BatchTransaction { public: e.tx.public, external: e.tx.external.clone() }).collect()
+    selected
+        .iter()
+        .map(|e| BatchTransaction {
+            public: e.tx.public,
+            external: e.tx.external.clone(),
+            withdrawal_leaves: e.tx.withdrawal_leaves.clone(),
+        })
+        .collect()
 }

@@ -22,13 +22,13 @@ use pr_sdk::api::{
 };
 use pr_sdk::pr_mempool::{entry_weight, escrow_weight, Entry, EscrowCoin};
 use pr_sdk::pr_protocol_types::{
-    ciphertext_kind, DUST_LIMIT, EMPTY_SETTLEMENT_WEIGHT, MAX_BATCH_ESCROWS, MAX_MONEY, MAX_SETTLEMENT_WEIGHT,
+    ciphertext_kind, DUST_LIMIT, EMPTY_SETTLEMENT_WEIGHT, ESCROW_INPUT_SEQUENCE, FUNDING_INPUT_SEQUENCE,
+    MAX_BATCH_ESCROWS, MAX_MONEY, MAX_SETTLEMENT_WEIGHT,
 };
 use pr_sdk::pr_state_transition::escrow;
 use pr_sdk::{decode_receipt, decode_transaction};
 use serde::{Deserialize, Serialize};
 
-use crate::cpfp::RewardKey;
 use crate::fees::{self, FeePlan, FeeQuote, SettlePolicy};
 use crate::rpc::Rpc;
 use crate::tx::{display_txid, serialize_segwit, weight};
@@ -61,8 +61,6 @@ pub enum FeeRate {
 
 /// Blocks searched back from the tip for a settlement that spent the rollup output.
 pub const SPENDER_SEARCH_DEPTH: u64 = 288;
-/// vsize of the CPFP child: one P2TR key-path input, one P2TR output.
-pub const CPFP_CHILD_VSIZE: u64 = 111;
 
 #[derive(Clone, Debug)]
 pub struct Config {
@@ -78,10 +76,6 @@ pub struct Config {
     /// most half their refund delay, so a refund cannot race a sweep.
     pub min_refund_delay: u16,
     pub fee_rate: FeeRate,
-    /// Receives fee surplus; also the CPFP anchor, so it should be a key of the node's wallet.
-    pub reward_script: Option<Vec<u8>>,
-    /// Secret key of a BIP86 `reward_script`, which lets [`Batcher::bump`] sign CPFP children.
-    pub reward_key: Option<Vec<u8>>,
     /// Batch size the verifier spend is priced over in quotes, and that triggers an automatic settlement.
     pub target_transactions: usize,
     /// Longest an admitted transaction waits for an automatic settlement once fees cover it.
@@ -102,8 +96,6 @@ impl Config {
             min_transactions: 1,
             min_refund_delay: 144,
             fee_rate: FeeRate::Fixed(1.0),
-            reward_script: None,
-            reward_key: None,
             target_transactions: 8,
             max_wait: Duration::from_secs(3600),
         }
@@ -142,25 +134,6 @@ pub struct Inflight {
     pub miner_fee: u64,
     #[serde(default)]
     pub weight: u64,
-    /// Output index, value and scriptPubKey of the reward (CPFP anchor) output.
-    #[serde(default)]
-    pub reward: Option<(u32, u64, String)>,
-    /// CPFP children broadcast with the settlement, hex.
-    #[serde(default)]
-    pub bumps: Vec<String>,
-}
-
-/// `POST /v1/bump`.
-#[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct BumpRequest {
-    pub sat_per_vb: f64,
-}
-
-#[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct BumpResponse {
-    pub child_txid: String,
-    pub child_fee: u64,
-    pub package_sat_per_vb: f64,
 }
 
 /// What an automatic settlement would carry now.
@@ -611,7 +584,7 @@ impl Batcher {
             match self.rpc.txout(&display_hex(&o.txid), o.vout).await? {
                 None => gone.push(k),
                 Some((amount, spk, c)) if amount == r.coin.amount && spk == r.coin.script_pubkey => {
-                    if c >= self.cfg.confirmations
+                    if c >= self.cfg.confirmations.max(u64::from(ESCROW_INPUT_SEQUENCE))
                         && c.saturating_mul(2) <= r.refund_delay as u64
                         && out.len() < MAX_BATCH_ESCROWS
                         && escrow_budget >= escrow_weight(&r.coin)
@@ -651,12 +624,11 @@ impl Batcher {
                     self.rate()
                 )
             })?;
-            let reward = plan.reward.clone();
             self.update(n, |r| r.fees = serde_json::to_value(&plan).ok());
-            let first = self.store.build_with_escrows(spk.clone(), Vec::new(), &escrows, reward.clone())?;
+            let first = self.store.build_with_escrows(spk.clone(), Vec::new(), &escrows)?;
             let new_root = hex::encode(first.effects.new_state.root());
             let successor = self.covenant_script_pubkey(&rollup_id, &new_root)?;
-            let b = self.store.build_with_escrows(spk, successor, &escrows, reward)?;
+            let b = self.store.build_with_escrows(spk, successor, &escrows)?;
             ensure!(hex::encode(b.effects.new_state.root()) == new_root, "new root depends on the successor");
             (b, old_root, rollup_id)
         };
@@ -669,7 +641,7 @@ impl Batcher {
             let key = outpoint_key(&i.prevout);
             if let Some(e) = escrows.iter().find(|e| e.outpoint == i.prevout) {
                 let control = escrow::sweep_control_block(&e.opening).context("escrow control block")?;
-                stacks.push(vec![e.opening.sweep_leaf.clone(), control]);
+                stacks.push(vec![e.opening.sweep_leaf.clone(), control, vec![pr_protocol_types::ANNEX_TAG]]);
                 swept.push(key);
                 continue;
             }
@@ -713,10 +685,6 @@ impl Batcher {
         let wt = weight(settlement, &raw);
         let paid_in: u64 = settlement.inputs.iter().map(|i| i.amount).sum();
         let paid_out: u64 = settlement.outputs.iter().map(|o| o.value).sum();
-        let reward = self.cfg.reward_script.as_ref().and_then(|spk| {
-            let i = settlement.outputs.iter().rposition(|o| &o.script_pubkey == spk)?;
-            Some((i as u32, settlement.outputs[i].value, hex::encode(spk)))
-        });
         let inflight = Inflight {
             batch_number: n,
             raw: hex::encode(&raw),
@@ -729,8 +697,6 @@ impl Batcher {
             broadcast: false,
             miner_fee: paid_in - paid_out,
             weight: wt,
-            reward,
-            bumps: Vec::new(),
         };
         write_atomic(&self.path("inflight.json"), &serde_json::to_vec_pretty(&inflight)?)?;
         fs::write(dir.join("settlement.hex"), &inflight.raw)?;
@@ -749,20 +715,11 @@ impl Batcher {
                 Err(e) => Err(e),
             },
             Broadcast::Mine(address) => Ok(Some(self.rpc.generate_block(address, &f.raw).await?)),
-            Broadcast::Direct(miner) => {
-                if f.bumps.is_empty() {
-                    match miner.send_raw_transaction(&f.raw).await {
-                        Ok(_) => {}
-                        Err(e) if format!("{e}").contains("already") => {}
-                        Err(e) => return Err(e),
-                    }
-                } else {
-                    let mut package = vec![f.raw.clone()];
-                    package.extend(f.bumps.iter().cloned());
-                    miner.submit_package(&package).await?;
-                }
-                Ok(None)
-            }
+            Broadcast::Direct(miner) => match miner.send_raw_transaction(&f.raw).await {
+                Ok(_) => Ok(None),
+                Err(e) if format!("{e}").contains("already") => Ok(None),
+                Err(e) => Err(e),
+            },
         }
     }
 
@@ -788,9 +745,6 @@ impl Batcher {
                     misses += 1;
                     if misses > 3 {
                         self.ensure_current(&f).await?;
-                        if let Some(g) = self.inflight()? {
-                            f.bumps = g.bumps;
-                        }
                         if let Err(e) = self.broadcast(&f).await {
                             self.abandon_if_conflicted(&f).await?;
                             bail!("settlement left the mempool and cannot be re-broadcast: {e:#}");
@@ -871,10 +825,6 @@ impl Batcher {
         Ok(r)
     }
 
-    pub fn reward_script(&self) -> Option<&[u8]> {
-        self.cfg.reward_script.as_deref()
-    }
-
     pub fn quote(&self) -> FeeQuote {
         fees::quote(self.rate(), self.cfg.target_transactions)
     }
@@ -883,7 +833,7 @@ impl Batcher {
         let weight = entries.iter().map(entry_weight).sum::<u64>() + escrows.iter().map(escrow_weight).sum::<u64>();
         let paid = entries.iter().map(|e| e.tx.public.fee_sats).sum::<u64>()
             + escrows.iter().map(|c| c.opening.fee_sats).sum::<u64>();
-        fees::plan(weight, paid, self.rate(), self.cfg.reward_script.as_deref())
+        fees::plan(weight, paid, self.rate())
     }
 
     fn mark_received(&self, key: String) -> Result<()> {
@@ -966,7 +916,8 @@ impl Batcher {
         write_atomic(&self.path("funding-witnesses.json"), &serde_json::to_vec(&*w)?)
     }
 
-    /// Drops pool transactions whose funding coins are no longer unspent (a depositor double spend).
+    /// Drops pool transactions whose funding coins are no longer unspent (a depositor double spend), and
+    /// defers settling while any funding coin is unconfirmed.
     async fn prune_spent_funding(&self) -> Result<()> {
         let coins: Vec<String> = {
             let _g = self.guard();
@@ -975,17 +926,22 @@ impl Batcher {
             pool.entries.iter().flat_map(|e| e.funding.iter().map(|c| outpoint_key(&c.outpoint))).collect()
         };
         let mut spent = Vec::new();
+        let mut unconfirmed = Vec::new();
         for k in coins {
             let (txid, vout) = k.split_once(':').context("outpoint key")?;
             let txid = display_hex(&hex::decode(txid)?.try_into().map_err(|_| anyhow::anyhow!("txid"))?);
-            if self.rpc.txout(&txid, vout.parse()?).await?.is_none() {
-                spent.push(k);
+            match self.rpc.txout(&txid, vout.parse()?).await? {
+                None => spent.push(k),
+                Some((_, _, c)) if c < u64::from(FUNDING_INPUT_SEQUENCE) => unconfirmed.push(k),
+                Some(_) => {}
             }
         }
-        if spent.is_empty() {
-            return Ok(());
+        if !spent.is_empty() {
+            self.drop_entries_funded_by(&spent)?;
         }
-        self.drop_entries_funded_by(&spent)
+        // FUNDING_INPUT_SEQUENCE is a BIP 68 lock: a settlement spending an unconfirmed coin is not final.
+        ensure!(unconfirmed.is_empty(), "funding coins {unconfirmed:?} are unconfirmed; settling once they confirm");
+        Ok(())
     }
 
     /// Fails if `f` no longer spends the tip (another settlement advanced the rollup).
@@ -1063,47 +1019,6 @@ impl Batcher {
             }
         }
         Ok(None)
-    }
-
-    /// CPFP: spends the reward output of the broadcast settlement with a wallet-signed child so the
-    /// package pays `sat_per_vb`, and submits both as a package.
-    pub async fn bump(&self, sat_per_vb: f64) -> Result<BumpResponse, Rejection> {
-        let mut f = self.inflight()?.ok_or_else(|| Rejection::NotFound("no settlement awaits confirmation".into()))?;
-        if !f.broadcast {
-            return Err(Rejection::Conflict("the settlement is not broadcast yet".into()));
-        }
-        let (vout, value, spk) =
-            f.reward.clone().ok_or_else(|| Rejection::Conflict("the settlement has no reward output".into()))?;
-        let parent_vsize = f.weight.div_ceil(4);
-        let total = (sat_per_vb * (parent_vsize + CPFP_CHILD_VSIZE) as f64).ceil() as u64;
-        let child_fee = total.saturating_sub(f.miner_fee).max(CPFP_CHILD_VSIZE);
-        if child_fee + fees::DUST_SATS > value {
-            return Err(Rejection::Invalid(format!("reward {value} sats cannot pay a {child_fee} sat child")));
-        }
-        let secret = self
-            .cfg
-            .reward_key
-            .as_ref()
-            .ok_or_else(|| Rejection::Conflict("no reward key is configured (PR_BATCHER_REWARD_KEY)".into()))?;
-        let key = RewardKey::from_secret(secret)?;
-        if hex::encode(key.script_pubkey()) != spk {
-            return Err(Rejection::Conflict("the reward output does not pay the configured reward key".into()));
-        }
-        let child = key.child(&f.txid, vout, value, child_fee)?;
-        let package = [f.raw.clone(), child.clone()];
-        let r = match &self.cfg.broadcast {
-            Broadcast::Direct(miner) => miner.submit_package(&package).await?,
-            _ => self.rpc.submit_package(&package).await?,
-        };
-        let child_txid = r["tx-results"]
-            .as_object()
-            .and_then(|m| m.values().filter_map(|v| v["txid"].as_str()).find(|t| *t != f.txid))
-            .map(str::to_owned)
-            .ok_or_else(|| Rejection::Internal(anyhow::anyhow!("submitpackage: {r}")))?;
-        f.bumps.push(child);
-        write_atomic(&self.path("inflight.json"), &serde_json::to_vec_pretty(&f).map_err(anyhow::Error::from)?)?;
-        let package_sat_per_vb = (f.miner_fee + child_fee) as f64 / (parent_vsize + CPFP_CHILD_VSIZE) as f64;
-        Ok(BumpResponse { child_txid, child_fee, package_sat_per_vb })
     }
 }
 

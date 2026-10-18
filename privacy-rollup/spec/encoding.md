@@ -18,7 +18,7 @@ anchor-node, commitment-frontier, batch-body, data-history, external-data, nulli
 ## Annex (input 0)
 
 ```
-0x50 || "GSRP" || 0x01 || old_state_root[32] || new_state_root[32] || BatchBody
+0x50 || 0x00 || "GSRP" || 0x01 || old_state_root[32] || new_state_root[32] || BatchBody
 BatchBody = rollup_id[32] || batch_number u64 || predecessor (txid[32] || vout u32)
          || transactions u8 || funding_inputs u8 || withdrawals u8 || changes u8 || reward u8 || escrows u8
          || nullifiers[2·transactions][32]          (strictly ascending, nonzero)
@@ -26,8 +26,9 @@ BatchBody = rollup_id[32] || batch_number u64 || predecessor (txid[32] || vout u
             kind 0: 1,232-byte ML-KEM ciphertext, kind 1: 120-byte self ciphertext)
 ```
 
-The counts bound every section, so the annex has no length prefixes. An empty-batch annex is 152 bytes; each transaction adds 2·32 + 2·33 plus its ciphertexts: 2,594 bytes for two
-recipient outputs, 1,482 bytes for a payment plus self change.
+The counts bound every section, so the annex has no length prefixes. An empty-batch annex is 153 bytes; each transaction adds 2·32 + 2·33 plus its ciphertexts: 2,594 bytes for two
+recipient outputs, 1,482 bytes for a payment plus self change. `changes` and `reward` are always 0: a
+settlement has no change or reward output (`protocol.md`, "No spendable handles").
 Scanners decode the annex with the same strict decoder and replay it against their own trees.
 
 ## Journal (196 bytes)

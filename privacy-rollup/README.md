@@ -36,7 +36,8 @@ user: joinsplit guest (private witness) -> zero-knowledge receipt (`identity_zk`
 | P6: adversarial tests, review package | real-receipt tampering, covenant-copy spend, crash-after-broadcast resume and replay on `gsr` (`tools/p6_adversarial.py`, [reports/p6-adversarial.json](reports/p6-adversarial.json)); competing-settler, replay and malformed-annex tests (`tests/tests/adversarial.rs`); external review scope, threat model, coverage and open questions in [review/README.md](review/README.md). No external review has taken place |
 | Empty batches | **Proven** and settled consecutively on activated regtest |
 | Covenant (`OP_TX` binding, successor leaf, `1 CSV`) | Implemented, metered, mined on regtest; altered spends rejected |
-| Relay | Consensus-valid; **nonstandard** under the pinned node's policy (annex) |
+| Relay | Consensus-valid; **nonstandard** under the pinned node's policy (annex); relays under bitcoin/bitcoin#36466 (open, not merged), see [reports/relay-pinning.md](reports/relay-pinning.md) |
+| No pinning handles | CSV-locked withdrawal leaves, no change/reward/P2A outputs, BIP 68 sequences on funding (1) and escrow (2) inputs; fees all to the miner, bumped by re-proving + RBF ([reports/no-pin-handles.json](reports/no-pin-handles.json)) |
 | Rust SDK, batcher, WASM client | `pr-sdk` (wallet, witnesses, local ZK proving, HTTP client), `pr-batcher` (HTTP admission, aggregation, settlement proving, Bitcoin Core RPC), `pr-sdk-wasm` (WASI build of the client) with a browser benchmark page. SDK -> batcher -> mined settlement measured on regtest; see [reports/sdk-batcher-wasm.md](reports/sdk-batcher-wasm.md) |
 
 ## Measurements

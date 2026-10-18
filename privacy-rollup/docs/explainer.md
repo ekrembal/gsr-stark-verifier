@@ -36,7 +36,10 @@ it can only be spent by a transaction that carries a valid zero-knowledge proof 
 - **Double spends:** every note has a nullifier, and the pool tracks spent nullifiers in a Merkle tree.
 - **Competing batchers:** at most one settlement per block (`1 CSV`). The loser re-batches its users, whose
   proofs stay valid because old tree roots (anchors) never expire.
-- **Fees:** each user pays `fee_sats`, fixed in their proof. A reward output gives batchers a CPFP handle.
+- **Fees:** each user pays `fee_sats`, fixed in their proof, all to the miner. To bump, a user re-proves with a
+  higher fee and the next batch replaces the old one (RBF); there is no CPFP, so no address is linked.
+- **No pinning:** nothing in a pending settlement is spendable: withdrawals and the successor are `1 CSV`
+  locked and there are no change, reward or anchor outputs. A withdrawal recipient spends one block later.
 
 **Measured (8-vCPU CPU machine, regtest on the `gsr` node).**
 
@@ -55,7 +58,9 @@ user (estimate).
 **What's not done.**
 - **Privacy assumption:** privacy rests on a zero-knowledge mode we added to RISC Zero. It is argued to be
   statistically zero-knowledge in a proof sketch that has not been reviewed.
-- **Relay:** settlements carry an annex, so they are nonstandard and go directly to miners.
+- **Relay:** settlements carry an annex, so today's nodes reject them and they go directly to miners. With the
+  open annex-relay proposal bitcoin/bitcoin#36466 applied, a real settlement relayed between two nodes and was
+  replaced by a bigger one through ordinary RBF (`reports/relay-pinning.md`); that proposal is not merged.
 - **Wider testing:** only one machine and regtest so far; there's no mainnet or signet deployment.
 
 The full design is in the [whitepaper](whitepaper.md).

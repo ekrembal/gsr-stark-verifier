@@ -37,11 +37,19 @@ pub const MAX_WITHDRAWALS_PER_TX: usize = 4;
 /// Depth of the SHA-256 anchor history tree (leaf `i` is the anchor after batch `i`).
 pub const ANCHOR_TREE_DEPTH: usize = 32;
 pub const ANNEX_TAG: u8 = 0x50;
+/// BIP 341 annex payloads starting with 0x00 are unstructured data (the standardness rule of bitcoin/bitcoin#36466).
+pub const ANNEX_UNSTRUCTURED: u8 = 0x00;
 pub const ANNEX_MAGIC: [u8; 4] = *b"GSRP";
 pub const ANNEX_ENCODING_VERSION: u8 = 1;
 pub const TX_VERSION: u32 = 2;
 pub const ROLLUP_INPUT_SEQUENCE: u32 = 1;
-pub const FUNDING_INPUT_SEQUENCE: u32 = 0xffff_ffff;
+/// BIP 68 relative lock of one block: a funding coin must be confirmed, so a settlement has no unconfirmed parent.
+pub const FUNDING_INPUT_SEQUENCE: u32 = 1;
 /// Marks an escrow input: the sweep leaf requires it and the transition allows it only on escrow inputs, so an
-/// escrow can never be claimed as a join-split's funding coin.
-pub const ESCROW_INPUT_SEQUENCE: u32 = 0xffff_fffd;
+/// escrow can never be claimed as a join-split's funding coin. As a BIP 68 lock it requires two confirmations.
+pub const ESCROW_INPUT_SEQUENCE: u32 = 2;
+/// Every withdrawal output is `P2TR(NUMS, {leaf})` with a 0xc0 leaf starting `OP_1 OP_CHECKSEQUENCEVERIFY OP_DROP`,
+/// so nothing in a settlement is spendable before it confirms and no descendant can pin it.
+pub const WITHDRAWAL_LEAF_PREFIX: [u8; 3] = [0x51, 0xb2, 0x75];
+pub const WITHDRAWAL_LEAF_VERSION: u8 = 0xc0;
+pub const MAX_WITHDRAWAL_LEAF_LEN: usize = 1024;

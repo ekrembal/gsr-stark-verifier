@@ -25,7 +25,7 @@ fn main() {
             let js = h.build(&b, [SpendInput::Dummy, SpendInput::Dummy], [w.pay(30_000), w.pay(29_000)]);
             h.submit(&js, funding).expect("deposit admitted");
         }
-        let e = h.settle(None).expect("deposit batch");
+        let e = h.settle().expect("deposit batch");
         let w = h.last_witness.clone().expect("witness");
         assert_eq!(w.transactions.len(), n, "deposit batch size");
         std::fs::write(out.join(format!("deposit-{n}.json")), serde_json::to_string(&w).expect("json")).expect("write");
@@ -39,7 +39,7 @@ fn main() {
             let js = h.build(&b, [w.spend(&h.replica, &n0), w.spend(&h.replica, &n1)], [to.pay(40_000), w.pay(18_000)]);
             h.submit(&js, vec![]).expect("transfer admitted");
         }
-        h.settle(None).expect("transfer batch");
+        h.settle().expect("transfer batch");
         let w = h.last_witness.clone().expect("witness");
         assert_eq!(w.transactions.len(), n, "transfer batch size");
         std::fs::write(out.join(format!("transfer-{n}.json")), serde_json::to_string(&w).expect("json"))

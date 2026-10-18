@@ -35,7 +35,12 @@ fn main() -> Result<()> {
         proof.whir_r1cs_proof.hints.len()
     );
     let (narg, hints) = (&proof.whir_r1cs_proof.narg_string, &proof.whir_r1cs_proof.hints);
-    let tx = RollupTransaction { public: js.witness.public, external: js.external.clone(), receipt: Vec::new() };
+    let tx = RollupTransaction {
+        public: js.witness.public,
+        external: js.external.clone(),
+        receipt: Vec::new(),
+        withdrawal_leaves: Vec::new(),
+    };
     let t = Instant::now();
     fs::write(out.join("joinsplit-witness.json"), serde_json::to_vec(&js.witness)?)?;
     h.mempool
@@ -48,7 +53,7 @@ fn main() -> Result<()> {
     forged.fee_sats += 1;
     anyhow::ensure!(pr_provekit_adapter::verify(&verifier, &forged, narg, hints).is_err(), "forged statement verified");
     let selected = h.mempool.select();
-    let settlement = h.settlement(&selected, None);
+    let settlement = h.settlement(&selected);
     let w = h.replica.witness(pr_mempool::batch_transactions(&selected), settlement);
     let effects = pr_state_transition::apply_batch(&w).map_err(|e| anyhow::anyhow!("{e:?}"))?;
     fs::write(out.join("witness.json"), serde_json::to_vec(&w)?)?;

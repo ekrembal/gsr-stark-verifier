@@ -1,0 +1,168 @@
+{
+  "node": "/home/ubuntu/gsr-p3/build/bitcoin-annex/bin",
+  "batch_a": {
+    "batch_number": 1,
+    "stage": "broadcast",
+    "transactions": 0,
+    "txid": "8f7d7cf0b93c4dc21aa07689a1628763f54f174d6ab327181e8daf0646faa2df",
+    "block_hash": null,
+    "error": null,
+    "prove": {
+      "cycles_total": 7864320,
+      "cycles_user": 7208376,
+      "identity_sha256_padded_seconds": 19.504845055,
+      "lift_join_seconds": 348.56794671,
+      "resolve_zk_seconds": 9.4e-08,
+      "seal_words": 55667,
+      "segment_proving_seconds": 1825.42601814,
+      "segments": 8,
+      "transactions": 0,
+      "workers": 1
+    },
+    "weight": 333803,
+    "fees": {
+      "fees": 10000,
+      "miner_fee": 10000,
+      "weight": 334181
+    },
+    "started_unix": 1792310030,
+    "finished_unix": null,
+    "wall_seconds": 2313.6,
+    "node_a": {
+      "vsize": 83451,
+      "weight": 333803,
+      "fee_sats": 10000,
+      "wtxid": "24c278e80d26f60e760f4eae49cebfc73939a4090b5ff837fc6079ed4e868104",
+      "bip125_replaceable": null
+    },
+    "relayed_to_node_b": true
+  },
+  "batch_b": {
+    "batch_number": 1,
+    "stage": "broadcast",
+    "transactions": 0,
+    "txid": "720c1f2aa2da2c668f7361905ec0615279ade5071c01dda081a4a645eee834ce",
+    "block_hash": null,
+    "error": null,
+    "prove": {
+      "cycles_total": 12058624,
+      "cycles_user": 11173693,
+      "identity_sha256_padded_seconds": 20.366057556,
+      "lift_join_seconds": 543.926902098,
+      "resolve_zk_seconds": 8.8e-08,
+      "seal_words": 55667,
+      "segment_proving_seconds": 2908.433103952,
+      "segments": 12,
+      "transactions": 0,
+      "workers": 1
+    },
+    "weight": 335903,
+    "fees": {
+      "fees": 20000,
+      "miner_fee": 20000,
+      "weight": 336362
+    },
+    "started_unix": 1792312348,
+    "finished_unix": null,
+    "wall_seconds": 3604.4,
+    "node_b": {
+      "vsize": 83976,
+      "weight": 335903,
+      "fee_sats": 20000,
+      "wtxid": "83fef289cca7c7bacae7ff03b5ac7464a5eeacbc34ca7aacd94950e191a71bc8",
+      "bip125_replaceable": null
+    },
+    "outputs": 1
+  },
+  "replacement": {
+    "tx2_relayed_to_node_a": true,
+    "tx1_evicted_from_node_a": true,
+    "relay_seconds": 3.5,
+    "delta_fee_sats": 10000,
+    "incremental_relay_floor_sats": 8398,
+    "feerate_old_sat_vb": 0.1198,
+    "feerate_new_sat_vb": 0.2382,
+    "resend_old_to_node_a": [
+      false,
+      "insufficient fee, rejecting replacement 8f7d7cf0b93c4dc21aa07689a1628763f54f174d6ab327181e8daf0646faa2df, less fees than conflicting txs; 0.0001 < 0.0002"
+    ]
+  },
+  "escrow_witness_items": [
+    599,
+    65,
+    1
+  ],
+  "consensus": {
+    "honest": [
+      true,
+      ""
+    ],
+    "escrow_annex_missing": [
+      false,
+      "TestBlockValidity failed: block-script-verify-flag-failed (Script failed an OP_EQUALVERIFY operation), input 1 of 720c1f2aa2da2c668f7361905ec0615279ade5071c01dda081a4a645eee834ce (wtxid 9f3f4494db6018"
+    ],
+    "escrow_annex_inflated_20kB": [
+      false,
+      "TestBlockValidity failed: block-script-verify-flag-failed (Script failed an OP_EQUALVERIFY operation), input 1 of 720c1f2aa2da2c668f7361905ec0615279ade5071c01dda081a4a645eee834ce (wtxid 538c0e89456d1c"
+    ]
+  },
+  "mined": {
+    "txid": "720c1f2aa2da2c668f7361905ec0615279ade5071c01dda081a4a645eee834ce",
+    "confirmations": 3,
+    "weight": 335903,
+    "annex_bytes": 2683,
+    "annex_prefix": "500047535250",
+    "inputs": 3,
+    "input_sequences": [
+      1,
+      2,
+      2
+    ],
+    "outputs": 1
+  },
+  "batch_b_final": {
+    "batch_number": 1,
+    "stage": "confirmed",
+    "transactions": 0,
+    "txid": "720c1f2aa2da2c668f7361905ec0615279ade5071c01dda081a4a645eee834ce",
+    "block_hash": null,
+    "error": "error sending request for url (http://127.0.0.1:19812/): client error (Connect): tcp connect error: Connection refused (os error 111)",
+    "prove": {
+      "cycles_total": 12058624,
+      "cycles_user": 11173693,
+      "identity_sha256_padded_seconds": 20.366057556,
+      "lift_join_seconds": 543.926902098,
+      "resolve_zk_seconds": 8.8e-08,
+      "seal_words": 55667,
+      "segment_proving_seconds": 2908.433103952,
+      "segments": 12,
+      "transactions": 0,
+      "workers": 1
+    },
+    "weight": 335903,
+    "fees": {
+      "fees": 20000,
+      "miner_fee": 20000,
+      "weight": 336362
+    },
+    "started_unix": 1792312348,
+    "finished_unix": 1792316241
+  },
+  "scans_via_b": {
+    "a": [
+      {
+        "leaf": 1,
+        "nullifier": "29952fb343b3ba8e155dcd32b54cceeff667ff5aa846a6e1b7601983e02f4d43",
+        "value": 20000
+      }
+    ],
+    "b": [
+      {
+        "leaf": 0,
+        "nullifier": "234c9051d2497f3c3a823b8196636e1a342599861d2fb426b3bdf719e53dee7a",
+        "value": 20000
+      }
+    ]
+  },
+  "resumed": "replacement stage onward rerun from persisted node/batcher state with the same txs"
+}

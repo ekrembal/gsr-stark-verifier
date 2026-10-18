@@ -1,12 +1,11 @@
 //! Fee policy. A settlement's miner fee is fixed when it is proven (`fee_sats` of every
-//! join-split and escrow, minus the optional operator reward), so the batcher prices it up front:
+//! join-split and escrow, all paid to the miner), so the batcher prices it up front:
 //!
 //! * a transaction pays at least its own weight at the current feerate (admission floor);
 //! * a settlement is only proven when the selected fees cover the whole transaction's upper-bound
 //!   weight, including the fixed verifier spend (`EMPTY_SETTLEMENT_WEIGHT`), at that feerate;
-//! * any surplus above the dust limit goes to the reward output, which is also the operator's
-//!   CPFP anchor (the successor output is locked by `1 CSV`).
-use pr_protocol_types::{TxOut, EMPTY_SETTLEMENT_WEIGHT, MAX_SETTLEMENT_WEIGHT};
+//! * there is no reward or anchor output: any surplus is miner fee, and users raise fees by re-proving.
+use pr_protocol_types::{EMPTY_SETTLEMENT_WEIGHT, MAX_SETTLEMENT_WEIGHT};
 use serde::{Deserialize, Serialize};
 
 /// Outputs below this are not created (P2TR / P2WSH dust limit at the default dust relay fee).
@@ -69,11 +68,10 @@ pub fn admission_floor(entry_weight: u64, sat_per_vb: f64) -> u64 {
 /// How a proven settlement splits its fees.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct FeePlan {
-    /// Upper bound on the settlement's weight, reward output included.
+    /// Upper bound on the settlement's weight.
     pub weight: u64,
     pub fees: u64,
     pub miner_fee: u64,
-    pub reward: Option<TxOut>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -84,30 +82,13 @@ pub struct Shortfall {
 
 /// Prices a settlement whose selected transactions and escrows weigh `content_weight` (upper
 /// bounds) and pay `fees`. Fails if `fees` do not cover the whole settlement at `sat_per_vb`.
-pub fn plan(
-    content_weight: u64,
-    fees: u64,
-    sat_per_vb: f64,
-    reward_script: Option<&[u8]>,
-) -> Result<FeePlan, Shortfall> {
-    let base = EMPTY_SETTLEMENT_WEIGHT + content_weight;
-    let required = fee_for_weight(base, sat_per_vb);
+pub fn plan(content_weight: u64, fees: u64, sat_per_vb: f64) -> Result<FeePlan, Shortfall> {
+    let weight = EMPTY_SETTLEMENT_WEIGHT + content_weight;
+    let required = fee_for_weight(weight, sat_per_vb);
     if fees < required {
         return Err(Shortfall { fees, required });
     }
-    if let Some(spk) = reward_script {
-        let weight = base + output_weight(spk);
-        let miner_fee = fee_for_weight(weight, sat_per_vb);
-        if let Some(r) = fees.checked_sub(miner_fee).filter(|r| *r >= DUST_SATS) {
-            return Ok(FeePlan {
-                weight,
-                fees,
-                miner_fee,
-                reward: Some(TxOut { value: r, script_pubkey: spk.to_vec() }),
-            });
-        }
-    }
-    Ok(FeePlan { weight: base, fees, miner_fee: fees, reward: None })
+    Ok(FeePlan { weight, fees, miner_fee: fees })
 }
 
 /// When to start proving: never with nothing to settle unless `min_transactions == 0`, only when
@@ -155,17 +136,10 @@ mod tests {
 
     #[test]
     fn shortfall_surplus_and_dust() {
-        let spk = [0x51, 0x20].iter().chain(&[7u8; 32]).copied().collect::<Vec<_>>();
         let required = fee_for_weight(EMPTY_SETTLEMENT_WEIGHT + 2_000, 2.0);
-        assert_eq!(plan(2_000, required - 1, 2.0, Some(&spk)), Err(Shortfall { fees: required - 1, required }));
-        let exact = plan(2_000, required, 2.0, Some(&spk)).unwrap();
-        assert_eq!((exact.reward, exact.miner_fee), (None, required));
-        let p = plan(2_000, required + 10_000, 2.0, Some(&spk)).unwrap();
-        let r = p.reward.clone().unwrap();
-        assert_eq!(p.miner_fee + r.value, p.fees);
-        assert_eq!(p.miner_fee, fee_for_weight(EMPTY_SETTLEMENT_WEIGHT + 2_000 + output_weight(&spk), 2.0));
-        let no_reward = plan(2_000, required + 10_000, 2.0, None).unwrap();
-        assert_eq!((no_reward.reward, no_reward.miner_fee), (None, required + 10_000));
+        assert_eq!(plan(2_000, required - 1, 2.0), Err(Shortfall { fees: required - 1, required }));
+        assert_eq!(plan(2_000, required, 2.0).unwrap().miner_fee, required);
+        assert_eq!(plan(2_000, required + 10_000, 2.0).unwrap().miner_fee, required + 10_000);
     }
 
     #[test]

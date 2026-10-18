@@ -173,13 +173,14 @@ external_data_commitment, expiry_batch_number
 5. **Balance:** `in0 + in1 + deposit = out0 + out1 + withdrawal + fee`.
 
 **External data** (`ExternalData`) is bound through `external_data_commitment`:
-- an optional deposit declaration: up to 4 funding outpoints and an optional change output;
-- up to 4 withdrawal outputs `(value, script_pubkey)`, each above dust and summing to `withdrawal_sats`;
+- an optional deposit declaration: up to 4 funding outpoints (a change output is rejected);
+- up to 4 withdrawal outputs `(value, script_pubkey)`, each above dust and summing to `withdrawal_sats`, each
+  paying `P2TR(NUMS, {OP_1 OP_CSV OP_DROP || tail})` for a leaf carried with the transaction (§11);
 - the two output ciphertexts.
 
 **Transaction kinds.**
 - **Deposit:** `deposit_sats > 0`, with dummy inputs. The funding coins become settlement inputs and must
-  pay exactly `deposit + change`.
+  pay exactly `deposit`.
 - **Transfer:** real inputs and outputs, no public amount except `fee_sats`.
 - **Withdrawal:** `withdrawal_sats > 0`, paid as up to 4 settlement outputs.
 
@@ -204,10 +205,10 @@ The same Rust code runs natively (batcher, scanner, tests) and in the guest (`pr
    - **Header:** version 2, locktime 0.
    - **Input order:** `[rollup, funding.., escrows..]`. Input 0 spends output 0 of the private
      `predecessor_tx` with sequence 1 and amount `backing_sats`; lineage is checked (§9).
-   - **Output order:** `[successor, withdrawals.., changes.., reward?]`.
-   - **Funding:** each funding set pays exactly `deposit + change`.
-5. **Fees:** `F = Σ fee_sats`, optional reward `R ≥ dust`, miner fee `M = F − R ≥ 0`, and
-   `Σ inputs − Σ outputs = M`. The new `backing_sats = old + deposits − withdrawals − F ≥ dust`.
+   - **Output order:** `[successor, withdrawals..]`; no change or reward outputs.
+   - **Sequences:** funding inputs 1, escrows 2 (BIP 68 locks: no unconfirmed parents).
+   - **Funding:** each funding set pays exactly `deposit`.
+5. **Fees:** `F = Σ fee_sats` is the miner fee: `Σ inputs − Σ outputs = F`. The new `backing_sats = old + deposits − withdrawals − F ≥ dust`.
 6. **New state:** the new anchor is written into the next empty anchor slot, the data history is extended,
    and the guest outputs the annex and the journal.
 
@@ -221,13 +222,13 @@ protocol_version u32 || rollup_id || old_state_root || new_state_root
 || SHA256(inputs preimage) || SHA256(outputs preimage) || SHA256(annex)
 ```
 
-**Annex (input 0):** `0x50 || "GSRP" || 0x01 || old_root || new_root || BatchBody`, where `BatchBody` holds:
+**Annex (input 0):** `0x50 || 0x00 || "GSRP" || 0x01 || old_root || new_root || BatchBody`, where `BatchBody` holds:
 - rollup id, batch number and predecessor outpoint;
 - section counts;
 - sorted nullifiers;
 - sorted `(commitment, kind, ciphertext)` entries.
 
-An empty-batch annex is 152 bytes. A deposit adds 370 bytes; a transfer with one recipient and self change
+An empty-batch annex is 153 bytes. A deposit adds 370 bytes; a transfer with one recipient and self change
 adds 1,482 bytes.
 
 ## 8. Zero-knowledge user receipts and composition
@@ -320,9 +321,10 @@ address = P2TR(NUMS, { sweep (0xc2): 0x20 D OP_DROP || body,
                        refund (0xc0): <delay> OP_CSV OP_DROP <xonly> OP_CHECKSIG })
 ```
 
-- **The sweep body** uses `OP_TX` to require two things: input 0 of the sweeping transaction is a script-path
-  spend of this pool's covenant (this image and rollup id, any state root) with an annex, and the escrow input
-  has sequence `0xfffffffd`.
+- **The sweep body** uses `OP_TX` to require three things: the escrow input's own annex is exactly the marker `0x50`
+  (so a relayer cannot inflate its weight), input 0 of the sweeping transaction is a script-path spend of this
+  pool's covenant (this image and rollup id, any state root) with an annex, and the escrow input has sequence
+  `2` (a BIP 68 lock: the escrow needs two confirmations).
 - **The guest** receives the escrow opening privately. It checks `D`, the taproot tweak, the sequence and the
   exact amount `value + fee_sats`, then mints the note and counts `fee_sats` as fee.
 - **Funding inputs** may not use the escrow sequence, so a funding input cannot satisfy the sweep leaf.
@@ -356,15 +358,23 @@ costs above). The largest batch fully settled on chain had 4 deposits (334,022 W
 ### 11.2 Fees
 
 Each join-split commits `fee_sats` in its proof, paid from shielded value (for a deposit, from the deposited
-amount). The guest enforces only `M = Σ fee_sats − R` (§7). How much each user pays is the batcher's policy
+amount). The guest enforces only that `Σ fee_sats` is the miner fee (§7). How much each user pays is the batcher's policy
 (`prover/batcher/src/fees.rs`), with `fee(w) = ceil(w · r / 4)`:
 - **Quote (`GET /v1/fees`):** `ceil(fee(332,000) / T) + fee(typical weight of kind)` for target batch size
   `T`.
 - **Admission:** a transaction is rejected unless it pays `fee(entry_weight)`.
 - **Shortfall:** proving is refused (HTTP 409) if the pool's fees don't cover the whole settlement.
-- **Reward / CPFP:** surplus goes to a reward output, a BIP86 key of the operator. `POST /v1/bump` signs a
-  111-vB child and submits the package.
-- **No RBF:** the proof fixes every input and output, hence the fee. Bumping means CPFP or proving again.
+- **No reward, no CPFP:** every fee goes to the miner. A user bumps by proving the join-split again with a
+  higher `fee_sats`; the next batch replaces the pending settlement under ordinary RBF. No Bitcoin coin of
+  the user is spent, so bumping links no address.
+- **No pinning handle:** withdrawal outputs carry `1 OP_CSV` in their leaf, the successor carries `1 OP_CSV`,
+  and there are no change, reward or P2A outputs, so nothing in an unconfirmed settlement can be spent and
+  it can have no descendants. Funding and escrow sequences are BIP 68 locks, so it has no unconfirmed
+  parents either. Measured on a node patched with bitcoin/bitcoin#36466 (`reports/no-pin-handles.json`):
+  every child of an unconfirmed settlement (either output, sequences 0, 1, `0xfffffffd`, `0xffffffff`) is
+  rejected, a settlement on an unconfirmed funding coin is `non-BIP68-final`, a higher-fee settlement
+  replaces it, and the withdrawal key spends one block after confirmation. The cost: a withdrawal cannot pay
+  an arbitrary address directly; the recipient forwards it.
 
 The verifier dominates, so fees per user fall with batch size. At 10 sat/vB, a 3-deposit batch costs about
 280,000 sats each, and 16 transfers about 56,000 sats each (estimates from the quote formula).

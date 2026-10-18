@@ -50,8 +50,8 @@ Consequences in the code:
 
 ## Growing batches replace each other by ordinary RBF
 
-Each settlement's successor output commits to its new state root, so a bigger batch has a different
-txid and replaces the smaller one under the full-RBF and cluster-mempool rules, starting at 5 sat/vB:
+Each settlement's output 1 (`OP_RETURN <new_root>`) commits to its new state root in non-witness data, so a
+bigger batch has a different txid and replaces the smaller one under the full-RBF and cluster-mempool rules, starting at 5 sat/vB:
 
 | regime | old vB / fee | +1 transfer vB | minimum new fee | minimum delta | binding rule |
 | --- | --- | --- | --- | --- | --- |
@@ -107,7 +107,8 @@ while it is unconfirmed, so it can have no descendant to pin it:
 
 * withdrawal outputs are `P2TR(NUMS, {OP_1 OP_CHECKSEQUENCEVERIFY OP_DROP || tail})`, the leaf carried with
   the join-split and checked by the guest (the wallet's `withdrawal(value, key_tail(xonly))` uses
-  `tail = <xonly> OP_CHECKSIG`); the successor already carries `1 OP_CSV`;
+  `tail = <xonly> OP_CHECKSIG`); the rollup output already carries `1 OP_CSV` and the root output is an
+  unspendable `OP_RETURN`;
 * no change, reward or P2A outputs: all fees go to the miner, and a user bumps by re-proving with a higher
   `fee_sats` (RBF by the next batch), not by CPFP;
 * funding inputs use sequence 1 and escrows sequence 2, BIP 68 locks, so a settlement never has an
@@ -119,7 +120,7 @@ while it is unconfirmed, so it can have no descendant to pin it:
 | case | result |
 | --- | --- |
 | settlement spending an unconfirmed funding coin | rejected (`non-BIP68-final`) |
-| child of the unconfirmed settlement, successor or withdrawal output, sequence 1 | rejected (`non-BIP68-final`) |
+| child of the unconfirmed settlement, rollup or withdrawal output, sequence 1 | rejected (`non-BIP68-final`) |
 | same, sequence 0, `0xfffffffd`, `0xffffffff` | rejected (CSV: `Locktime requirement not satisfied`) |
 | settlement descendants in the mempool | 1 (itself) |
 | higher-fee competing settlement (+20,000 sats) | replaces it (ordinary RBF) |

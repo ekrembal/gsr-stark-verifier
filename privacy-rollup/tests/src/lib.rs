@@ -145,7 +145,7 @@ impl Harness {
     }
 
     pub fn settlement(&self, selected: &[Entry]) -> SettlementTx {
-        assemble_settlement(&self.replica, ROLLUP_SPK.to_vec(), ROLLUP_SPK.to_vec(), selected).expect("assemble")
+        assemble_settlement(&self.replica, ROLLUP_SPK.to_vec(), selected).expect("assemble")
     }
 
     /// Settles the mempool's selection and applies it to the replica.
@@ -165,14 +165,8 @@ impl Harness {
     /// Settles the mempool's selection plus `escrows` and applies it to the replica.
     pub fn settle_with_escrows(&mut self, escrows: &[EscrowCoin]) -> Result<BatchEffects, ScanError> {
         let selected = self.mempool.select();
-        let settlement = assemble_settlement_with_escrows(
-            &self.replica,
-            ROLLUP_SPK.to_vec(),
-            ROLLUP_SPK.to_vec(),
-            &selected,
-            escrows,
-        )
-        .expect("assemble");
+        let settlement =
+            assemble_settlement_with_escrows(&self.replica, ROLLUP_SPK.to_vec(), &selected, escrows).expect("assemble");
         let openings = escrows.iter().map(|c| c.opening.clone()).collect();
         let w = self.replica.witness_with_escrows(batch_transactions(&selected), openings, settlement);
         let effects = self.replica.apply_witness(&w)?;

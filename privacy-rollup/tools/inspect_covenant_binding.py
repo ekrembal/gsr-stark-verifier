@@ -71,20 +71,19 @@ def main():
         parameters['claim']['output'] = rc.ref.output_digest(
             sha(journal), bytes.fromhex(parameters['claim']['assumptions_digest'])).hex()
         parameters['claim_digest'] = rc.ref.claim_digest(parameters['claim']).hex()
-        covenant = rc.Covenant(parameters, journal[4:36], journal[36:68])
-        successor = covenant.for_root(journal[68:100])
+        covenant = rc.Covenant(parameters, journal[4:36])
         changed = copy.deepcopy(tx)
         changed['inputs'][0]['script_pubkey'] = list(covenant.script_pubkey)
-        changed['outputs'][0]['script_pubkey'] = list(successor.script_pubkey)
+        changed['outputs'][0]['script_pubkey'] = list(covenant.script_pubkey)
         new_inputs, new_outputs = transaction_digests(changed)
         (a.out / (name + '.script')).write_bytes(covenant.script)
         result['images'][name] = {
             'image_id': image, 'script_bytes': len(covenant.script),
             'script_sha256': sha(covenant.script).hex(),
             'input_script_pubkey': covenant.script_pubkey.hex(),
-            'successor_script_pubkey': successor.script_pubkey.hex(),
+            'output0_script_pubkey': covenant.script_pubkey.hex(),
             'frozen_input_matches': bytes(tx['inputs'][0]['script_pubkey']) == covenant.script_pubkey,
-            'frozen_successor_matches': bytes(tx['outputs'][0]['script_pubkey']) == successor.script_pubkey,
+            'frozen_output0_matches': bytes(tx['outputs'][0]['script_pubkey']) == covenant.script_pubkey,
             'replacing_scripts_preserves_inputs_digest': new_inputs == inputs,
             'replacing_scripts_preserves_outputs_digest': new_outputs == outputs,
             'replacement_inputs_digest': new_inputs.hex(),

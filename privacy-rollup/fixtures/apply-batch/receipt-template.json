@@ -6,11 +6,11 @@
     "journal_digest": "284fa02b56fabf784dabea24f19708dd172d0fe7249334e96d571ee3128726ed",
     "output": "a6d4eb5c2655090d151b19355675696484499d3e29cfd10b4b2ad13af8aa4407",
     "post": "a3acc27117418996340b84e5a90f3ef4c49d22c79e44aad822ec9c313e1eb8e2",
-    "pre": "6071f5ee320e5f06a6585c0f551f56f773c10736a7212690ab5da86b62f1bec1",
+    "pre": "e9b075ff0785c936f7403ec75447f1b9d3ddcb5860b70576035b0907f19730f2",
     "sys_exit": 0,
     "user_exit": 0
   },
-  "claim_digest": "36e5d75bb6f4a62ad93c7c67cdcf0497eaac31c3a8b0324660e9d8a6a877d19a",
+  "claim_digest": "667c983fd28be9aeeb699f2b4ea54cddf7c4e69cbbc499e6b27d84e3a06aab5d",
   "control_id": "a71e992ab67b268768f93eb47135e9ebbc8dc24f3622ab156c1e82ea4f19f062",
   "control_inclusion_proof": {
     "digests": [

@@ -185,6 +185,9 @@ impl Default for Frontier {
 impl Frontier {
     pub fn root(&self) -> Fe {
         let z = zero_hashes();
+        if self.count == 0 {
+            return z[DEPTH];
+        }
         let mut node = z[0];
         for i in 0..DEPTH {
             node =

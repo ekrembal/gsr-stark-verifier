@@ -91,6 +91,7 @@ class Batch:
         self.batch = json.loads((out / "batch.json").read_text())
         self.receipt = json.loads((out / "proof/receipt.json").read_text())
         self.seal = (out / "proof/seal.bin").read_bytes()
+        self.old_root = bytes.fromhex(self.batch["old_state_root"])
         self.new_root = bytes.fromhex(self.batch["new_state_root"])
         self.annex = bytes.fromhex(self.batch["annex"])
         assert self.receipt["journal"] == self.batch["journal"]
@@ -102,7 +103,8 @@ class Batch:
         if edit:
             edit(tx)
         tx.wit.vtxinwit[0].scriptWitness.stack = self.cov.witness(
-            receipt or self.receipt, seal or self.seal, new_root or self.new_root, annex or self.annex, hints)
+            receipt or self.receipt, seal or self.seal, self.old_root, new_root or self.new_root,
+            annex or self.annex, hints)
         return tx
 
     def meter(self, tx: CTransaction, name: str, batch=None) -> dict:
@@ -130,9 +132,6 @@ def deposit(state: Path, coin: COutPoint, out: Path) -> dict:
 def build_batch(state: Path, cov: rc.Covenant, out: Path) -> Batch:
     req = {"rollup_script_pubkey": cov.script_pubkey.hex(), "transactions": []}
     (out.parent / f"{out.name}-req.json").write_text(json.dumps(req))
-    new_root = bytes.fromhex(json.loads(operator("build", state, out.parent / f"{out.name}-req.json", out)))
-    req["successor_script_pubkey"] = cov.for_root(new_root).script_pubkey.hex()
-    (out.parent / f"{out.name}-req.json").write_text(json.dumps(req))
     operator("build", state, out.parent / f"{out.name}-req.json", out)
     t = time.time()
     receipts = [str(out / n) for n in json.loads((out / "batch.json").read_text())["assumption_receipts"]]
@@ -143,7 +142,7 @@ def build_batch(state: Path, cov: rc.Covenant, out: Path) -> Batch:
     return Batch(cov, out)
 
 
-def negative_cases(b: Batch, other: Batch) -> dict:
+def negative_cases(b: Batch, other: Batch, copy: rc.Covenant) -> dict:
     other_root = hashlib.sha256(b"other root").digest()
 
     def set_out0(spk):
@@ -155,10 +154,11 @@ def negative_cases(b: Batch, other: Batch) -> dict:
     flipped = bytearray(b.annex)
     flipped[-1] ^= 1
     cases = {
-        "redirected_successor": b.tx(edit=set_out0(b.cov.for_root(other_root).script_pubkey)),
-        "successor_for_witness_root": b.tx(new_root=other_root,
-                                          edit=set_out0(b.cov.for_root(other_root).script_pubkey)),
-        "successor_value_minus_one": b.tx(edit=bump(0, -1)),
+        "output0_to_covenant_copy": b.tx(edit=set_out0(copy.script_pubkey)),
+        "output0_to_other_address": b.tx(edit=set_out0(OP_TRUE_SPK)),
+        "root_output_for_witness_root": b.tx(new_root=other_root, edit=lambda tx: setattr(
+            tx.vout[1], "scriptPubKey", CScript(b"\x6a\x20" + other_root))),
+        "rollup_value_minus_one": b.tx(edit=bump(0, -1)),
         "extra_output": b.tx(edit=lambda tx: tx.vout.append(CTxOut(1000, CScript(OP_TRUE_SPK)))),
         "altered_annex": b.tx(annex=bytes(flipped)),
         "input_sequence_2": b.tx(edit=lambda tx: setattr(tx.vin[0], "nSequence", 2)),
@@ -249,7 +249,8 @@ def main() -> None:
         ids = json.loads(operator("init", state, WORK / "descriptor.json"))
         rollup_id, root = bytes.fromhex(ids["rollup_id"]), bytes.fromhex(ids["state_root"])
         t = time.time()
-        cov = rc.Covenant(template, rollup_id, root)
+        cov = rc.Covenant(template, rollup_id)
+        copy = rc.Covenant(template, hashlib.sha256(b"copied rollup").digest())
         print(f"covenant generated in {time.time() - t:.0f}s: {len(cov.script)} bytes", flush=True)
         gtx = CTransaction()
         gtx.version = 2
@@ -300,9 +301,8 @@ def main() -> None:
                 first_batch = b
                 report["consensus_negatives_of_settlement_1"] = consensus_negatives(
                     b, miner, COutPoint(int(gtxid, 16), 1))
-            current = current.for_root(b.new_root)
             print(f"settlement {k}: {entry['weight']} WU, {entry['varops']} varops", flush=True)
-        report["negative_spends_of_settlement_1"] = negative_cases(first_batch, b)
+        report["negative_spends_of_settlement_1"] = negative_cases(first_batch, b, copy)
 
         status = json.loads(operator("status", state))
         utxo = rpc("gettxout", internal(status["utxo"][0]), status["utxo"][1])

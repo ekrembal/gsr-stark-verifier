@@ -10,6 +10,7 @@ use std::collections::BTreeSet;
 use serde::{Deserialize, Serialize};
 
 use pr_bitcoin_adapter::{SettlementTx, TxInput};
+use pr_protocol_types::state_root_script;
 use pr_protocol_types::{
     Canonical, Fe, Outpoint, RollupTransaction, TxOut, EMPTY_SETTLEMENT_WEIGHT, ESCROW_INPUT_SEQUENCE,
     FUNDING_INPUT_SEQUENCE, MAX_BATCH_TRANSACTIONS, MAX_SETTLEMENT_WEIGHT, ROLLUP_INPUT_SEQUENCE, TX_VERSION,
@@ -196,14 +197,15 @@ pub fn escrow_weight(c: &EscrowCoin) -> u64 {
 }
 
 /// The settlement transaction for `selected` on top of `replica`'s tip: inputs `[rollup, funding..]`,
-/// outputs `[rollup', withdrawals..]`, version 2, locktime 0, rollup sequence 1. All batch fees go to the miner.
+/// outputs `[rollup', OP_RETURN root, withdrawals..]`, version 2, locktime 0, rollup sequence 1. All batch fees go
+/// to the miner. The rollup output pays `rollup_script_pubkey` again; output 1 holds a placeholder root, which the
+/// replica's `witness` replaces with the batch's new root.
 pub fn assemble_settlement(
     replica: &Replica,
     rollup_script_pubkey: Vec<u8>,
-    successor_script_pubkey: Vec<u8>,
     selected: &[Entry],
 ) -> Option<SettlementTx> {
-    assemble_settlement_with_escrows(replica, rollup_script_pubkey, successor_script_pubkey, selected, &[])
+    assemble_settlement_with_escrows(replica, rollup_script_pubkey, selected, &[])
 }
 
 /// A confirmed escrow output and its private opening.
@@ -220,7 +222,6 @@ pub struct EscrowCoin {
 pub fn assemble_settlement_with_escrows(
     replica: &Replica,
     rollup_script_pubkey: Vec<u8>,
-    successor_script_pubkey: Vec<u8>,
     selected: &[Entry],
     escrows: &[EscrowCoin],
 ) -> Option<SettlementTx> {
@@ -228,7 +229,7 @@ pub fn assemble_settlement_with_escrows(
     let mut inputs = vec![TxInput {
         prevout: tip.utxo,
         amount: tip.state.backing_sats,
-        script_pubkey: rollup_script_pubkey,
+        script_pubkey: rollup_script_pubkey.clone(),
         script_sig: Vec::new(),
         sequence: ROLLUP_INPUT_SEQUENCE,
     }];
@@ -255,7 +256,10 @@ pub fn assemble_settlement_with_escrows(
     let backing =
         (tip.state.backing_sats as u128 + minted + selected.iter().map(|e| p(e).deposit_sats as u128).sum::<u128>())
             .checked_sub(selected.iter().map(|e| p(e).withdrawal_sats as u128 + p(e).fee_sats as u128).sum())?;
-    let mut outputs = vec![TxOut { value: u64::try_from(backing).ok()?, script_pubkey: successor_script_pubkey }];
+    let mut outputs = vec![
+        TxOut { value: u64::try_from(backing).ok()?, script_pubkey: rollup_script_pubkey },
+        TxOut { value: 0, script_pubkey: state_root_script(&[0; 32]) },
+    ];
     outputs.extend(selected.iter().flat_map(|e| e.tx.external.withdrawals.iter().cloned()));
     Some(SettlementTx { version: TX_VERSION, lock_time: 0, inputs, outputs })
 }

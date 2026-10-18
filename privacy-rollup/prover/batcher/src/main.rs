@@ -35,8 +35,8 @@ async fn main() -> Result<()> {
             let state = store.init(&descriptor)?;
             let cfg = Config::from_env(Broadcast::Send);
             let b = Batcher::open_uninitialized(&store.dir, cfg)?;
-            let (rollup_id, root) = (hex::encode(state.rollup_id.0), hex::encode(state.root()));
-            let spk = tokio::task::spawn_blocking(move || b.covenant_script_pubkey(&rollup_id, &root)).await??;
+            let rollup_id = hex::encode(state.rollup_id.0);
+            let spk = tokio::task::spawn_blocking(move || b.covenant_script_pubkey(&rollup_id)).await??;
             println!(
                 "{}",
                 serde_json::json!({"rollup_id": hex::encode(state.rollup_id.0), "state_root": hex::encode(state.root()),

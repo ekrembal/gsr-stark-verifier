@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Recursive lineage with real settlement proofs on a gsr regtest node (patched with bitcoin/bitcoin#36466):
+"""Recursive lineage and the fixed rollup address with real settlement proofs on a gsr regtest node (patched with bitcoin/bitcoin#36466):
 
   * genesis, then escrow deposit a: batch 1 spends the genesis state (no predecessor receipt), mined;
   * escrow deposit b: batch 2 proves batch 1's journal by its poseidon2 receipt (an assumption discharged
@@ -7,7 +7,10 @@
   * batch 2's witness executed with batch 1's on-chain padded-SHA receipt verified inside the guest
     (`settle exec --seal`): same journal;
   * `settle exec` of batch 2 without a predecessor proof, with the wrong predecessor receipt, or with a
-    fabricated old state (attacker-chosen `parent`) fails.
+    fabricated old state (attacker-chosen `parent`) fails;
+  * every settlement pays the genesis output's address in output 0 and `OP_RETURN <new root>` in output 1, and
+    `settle exec` fails with a flipped or missing predecessor root output, a wrong or non-OP_RETURN new root
+    output, or output 0 at another address.
 
 Writes build/lineage-e2e.json. Build the binaries as in batcher_e2e.py.
 """
@@ -76,8 +79,24 @@ def checks(state, report: dict) -> None:
     (r.WORK / "forged.json").write_text(json.dumps(forged))
     cases["fabricated_parent"] = settle_exec(str(r.WORK / "forged.json"), str(r.WORK / "x"), "--receipt",
                                              str(b1 / "unconditional.bin"))
+    for name, edit in [("predecessor_root_output_flipped", lambda w: w["predecessor_tx"]["outputs"][1]["script_pubkey"]
+                        .__setitem__(2, w["predecessor_tx"]["outputs"][1]["script_pubkey"][2] ^ 1)),
+                       ("predecessor_root_output_missing", lambda w: w["predecessor_tx"]["outputs"].pop(1)),
+                       ("new_root_output_wrong", lambda w: w["settlement"]["outputs"][1]["script_pubkey"]
+                        .__setitem__(2, w["settlement"]["outputs"][1]["script_pubkey"][2] ^ 1)),
+                       ("root_output_not_op_return", lambda w: w["settlement"]["outputs"][1]["script_pubkey"]
+                        .__setitem__(0, 0x51)),
+                       ("output0_other_address", lambda w: w["settlement"]["outputs"][0]["script_pubkey"]
+                        .__setitem__(5, w["settlement"]["outputs"][0]["script_pubkey"][5] ^ 1))]:
+        w = json.loads(w2.read_text())
+        edit(w)
+        (r.WORK / f"{name}.json").write_text(json.dumps(w))
+        cases[name] = settle_exec(str(r.WORK / f"{name}.json"), str(r.WORK / "x"), "--receipt",
+                                  str(b1 / "unconditional.bin"))
     report["exec"] = cases
-    for k in ["no_predecessor", "wrong_predecessor_seal", "fabricated_parent"]:
+    for k in ["no_predecessor", "wrong_predecessor_seal", "fabricated_parent", "predecessor_root_output_flipped",
+              "predecessor_root_output_missing", "new_root_output_wrong", "root_output_not_op_return",
+              "output0_other_address"]:
         assert not cases[k][0], (k, cases[k])
 
 
@@ -168,6 +187,11 @@ def main() -> None:
                                     "weight": mined["weight"], "inputs": len(mined["vin"]),
                                     "outputs": len(mined["vout"]), "stats": stats}
             assert stats["lineage"] == ("genesis" if n == 1 else "receipt"), stats
+            new_root = json.loads((state / f"batches/{n}/receipt.json").read_text())["journal"][136:200]
+            report[f"batch_{n}"]["static_address"] = mined["vout"][0]["scriptPubKey"]["hex"] == ids["script_pubkey"]
+            report[f"batch_{n}"]["root_output"] = mined["vout"][1]["scriptPubKey"]["hex"]
+            assert report[f"batch_{n}"]["static_address"], mined["vout"][0]
+            assert mined["vout"][1]["scriptPubKey"]["hex"] == "6a20" + new_root and mined["vout"][1]["value"] == 0
             print(f"batch {n} mined: {report[f'batch_{n}']['weight']} WU, lineage {stats['lineage']}", flush=True)
 
         checks(state, report)

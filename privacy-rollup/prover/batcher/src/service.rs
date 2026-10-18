@@ -463,17 +463,17 @@ impl Batcher {
         Ok(serde_json::from_slice(&out.stdout)?)
     }
 
-    /// The covenant output for `root`; the leaf takes seconds to generate, so it is cached.
-    pub fn covenant_script_pubkey(&self, rollup_id: &str, root: &str) -> Result<Vec<u8>> {
-        let path = self.path("covenants.json");
+    /// The rollup's fixed covenant address; the leaf takes seconds to generate, so it is cached.
+    pub fn covenant_script_pubkey(&self, rollup_id: &str) -> Result<Vec<u8>> {
+        let path = self.path("covenant.json");
         let mut cache: BTreeMap<String, String> = read_or_default(&path)?;
-        if let Some(spk) = cache.get(root) {
+        if let Some(spk) = cache.get(rollup_id) {
             return Ok(hex::decode(spk)?);
         }
         let template = self.cfg.template.to_string_lossy().into_owned();
-        let v = self.covenant(&["script", &template, rollup_id, root])?;
+        let v = self.covenant(&["script", &template, rollup_id])?;
         let spk = v["script_pubkey"].as_str().context("script_pubkey")?.to_owned();
-        cache.insert(root.to_owned(), spk.clone());
+        cache.insert(rollup_id.to_owned(), spk.clone());
         write_atomic(&path, &serde_json::to_vec_pretty(&cache)?)?;
         Ok(hex::decode(spk)?)
     }
@@ -486,20 +486,19 @@ impl Batcher {
         write_atomic(&self.path("escrows.json"), &serde_json::to_vec_pretty(m)?)
     }
 
-    /// What a depositor needs to build an address; the sweep body is the same for every root.
+    /// What a depositor needs to build an address; the sweep body names the rollup's fixed address.
     pub fn escrow_terms(&self) -> Result<EscrowTerms> {
         let path = self.path("escrow-terms.json");
         if path.exists() {
             return Ok(serde_json::from_slice(&fs::read(path)?)?);
         }
-        let (rollup_id, root) = {
+        let rollup_id = {
             let _g = self.guard();
             let (replica, _) = self.store.load()?;
-            let tip = replica.tip().state;
-            (hex::encode(tip.rollup_id.0), hex::encode(tip.root()))
+            hex::encode(replica.tip().state.rollup_id.0)
         };
         let template = self.cfg.template.to_string_lossy().into_owned();
-        let v = self.covenant(&["escrow-body", &template, &rollup_id, &root])?;
+        let v = self.covenant(&["escrow-body", &template, &rollup_id])?;
         let terms = EscrowTerms {
             rollup_id,
             body: v["body"].as_str().context("body")?.to_owned(),
@@ -640,7 +639,7 @@ impl Batcher {
             let tip = replica.tip().state;
             ensure!(tip.batch_number + 1 == n, "tip moved to batch {}", tip.batch_number);
             let (rollup_id, old_root) = (hex::encode(tip.rollup_id.0), hex::encode(tip.root()));
-            let spk = self.covenant_script_pubkey(&rollup_id, &old_root)?;
+            let spk = self.covenant_script_pubkey(&rollup_id)?;
             let entries = self.store.select(&replica, &escrows)?;
             let plan = self.price(&entries, &escrows).map_err(|s| {
                 anyhow::anyhow!(
@@ -651,11 +650,7 @@ impl Batcher {
                 )
             })?;
             self.update(n, |r| r.fees = serde_json::to_value(&plan).ok());
-            let first = self.store.build_with_escrows(spk.clone(), Vec::new(), &escrows)?;
-            let new_root = hex::encode(first.effects.new_state.root());
-            let successor = self.covenant_script_pubkey(&rollup_id, &new_root)?;
-            let b = self.store.build_with_escrows(spk, successor, &escrows)?;
-            ensure!(hex::encode(b.effects.new_state.root()) == new_root, "new root depends on the successor");
+            let b = self.store.build_with_escrows(spk, &escrows)?;
             (b, old_root, rollup_id)
         };
         let settlement = &b.witness.settlement;
@@ -700,8 +695,8 @@ impl Batcher {
         let seal = dir.join("seal.bin").to_string_lossy().into_owned();
         let w =
             self.covenant(&["witness", &template, &rollup_id, &old_root, &receipt_json, &seal, &new_root, &annex])?;
-        let successor = w["successor_script_pubkey"].as_str().context("successor")?;
-        ensure!(hex::decode(successor)? == settlement.outputs[0].script_pubkey, "successor output mismatch");
+        let spk = w["script_pubkey"].as_str().context("script_pubkey")?;
+        ensure!(hex::decode(spk)? == settlement.outputs[0].script_pubkey, "rollup output mismatch");
         stacks[0] = w["stack"]
             .as_array()
             .context("stack")?
@@ -768,13 +763,17 @@ impl Batcher {
         }
         f.broadcast = true;
         write_atomic(&self.path("inflight.json"), &serde_json::to_vec_pretty(&f)?)?;
-        self.update(n, |r| r.stage = Stage::Broadcast);
+        self.update(n, |r| {
+            r.stage = Stage::Broadcast;
+            r.error = None;
+        });
         let mut misses = 0;
         loop {
-            match self.rpc.confirmations(&f.txid, 0).await? {
-                Some(c) if c >= self.cfg.confirmations => break,
-                Some(_) => misses = 0,
-                None => {
+            match self.rpc.confirmations(&f.txid, 0).await {
+                Err(e) => eprintln!("batch {n}: waiting for confirmations: {e:#}"),
+                Ok(Some(c)) if c >= self.cfg.confirmations => break,
+                Ok(Some(_)) => misses = 0,
+                Ok(None) => {
                     misses += 1;
                     if misses > 3 {
                         self.ensure_current(&f).await?;

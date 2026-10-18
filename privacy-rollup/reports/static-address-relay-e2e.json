@@ -1,0 +1,153 @@
+{
+  "node": "/home/ubuntu/gsr-p3/build/bitcoin-annex/bin",
+  "batch_a": {
+    "batch_number": 1,
+    "stage": "broadcast",
+    "transactions": 0,
+    "txid": "8ef4f4e7567cb8c2034e445ad046dce611409d7f5dafa27f9ee53140c848a4a1",
+    "block_hash": null,
+    "error": null,
+    "prove": {
+      "cycles_total": 8388608,
+      "cycles_user": 7549098,
+      "identity_sha256_padded_seconds": 18.209672787,
+      "lift_join_seconds": 318.354092913,
+      "lineage": "genesis",
+      "resolve_predecessor_seconds": 0.0,
+      "resolve_zk_seconds": 0.0,
+      "seal_words": 55667,
+      "segment_proving_seconds": 1842.433428986,
+      "segments": 8,
+      "transactions": 0,
+      "workers": 1
+    },
+    "weight": 333251,
+    "fees": {
+      "fees": 10000,
+      "miner_fee": 10000,
+      "weight": 333682
+    },
+    "started_unix": 1792355189,
+    "finished_unix": null,
+    "wall_seconds": 2208.1,
+    "node_a": {
+      "vsize": 83313,
+      "weight": 333251,
+      "fee_sats": 10000,
+      "wtxid": "14a2d4412ceae0dba77bd23bbc6359d52aafa76b4b90a725cd0084fd275d7d6d",
+      "bip125_replaceable": null
+    },
+    "relayed_to_node_b": true
+  },
+  "batch_b": {
+    "batch_number": 1,
+    "stage": "broadcast",
+    "transactions": 0,
+    "txid": "7b299d81f7dbc6be3175718e711127add1a1254a77f404f36d73aaf7f7f30af8",
+    "block_hash": null,
+    "error": null,
+    "prove": {
+      "cycles_total": 12582912,
+      "cycles_user": 11508419,
+      "identity_sha256_padded_seconds": 19.490536742,
+      "lift_join_seconds": 500.483954622,
+      "lineage": "genesis",
+      "resolve_predecessor_seconds": 0.0,
+      "resolve_zk_seconds": 0.0,
+      "seal_words": 55667,
+      "segment_proving_seconds": 2746.47200989,
+      "segments": 12,
+      "transactions": 0,
+      "workers": 1
+    },
+    "weight": 334850,
+    "fees": {
+      "fees": 20000,
+      "miner_fee": 20000,
+      "weight": 335364
+    },
+    "started_unix": 1792357403,
+    "finished_unix": null,
+    "wall_seconds": 3299.8,
+    "node_b": {
+      "vsize": 83713,
+      "weight": 334850,
+      "fee_sats": 20000,
+      "wtxid": "684392542f904d85a822169bc5d5ad518591fc32199685feedcd89f57c1f1478",
+      "bip125_replaceable": null
+    },
+    "outputs": 2
+  },
+  "replacement": {
+    "tx2_relayed_to_node_a": true,
+    "tx1_evicted_from_node_a": true,
+    "delta_fee_sats": 10000,
+    "incremental_relay_floor_sats": 8372,
+    "feerate_old_sat_vb": 0.12,
+    "feerate_new_sat_vb": 0.2389,
+    "resend_old_to_node_a": [
+      false,
+      "insufficient fee, rejecting replacement 8ef4f4e7567cb8c2034e445ad046dce611409d7f5dafa27f9ee53140c848a4a1, less fees than conflicting txs; 0.0001 < 0.0002"
+    ]
+  },
+  "escrow_witness_items": [
+    100,
+    65,
+    1
+  ],
+  "consensus": {
+    "honest": [
+      true,
+      ""
+    ],
+    "escrow_annex_missing": [
+      false,
+      "TestBlockValidity failed: block-script-verify-flag-failed (Script failed an OP_EQUALVERIFY operation), input 1 of 7b299d81f7dbc6be3175718e711127add1a1254a77f404f36d73aaf7f7f30af8 (wtxid 007718d187376a"
+    ],
+    "escrow_annex_inflated_20kB": [
+      false,
+      "TestBlockValidity failed: block-script-verify-flag-failed (Script failed an OP_EQUALVERIFY operation), input 1 of 7b299d81f7dbc6be3175718e711127add1a1254a77f404f36d73aaf7f7f30af8 (wtxid f41ed8074585d2"
+    ]
+  },
+  "mined": {
+    "txid": "7b299d81f7dbc6be3175718e711127add1a1254a77f404f36d73aaf7f7f30af8",
+    "confirmations": 1,
+    "weight": 334850,
+    "annex_bytes": 2683,
+    "annex_prefix": "500047535250",
+    "inputs": 3,
+    "outputs": 2
+  },
+  "batch_b_final_resumed": {
+    "batch_number": 1,
+    "stage": "confirmed",
+    "transactions": 0,
+    "txid": "7b299d81f7dbc6be3175718e711127add1a1254a77f404f36d73aaf7f7f30af8",
+    "block_hash": null,
+    "error": "error sending request for url (http://127.0.0.1:19812/): client error (Connect): tcp connect error: Connection refused (os error 111)",
+    "weight": 334850,
+    "fees": {
+      "fees": 20000,
+      "miner_fee": 20000,
+      "weight": 335364
+    },
+    "started_unix": 1792357403,
+    "finished_unix": 1792361298
+  },
+  "scans_via_b": {
+    "a": [
+      {
+        "leaf": 1,
+        "nullifier": "202429901ae3a05e5956bee2ad3f2732f27eaecfa994ed518e3fdb3f19b6df57",
+        "value": 20000
+      }
+    ],
+    "b": [
+      {
+        "leaf": 0,
+        "nullifier": "1f83d2444fa6639a7fdf90859ba17c5aba59ed8b1198f8b8c5dfa64a5d4bcab6",
+        "value": 20000
+      }
+    ]
+  }
+}

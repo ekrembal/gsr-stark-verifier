@@ -3,7 +3,8 @@
 Short explainer: [docs/explainer.md](docs/explainer.md). Whitepaper-style specification: [docs/whitepaper.md](docs/whitepaper.md).
 
 A two-input/two-output private join-split rollup whose state is a single Taproot UTXO. Each settlement
-spends the current rollup UTXO and creates its successor; the only spending condition is a RISC Zero
+spends the current rollup UTXO, pays the same fixed rollup address again and publishes the new state root
+as `OP_RETURN <root>` in output 1; the only spending condition is a RISC Zero
 succinct receipt of the `apply_batch` guest, verified in Script by the [`risc0-succinct`](../risc0-succinct/README.md)
 verifier and bound to the spending transaction with `OP_TX`.
 
@@ -12,8 +13,9 @@ user: joinsplit guest (private witness) -> zero-knowledge receipt (`identity_zk`
   -> operator: ExecutorEnv::add_assumption; apply_batch guest calls env::verify per transaction,
      applies the batch, commits a 196-byte journal
   -> resolve_zk per transaction, then the succinct receipt re-proven under the padded SHA-256 suite
-  -> rollup leaf: PUSH32 <state_root> 1 CSV DROP || fixed verifier suffix
-  -> settlement transaction: input 0 = rollup UTXO (+ deposit funding), output 0 = successor, annex = batch data
+  -> rollup leaf (one fixed address): 1 CSV DROP || fixed verifier suffix
+  -> settlement transaction: input 0 = rollup UTXO (+ deposits), output 0 = same address,
+     output 1 = OP_RETURN <new_root>, annex = batch data
 ```
 
 > Research code, not audited. See [spec/security-model.md](spec/security-model.md) for assumptions and
@@ -35,7 +37,7 @@ user: joinsplit guest (private witness) -> zero-knowledge receipt (`identity_zk`
 | P5: faster settlement proving | BigInt2 Poseidon2 in the guest, static zero hashes, SHA-256-authenticated commitment frontier in the state, batched indexed-nullifier insertion, cached tagged-hash midstates, optional parallel segment / lift / join proving (`PR_PROVE_WORKERS`); 4-deposit settlement 18 -> 5 segments and 2,148 -> 508 s segment + lift/join, rerun of the P4 flow on `gsr` mined at the same 333,485 WU. See [reports/p5-proving.md](reports/p5-proving.md) |
 | P6: adversarial tests, review package | real-receipt tampering, covenant-copy spend, crash-after-broadcast resume and replay on `gsr` (`tools/p6_adversarial.py`, [reports/p6-adversarial.json](reports/p6-adversarial.json)); competing-settler, replay and malformed-annex tests (`tests/tests/adversarial.rs`); external review scope, threat model, coverage and open questions in [review/README.md](review/README.md). No external review has taken place |
 | Empty batches | **Proven** and settled consecutively on activated regtest |
-| Covenant (`OP_TX` binding, successor leaf, `1 CSV`) | Implemented, metered, mined on regtest; altered spends rejected |
+| Covenant (`OP_TX` binding, output 0 = own address, `1 CSV`) | Implemented, metered, mined on regtest; altered spends rejected |
 | Relay | Consensus-valid; **nonstandard** under the pinned node's policy (annex); relays under bitcoin/bitcoin#36466 (open, not merged), see [reports/relay-pinning.md](reports/relay-pinning.md) |
 | No pinning handles | CSV-locked withdrawal leaves, no change/reward/P2A outputs, BIP 68 sequences on funding (1) and escrow (2) inputs; fees all to the miner, bumped by re-proving + RBF ([reports/no-pin-handles.json](reports/no-pin-handles.json)) |
 | Rust SDK, batcher, WASM client | `pr-sdk` (wallet, witnesses, local ZK proving, HTTP client), `pr-batcher` (HTTP admission, aggregation, settlement proving, Bitcoin Core RPC), `pr-sdk-wasm` (WASI build of the client) with a browser benchmark page. SDK -> batcher -> mined settlement measured on regtest; see [reports/sdk-batcher-wasm.md](reports/sdk-batcher-wasm.md) |
@@ -90,7 +92,7 @@ settlement under 400,000 WU (`MAX_SETTLEMENT_WEIGHT`, budgeted from the measured
 | `crates/crypto` | Poseidon2 (BN254) commitments, nullifiers, key derivation |
 | `crates/commitment-tree`, `crates/indexed-nullifier-tree` | depth-32 incremental and indexed trees with insertion/absence witnesses |
 | `crates/state-transition` | `apply_batch`: shared by the native node, the operator and the guest |
-| `crates/bitcoin-adapter` | settlement transaction, `OP_TX` preimages, successor leaf |
+| `crates/bitcoin-adapter` | settlement transaction, `OP_TX` preimages, rollup leaf |
 | `crates/joinsplit` | join-split witness and constraint check, shared by the wallet and the guest |
 | `crates/provekit-adapter` | ProveKit proving/verification (reference path); `joinsplit-batch`, `provekit-export` |
 | `crates/wallet-core`, `crates/scanner`, `crates/mempool`, `operator` | wallet, replay/rollback, admission, `pr-operator` CLI |

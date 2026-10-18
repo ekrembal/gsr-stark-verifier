@@ -2825,6 +2825,7 @@ dependencies = [
  "hex",
  "http-body-util",
  "k256",
+ "postcard",
  "pr-bitcoin-adapter",
  "pr-mempool",
  "pr-operator",

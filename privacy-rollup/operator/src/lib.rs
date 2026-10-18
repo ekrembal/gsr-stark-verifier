@@ -11,7 +11,7 @@ use pr_mempool::{
     assemble_settlement_with_escrows, batch_transactions, escrow_weight, Entry, EscrowCoin, FundingCoin, Mempool,
 };
 use pr_protocol_types::{
-    Canonical, Outpoint, RollupDescriptor, RollupTransaction, EMPTY_SETTLEMENT_WEIGHT, MAX_SETTLEMENT_WEIGHT,
+    Canonical, Outpoint, RollupDescriptor, RollupTransaction, TxOut, EMPTY_SETTLEMENT_WEIGHT, MAX_SETTLEMENT_WEIGHT,
 };
 use pr_scanner::Replica;
 use pr_state_transition::{apply_batch, BatchEffects, BatchWitness};
@@ -23,6 +23,10 @@ pub struct Settled {
     pub annex: String,
     /// The settlement transaction, hex; any serialization is accepted, stored without witnesses.
     pub tx: String,
+    /// The output each input of `tx` spent, in input order: the next settlement rebuilds this
+    /// one's journal from them for its lineage proof.
+    #[serde(default)]
+    pub spent: Vec<TxOut>,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, Default)]
@@ -121,7 +125,7 @@ impl Store {
         let mut replica = Replica::new(self.descriptor()?, genesis).map_err(|e| anyhow::anyhow!("genesis: {e:?}"))?;
         for s in &chain.settlements {
             replica
-                .accept_annex_bytes(&hex::decode(&s.annex)?, &plain_tx(&s.tx)?)
+                .accept_settlement(&hex::decode(&s.annex)?, &plain_tx(&s.tx)?, s.spent.clone())
                 .map_err(|e| anyhow::anyhow!("replaying batch: {e:?}"))?;
         }
         Ok((replica, chain))
@@ -186,9 +190,13 @@ impl Store {
         let (mut replica, mut chain) = self.load()?;
         let tx = plain_tx(&settled.tx)?;
         replica
-            .accept_annex_bytes(&hex::decode(&settled.annex)?, &tx)
+            .accept_settlement(&hex::decode(&settled.annex)?, &tx, settled.spent.clone())
             .map_err(|e| anyhow::anyhow!("annex rejected: {e:?}"))?;
-        chain.settlements.push(Settled { annex: settled.annex, tx: hex::encode(tx.serialize_legacy()) });
+        chain.settlements.push(Settled {
+            annex: settled.annex,
+            tx: hex::encode(tx.serialize_legacy()),
+            spent: settled.spent,
+        });
         self.save(&chain)?;
         self.save_pool(&self.load_pool(&replica)?)?;
         Ok(replica)

@@ -11,8 +11,8 @@ use pr_wallet_core::{decrypt_any, key_tail, withdrawal, SpendInput};
 
 const WITHDRAW_SPK: [u8; 22] = [0x00, 0x14, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20];
 
-/// `(annex, settlement without witnesses)` of every settlement, as published on chain.
-type Published = Vec<(Vec<u8>, PlainTx)>;
+/// `(annex, settlement without witnesses, outputs it spent)` of every settlement, as on chain.
+type Published = Vec<(Vec<u8>, PlainTx, Vec<TxOut>)>;
 
 /// Alice deposits, pays Bob, Bob withdraws; returns the harness, wallets and every published annex.
 fn lifecycle() -> (Harness, Wallet, Wallet, Published) {
@@ -20,7 +20,8 @@ fn lifecycle() -> (Harness, Wallet, Wallet, Published) {
     let (mut alice, mut bob) = (Wallet::new(1), Wallet::new(2));
     let mut published = Vec::new();
     let mut record = |h: &Harness, e: &pr_state_transition::BatchEffects| {
-        published.push((e.annex_bytes.clone(), h.replica.tip().creating_tx.clone()));
+        let tip = h.replica.tip();
+        published.push((e.annex_bytes.clone(), tip.creating_tx.clone(), tip.creating_spent.clone()));
     };
 
     // Batch 1: deposit a whole 50_000 coin (no change output); fee 1_000, all to the miner.
@@ -74,8 +75,8 @@ fn lifecycle() -> (Harness, Wallet, Wallet, Published) {
 fn deposit_transfer_withdraw_and_scanner_replay() {
     let (h, _, _, published) = lifecycle();
     let mut fresh = Replica::new(descriptor(), genesis_tx()).unwrap();
-    for (annex, tx) in &published {
-        fresh.accept_annex_bytes(annex, tx).unwrap();
+    for (annex, tx, spent) in &published {
+        fresh.accept_settlement(annex, tx, spent.clone()).unwrap();
     }
     assert_eq!(fresh.tip(), h.replica.tip());
     assert_eq!(fresh.commitments.root(), h.replica.commitments.root());
@@ -86,9 +87,9 @@ fn deposit_transfer_withdraw_and_scanner_replay() {
 fn scanner_rejects_tampered_or_out_of_order_annexes() {
     let (_, _, _, published) = lifecycle();
     let mut r = Replica::new(descriptor(), genesis_tx()).unwrap();
-    let (a2, t2) = &published[1];
+    let (a2, t2, _) = &published[1];
     assert_eq!(r.accept_annex_bytes(a2, t2), Err(ScanError::WrongBatchNumber));
-    let (a1, t1) = &published[0];
+    let (a1, t1, _) = &published[0];
     let mut inflated = t1.clone();
     inflated.outputs[0].value += 1;
     assert_eq!(r.accept_annex_bytes(a1, &inflated), Err(ScanError::NewRootMismatch));
@@ -114,8 +115,8 @@ fn rollback_restores_state_and_allows_reapplication() {
     let before = h.replica.tip().clone();
     h.replica.rollback().unwrap();
     assert_eq!(h.replica.state().batch_number, 3);
-    let (a, t) = &published[3];
-    h.replica.accept_annex_bytes(a, t).unwrap();
+    let (a, t, spent) = &published[3];
+    h.replica.accept_settlement(a, t, spent.clone()).unwrap();
     assert_eq!(h.replica.tip(), &before);
     for _ in 0..4 {
         h.replica.rollback().unwrap();

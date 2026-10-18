@@ -1,0 +1,140 @@
+{
+  "node": "/home/ubuntu/gsr-p3/build/bitcoin-annex/bin",
+  "resumed": true,
+  "batch_1": {
+    "batch_number": 1,
+    "stage": "confirmed",
+    "transactions": 0,
+    "txid": "6db90a9a6156d6de9d71c136a58311a1fdde8f3cef027b5e7b059444b569d965",
+    "block_hash": null,
+    "error": null,
+    "prove": {
+      "cycles_total": 14680064,
+      "cycles_user": 13799746,
+      "identity_sha256_padded_seconds": 18.66890028,
+      "lift_join_seconds": 624.583710891,
+      "lineage": "genesis",
+      "resolve_predecessor_seconds": 0.0,
+      "resolve_zk_seconds": 0.0,
+      "seal_words": 55667,
+      "segment_proving_seconds": 3255.447865545,
+      "segments": 14,
+      "transactions": 0,
+      "workers": 1
+    },
+    "weight": 333803,
+    "fees": {
+      "fees": 10000,
+      "miner_fee": 10000,
+      "weight": 334181
+    },
+    "started_unix": 1792340584,
+    "finished_unix": 1792344613,
+    "confirmations": 8,
+    "inputs": 2,
+    "outputs": 1,
+    "stats": {
+      "transactions": 0,
+      "lineage": "genesis",
+      "resolve_predecessor_seconds": 0.0,
+      "cycles_total": 14680064,
+      "cycles_user": 13799746,
+      "segments": 14,
+      "segment_proving_seconds": 3255.447865545,
+      "lift_join_seconds": 624.583710891,
+      "resolve_zk_seconds": 0.0,
+      "identity_sha256_padded_seconds": 18.66890028,
+      "seal_words": 55667,
+      "workers": 1
+    }
+  },
+  "batch_2": {
+    "batch_number": 2,
+    "stage": "confirmed",
+    "transactions": 0,
+    "txid": "3e24c2e2407c9f041053e0f0c547d66a7e8670ea5c81d906a379d1690ced7e14",
+    "block_hash": null,
+    "error": null,
+    "prove": {
+      "cycles_total": 7864320,
+      "cycles_user": 7332418,
+      "identity_sha256_padded_seconds": 19.956371589,
+      "lift_join_seconds": 361.499131778,
+      "lineage": "receipt",
+      "resolve_predecessor_seconds": 22.419277399,
+      "resolve_zk_seconds": 0.0,
+      "seal_words": 55667,
+      "segment_proving_seconds": 1850.48303742,
+      "segments": 8,
+      "transactions": 0,
+      "workers": 1
+    },
+    "weight": 333803,
+    "fees": {
+      "fees": 10000,
+      "miner_fee": 10000,
+      "weight": 334181
+    },
+    "started_unix": 1792344615,
+    "finished_unix": 1792347006,
+    "confirmations": 3,
+    "inputs": 2,
+    "outputs": 1,
+    "stats": {
+      "transactions": 0,
+      "lineage": "receipt",
+      "resolve_predecessor_seconds": 22.419277399,
+      "cycles_total": 7864320,
+      "cycles_user": 7332418,
+      "segments": 8,
+      "segment_proving_seconds": 1850.48303742,
+      "lift_join_seconds": 361.499131778,
+      "resolve_zk_seconds": 0.0,
+      "identity_sha256_padded_seconds": 19.956371589,
+      "seal_words": 55667,
+      "workers": 1
+    }
+  },
+  "scans": {
+    "a": [
+      {
+        "leaf": 0,
+        "nullifier": "0f7768db72333d1aa1d561a78861ab5195eb495a3ef33d07363d2f3bdda447f9",
+        "value": 20000
+      }
+    ],
+    "b": [
+      {
+        "leaf": 1,
+        "nullifier": "210f0694873c260221258a1b6e107efdf9d61ee65cd4c3d317c4c7f649f7c43a",
+        "value": 20000
+      }
+    ]
+  },
+  "exec": {
+    "seal_mode": {
+      "ok": true,
+      "cycles": 30194917,
+      "segments": 32,
+      "seconds": 1.0,
+      "same_journal": true
+    },
+    "receipt_mode": {
+      "ok": true,
+      "cycles": 7332418,
+      "segments": 8
+    },
+    "no_predecessor": [
+      false,
+      "Error: the old state is not genesis; a predecessor proof is required"
+    ],
+    "wrong_predecessor_seal": [
+      false,
+      "Error: predecessor receipt is for another journal"
+    ],
+    "fabricated_parent": [
+      false,
+      "Error: native transition: Lineage"
+    ]
+  }
+}

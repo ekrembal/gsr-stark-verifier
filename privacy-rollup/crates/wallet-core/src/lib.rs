@@ -4,7 +4,9 @@ pub mod joinsplit;
 pub mod keys;
 
 pub use encryption::{decrypt_any, decrypt_note, encrypt_note, encrypt_self, NotePlaintext};
-pub use joinsplit::{BuiltJoinSplit, JoinSplitBuilder, JoinSplitWitness, OutputSpec, ProverToml, SpendInput};
+pub use joinsplit::{
+    key_tail, withdrawal, BuiltJoinSplit, JoinSplitBuilder, JoinSplitWitness, OutputSpec, ProverToml, SpendInput,
+};
 pub use keys::{Address, Keys};
 
 use pr_protocol_types::Fe;

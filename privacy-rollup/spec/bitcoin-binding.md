@@ -39,8 +39,14 @@ bytes, ~2.1B of the ~3.9B varops budget.
 ## Consensus versus policy
 
 The spend is consensus-valid on the pinned GSR node with `script_restoration` active. The node's standard
-policy rejects any input carrying an annex, so settlements are not relayed by default nodes; the demo
-mines them with `generateblock` (consensus checks only) and records the `testmempoolaccept` verdict.
-Deploying this design needs either an annex-aware relay policy or direct submission to miners. Empty
+policy rejects any input carrying an annex, so on an unpatched node settlements are not relayed; the demo
+mines them with `generateblock` (consensus checks only) or submits them directly to a miner.
+
+With the open annex-relay proposal bitcoin/bitcoin#36466 applied, settlements are standard if every
+annex is unstructured (`0x50 0x00 ...`, or the one-byte marker `0x50`) and every non-P2A input carries
+one. The input-0 annex therefore starts `50 00`, and escrow sweeps carry the marker `50`, which the
+sweep leaf checks with `OP_TX` (`00 00 02 00 00 00`, the current input's annex) so no relayer can inflate
+it. Funding inputs that are not taproot (P2WPKH, P2WSH) cannot carry an annex, so a settlement spending
+one is nonstandard even under #36466. Measurements: `reports/relay-pinning.md`. Empty
 batches also pay no miner fee (there are no user fees to pay it from), so they need a miner who includes
 them for free or out-of-band payment.

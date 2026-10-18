@@ -19,7 +19,7 @@ use std::path::Path;
 use anyhow::{bail, ensure, Result};
 use pr_mempool::FundingCoin;
 use pr_operator::{parse_transaction_json, Settled, Store, MAX_TX_JSON_BYTES};
-use pr_protocol_types::{Canonical, RollupDescriptor, TxOut};
+use pr_protocol_types::{Canonical, RollupDescriptor};
 use serde::Deserialize;
 
 /// Next-batch request; the batch is the pool's fee-ordered selection. `successor_script_pubkey` is
@@ -28,7 +28,6 @@ use serde::Deserialize;
 #[derive(Deserialize)]
 struct Request {
     rollup_script_pubkey: String,
-    reward: Option<(u64, String)>,
     successor_script_pubkey: Option<String>,
 }
 
@@ -45,15 +44,11 @@ fn submit(store: &Store, tx: &Path, funding: Option<&String>) -> Result<usize> {
 
 fn build(store: &Store, request: &Path, out: &Path) -> Result<()> {
     let req: Request = serde_json::from_slice(&fs::read(request)?)?;
-    let reward = match &req.reward {
-        Some((value, spk)) => Some(TxOut { value: *value, script_pubkey: hex::decode(spk)? }),
-        None => None,
-    };
     let successor = match &req.successor_script_pubkey {
         Some(s) => hex::decode(s)?,
         None => Vec::new(),
     };
-    let b = store.build(hex::decode(&req.rollup_script_pubkey)?, successor, reward)?;
+    let b = store.build(hex::decode(&req.rollup_script_pubkey)?, successor)?;
     fs::create_dir_all(out)?;
     let mut frames = Vec::new();
     for (i, e) in b.entries.iter().enumerate() {

@@ -34,7 +34,7 @@ pub use pr_prover::user::{
 pub use pr_prover::JOINSPLIT_ID;
 pub use pr_state_transition;
 pub use pr_wallet_core::{
-    scan_outputs, Address, BuiltJoinSplit, Keys, NotePlaintext, OutputSpec, OwnedNote, SpendInput,
+    key_tail, scan_outputs, withdrawal, Address, BuiltJoinSplit, Keys, NotePlaintext, OutputSpec, OwnedNote, SpendInput,
 };
 
 use api::{EscrowTerms, FundingInput, MerklePath, Notes, Status, Submission};
@@ -73,7 +73,12 @@ pub fn decode_transaction(s: &str) -> Result<RollupTransaction> {
 /// The transaction sent to the batcher: the witness's public statement, the external data and
 /// the user's receipt.
 pub fn transaction(built: &BuiltJoinSplit, receipt: Vec<u8>) -> RollupTransaction {
-    RollupTransaction { public: built.witness.public, external: built.external.clone(), receipt }
+    RollupTransaction {
+        public: built.witness.public,
+        external: built.external.clone(),
+        receipt,
+        withdrawal_leaves: built.withdrawal_leaves.clone(),
+    }
 }
 
 pub fn submission(tx: &RollupTransaction, funding: Vec<FundingInput>) -> Submission {
@@ -81,7 +86,8 @@ pub fn submission(tx: &RollupTransaction, funding: Vec<FundingInput>) -> Submiss
 }
 
 /// Proves a join-split on this device and returns the transaction to submit with its stage
-/// timings. `external` is the `BuiltJoinSplit::external` the witness was built with.
+/// timings. `external` is the `BuiltJoinSplit::external` the witness was built with; set the
+/// returned transaction's `withdrawal_leaves` from `BuiltJoinSplit::withdrawal_leaves`.
 #[cfg(feature = "prove")]
 pub fn prove(
     witness: &JoinSplitWitness,
@@ -89,7 +95,15 @@ pub fn prove(
     segment_po2: Option<u32>,
 ) -> Result<(RollupTransaction, UserProofStats)> {
     let (receipt, stats) = prove_joinsplit(witness, segment_po2)?;
-    Ok((RollupTransaction { public: witness.public, external: external.clone(), receipt }, stats))
+    Ok((
+        RollupTransaction {
+            public: witness.public,
+            external: external.clone(),
+            receipt,
+            withdrawal_leaves: Vec::new(),
+        },
+        stats,
+    ))
 }
 
 /// Checks a transaction's receipt as the batcher does before admitting it.
@@ -134,6 +148,7 @@ impl Wallet {
             expiry_batch_number: status.batch_number + expiry_batches,
             deposit: None,
             withdrawals: Vec::new(),
+            withdrawal_leaves: Vec::new(),
             fee_sats,
         })
     }
@@ -217,7 +232,7 @@ impl Wallet {
         status: &Status,
         spends: &[(OwnedNote, MerklePath)],
         payments: Vec<OutputSpec>,
-        withdrawals: Vec<TxOut>,
+        withdrawals: Vec<(TxOut, Vec<u8>)>,
         fee_sats: u64,
         expiry_batches: u64,
     ) -> Result<BuiltJoinSplit> {
@@ -244,7 +259,10 @@ impl Wallet {
         let paid = payments.iter().try_fold(0u64, |s, o| s.checked_add(o.value)).context("outputs overflow")?;
         let out = paid
             .checked_add(
-                withdrawals.iter().try_fold(0u64, |a, o| a.checked_add(o.value)).context("withdrawals overflow")?,
+                withdrawals
+                    .iter()
+                    .try_fold(0u64, |a, (o, _)| a.checked_add(o.value))
+                    .context("withdrawals overflow")?,
             )
             .and_then(|v| v.checked_add(fee_sats))
             .context("outputs overflow")?;
@@ -258,7 +276,7 @@ impl Wallet {
             outputs.push(self.change(0));
         }
         let mut b = Self::builder(status, expiry_batches, fee_sats)?;
-        b.withdrawals = withdrawals;
+        b.set_withdrawals(withdrawals);
         let outputs: [OutputSpec; 2] = outputs.try_into().map_err(|_| anyhow::anyhow!("two outputs"))?;
         let built = b.build(rng, inputs, outputs).map_err(|e| anyhow::anyhow!("join-split: {e}"))?;
         built.witness.check().map_err(|e| anyhow::anyhow!("witness: {e}"))?;

@@ -2,11 +2,12 @@
 use pr_bitcoin_adapter::PlainTx;
 use pr_indexed_nullifier_tree::NullifierError;
 use pr_mempool::{EscrowCoin, MempoolError};
+use pr_protocol_types::MAX_WITHDRAWAL_LEAF_LEN;
 use pr_protocol_types::{Annex, Canonical, Outpoint, TxOut};
 use pr_scanner::{Replica, ScanError};
 use pr_state_transition::{apply_batch, BatchWitness, TransitionError};
 use pr_tests::{coin, descriptor, escrow_coin, genesis_tx, Harness, Wallet};
-use pr_wallet_core::{decrypt_any, SpendInput};
+use pr_wallet_core::{decrypt_any, key_tail, withdrawal, SpendInput};
 
 const WITHDRAW_SPK: [u8; 22] = [0x00, 0x14, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20];
 
@@ -22,13 +23,12 @@ fn lifecycle() -> (Harness, Wallet, Wallet, Published) {
         published.push((e.annex_bytes.clone(), h.replica.tip().creating_tx.clone()));
     };
 
-    // Batch 1: deposit 50_000 from a 60_000 coin with 10_000 change; fee 1_000 of which 600 is the prover reward.
-    let funding = vec![coin(0x31, 60_000)];
-    let change = TxOut { value: 10_000, script_pubkey: vec![0x51, 0x20, 0x31] };
-    let b = h.deposit_builder(1_000, &funding, 50_000, Some(change));
+    // Batch 1: deposit a whole 50_000 coin (no change output); fee 1_000, all to the miner.
+    let funding = vec![coin(0x31, 50_000)];
+    let b = h.deposit_builder(1_000, &funding, 50_000, None);
     let js = h.build(&b, [SpendInput::Dummy, SpendInput::Dummy], [alice.pay(49_000), alice.pay(0)]);
     h.submit(&js, funding).unwrap();
-    let e = h.settle(Some(TxOut { value: 600, script_pubkey: vec![0x51, 0x20, 0x99] })).unwrap();
+    let e = h.settle().unwrap();
     record(&h, &e);
     alice.scan(&h.replica, &e);
     bob.scan(&h.replica, &e);
@@ -40,7 +40,7 @@ fn lifecycle() -> (Harness, Wallet, Wallet, Published) {
     let note = alice.notes[0].clone();
     let js = h.build(&b, [alice.spend(&h.replica, &note), SpendInput::Dummy], [bob.pay(30_000), alice.pay(18_500)]);
     h.submit(&js, vec![]).unwrap();
-    let e = h.settle(None).unwrap();
+    let e = h.settle().unwrap();
     record(&h, &e);
     alice.scan(&h.replica, &e);
     bob.scan(&h.replica, &e);
@@ -48,19 +48,20 @@ fn lifecycle() -> (Harness, Wallet, Wallet, Published) {
     assert_eq!(e.new_state.backing_sats, 58_500);
 
     // Batch 3: empty (anchor-only) settlement.
-    let e = h.settle(None).unwrap();
+    let e = h.settle().unwrap();
     record(&h, &e);
 
     // Batch 4: Bob withdraws 29_000 with fee 1_000 (anchor from batch 2, still in the window).
     let mut b = h.builder(1_000);
-    b.withdrawals = vec![TxOut { value: 29_000, script_pubkey: WITHDRAW_SPK.to_vec() }];
+    let (out, leaf) = withdrawal(29_000, &key_tail(&[9; 32])).unwrap();
+    b.set_withdrawals(vec![(out.clone(), leaf)]);
     let note = bob.notes[0].clone();
     let js = h.build(&b, [bob.spend(&h.replica, &note), SpendInput::Dummy], [bob.pay(0), bob.pay(0)]);
     h.submit(&js, vec![]).unwrap();
     let w_settle = h.mempool.select();
-    let s = h.settlement(&w_settle, None);
-    assert_eq!(s.outputs[1], TxOut { value: 29_000, script_pubkey: WITHDRAW_SPK.to_vec() });
-    let e = h.settle(None).unwrap();
+    let s = h.settlement(&w_settle);
+    assert_eq!((s.outputs.len(), &s.outputs[1]), (2, &out));
+    let e = h.settle().unwrap();
     record(&h, &e);
     bob.scan(&h.replica, &e);
     assert_eq!((alice.balance(&h.replica), bob.balance(&h.replica)), (18_500, 0));
@@ -148,13 +149,21 @@ fn double_spend_is_rejected_by_mempool_and_transition() {
     // Bypassing the mempool: both in one batch is a duplicate nullifier in the transition.
     let w = h.replica.witness(
         vec![
-            pr_state_transition::BatchTransaction { public: js1.witness.public, external: js1.external.clone() },
-            pr_state_transition::BatchTransaction { public: js2.witness.public, external: js2.external.clone() },
+            pr_state_transition::BatchTransaction {
+                public: js1.witness.public,
+                external: js1.external.clone(),
+                withdrawal_leaves: vec![],
+            },
+            pr_state_transition::BatchTransaction {
+                public: js2.witness.public,
+                external: js2.external.clone(),
+                withdrawal_leaves: vec![],
+            },
         ],
-        h.settlement(&[], None),
+        h.settlement(&[]),
     );
     assert_eq!(apply_batch(&w).err(), Some(TransitionError::DuplicateNullifier));
-    let _ = h.settle(None).unwrap();
+    let _ = h.settle().unwrap();
     alice.notes.clear();
 }
 
@@ -173,11 +182,12 @@ fn deposit_witness(
             public: js.witness.public,
             external: js.external.clone(),
             receipt: vec![],
+            withdrawal_leaves: vec![],
         },
         funding,
         arrival: 1,
     };
-    let s = h.settlement(std::slice::from_ref(&entry), None);
+    let s = h.settlement(std::slice::from_ref(&entry));
     (h.replica.witness(pr_mempool::batch_transactions(&[entry]), s), js)
 }
 
@@ -217,11 +227,11 @@ fn transition_rejects_every_settlement_tamper() {
     );
     expect(&|w| w.settlement.inputs[1].amount -= 1, TransitionError::FundingAmount);
     expect(&|w| w.settlement.outputs[0].value -= 1, TransitionError::RolloverOutput);
+    // Any output beyond the successor and the declared withdrawals (a reward, change or anchor) is rejected.
     expect(
         &|w| w.settlement.outputs.push(TxOut { value: 701, script_pubkey: vec![0x6a] }),
-        TransitionError::FeeShortfall,
+        TransitionError::OutputCount,
     );
-    expect(&|w| w.settlement.outputs.push(TxOut { value: 1, script_pubkey: vec![0x6a] }), TransitionError::Dust);
     expect(
         &|w| {
             w.settlement.outputs.push(TxOut { value: 400, script_pubkey: vec![] });
@@ -288,7 +298,7 @@ fn journal_binds_digests_of_the_transaction() {
     assert_eq!(e.journal.annex_digest, pr_protocol_types::hash::sha256(&e.annex_bytes));
     assert_eq!(e.journal.old_state_root, w.old_state.root());
     assert_eq!(e.journal.new_state_root, e.new_state.root());
-    // A different change script, reward, or funding coin changes the bound digests.
+    // A different funding coin changes the bound digests.
     let mut w2 = w.clone();
     w2.settlement.inputs[1].script_pubkey.push(0);
     assert_ne!(apply_batch(&w2).unwrap().journal.transaction_inputs_digest, e.journal.transaction_inputs_digest);
@@ -306,6 +316,7 @@ fn mempool_admission_rules() {
         public: js.witness.public,
         external: js.external.clone(),
         receipt: vec![],
+        withdrawal_leaves: vec![],
     };
     assert_eq!(h.mempool.submit(tx, funding.clone(), &h.replica, |_| false), Err(MempoolError::Proof));
     h.submit(&js, funding.clone()).unwrap();
@@ -326,7 +337,7 @@ fn mempool_admission_rules() {
     h.submit(&c, vec![]).unwrap();
     assert_eq!(h.mempool.entries.len(), 3);
     h.mempool.entries.retain(|e| e.tx.public.deposit_sats > 0);
-    let e = h.settle(None).unwrap();
+    let e = h.settle().unwrap();
     assert_eq!(e.new_state.backing_sats, 15_000);
     assert!(h.mempool.entries.is_empty());
 }
@@ -340,30 +351,62 @@ fn anchors_never_leave_the_history() {
     b.expiry_batch_number = 100;
     let js = h.build(&b, [SpendInput::Dummy, SpendInput::Dummy], [alice.pay(0), alice.pay(0)]);
     for _ in 0..99 {
-        h.settle(None).unwrap();
+        h.settle().unwrap();
     }
     h.submit(&js, vec![]).unwrap();
     h.mempool.entries.clear();
-    h.settle(None).unwrap();
+    h.settle().unwrap();
     assert_eq!(h.submit(&js, vec![]), Err(MempoolError::Rule(TransitionError::Expired)));
 }
 
+/// Nothing in a settlement is spendable before it confirms: no reward, change or anchor output, and every
+/// withdrawal is `P2TR(NUMS, {OP_1 OP_CSV OP_DROP || tail})`.
 #[test]
-fn reward_cannot_exceed_fees() {
+fn settlement_has_no_unconfirmed_spend_path() {
     let mut h = Harness::new();
     let alice = Wallet::new(1);
-    let b = h.builder(500);
     let funding = vec![coin(0x61, 1_000)];
     let bd = h.deposit_builder(500, &funding, 1_000, None);
     let js = h.build(&bd, [SpendInput::Dummy, SpendInput::Dummy], [alice.pay(500), alice.pay(0)]);
-    let _ = b;
-    h.submit(&js, funding).unwrap();
+    h.submit(&js, funding.clone()).unwrap();
     let sel = h.mempool.select();
-    let s = h.settlement(&sel, Some(TxOut { value: 501, script_pubkey: vec![0x51] }));
+    let mut s = h.settlement(&sel);
+    assert_eq!(s.outputs.len(), 1);
+    s.outputs.push(TxOut { value: 400, script_pubkey: [&[0x51, 0x20][..], &[7; 32]].concat() });
     let w = h.replica.witness(pr_mempool::batch_transactions(&sel), s);
-    assert_eq!(apply_batch(&w).err(), Some(TransitionError::FeeShortfall));
-    let e = h.settle(Some(TxOut { value: 500, script_pubkey: vec![0x51] })).unwrap();
+    assert_eq!(apply_batch(&w).err(), Some(TransitionError::OutputCount), "reward / anchor output");
+    let p2a = TxOut { value: 400, script_pubkey: vec![0x51, 0x02, 0x4e, 0x73] };
+    let mut s = h.settlement(&sel);
+    s.outputs.push(p2a);
+    let w = h.replica.witness(pr_mempool::batch_transactions(&sel), s);
+    assert_eq!(apply_batch(&w).err(), Some(TransitionError::OutputCount), "P2A output");
+    let e = h.settle().unwrap();
     assert_eq!(e.new_state.backing_sats, 10_500);
+
+    let change = TxOut { value: 400, script_pubkey: [&[0x51, 0x20][..], &[8; 32]].concat() };
+    let funding = vec![coin(0x62, 1_400)];
+    let bc = h.deposit_builder(0, &funding, 1_000, Some(change));
+    let js = h.build(&bc, [SpendInput::Dummy, SpendInput::Dummy], [alice.pay(1_000), alice.pay(0)]);
+    assert_eq!(h.submit(&js, funding), Err(MempoolError::Rule(TransitionError::ChangeOutput)));
+
+    let mut alice = alice;
+    alice.scan(&h.replica, &e);
+    let note = alice.notes[0].clone();
+    let (locked, leaf) = withdrawal(400, &key_tail(&[9; 32])).unwrap();
+    let cases = [
+        (vec![TxOut { value: 400, script_pubkey: WITHDRAW_SPK.to_vec() }], vec![], "plain script, no leaf"),
+        (vec![TxOut { value: 400, script_pubkey: WITHDRAW_SPK.to_vec() }], vec![leaf.clone()], "plain script"),
+        (vec![locked.clone()], vec![key_tail(&[9; 32])], "leaf without the CSV prefix"),
+        (vec![locked.clone()], vec![[&leaf[..], &[0x75]].concat()], "another leaf"),
+    ];
+    for (outs, leaves, what) in cases {
+        let mut b = h.builder(100);
+        b.withdrawals = outs;
+        b.withdrawal_leaves = leaves;
+        let js = h.build(&b, [alice.spend(&h.replica, &note), SpendInput::Dummy], [alice.pay(0), alice.pay(0)]);
+        assert_eq!(h.submit(&js, vec![]), Err(MempoolError::Rule(TransitionError::WithdrawalLock)), "{what}");
+    }
+    assert!(withdrawal(400, &[0; MAX_WITHDRAWAL_LEAF_LEN]).is_none(), "oversized leaf");
 }
 
 /// `n` wallets each deposit `amount` (fee 0) in one batch; returns the wallets after scanning it.
@@ -376,7 +419,7 @@ fn funded_wallets(h: &mut Harness, n: u8, amount: u64) -> Vec<Wallet> {
         h.submit(&js, funding).unwrap();
     }
     while !h.mempool.entries.is_empty() {
-        let e = h.settle(None).unwrap();
+        let e = h.settle().unwrap();
         for w in wallets.iter_mut() {
             w.scan(&h.replica, &e);
         }
@@ -388,23 +431,23 @@ fn funded_wallets(h: &mut Harness, n: u8, amount: u64) -> Vec<Wallet> {
 fn batch_withdrawals_pay_each_declared_script_in_order() {
     let mut h = Harness::new();
     let wallets = funded_wallets(&mut h, 3, 10_000);
-    let scripts: Vec<Vec<u8>> = (0..3u8).map(|k| [&[0x00, 0x14][..], &[0x40 + k; 20]].concat()).collect();
+    let locked: Vec<(TxOut, Vec<u8>)> =
+        (0..3u8).map(|k| withdrawal(4_000 + k as u64 * 1_000, &key_tail(&[0x40 + k; 32])).unwrap()).collect();
     for (k, w) in wallets.iter().enumerate() {
         let mut b = h.builder(300);
-        b.withdrawals = vec![TxOut { value: 4_000 + k as u64 * 1_000, script_pubkey: scripts[k].clone() }];
+        b.set_withdrawals(vec![locked[k].clone()]);
         let note = w.notes[0].clone();
         let change = 10_000 - 300 - (4_000 + k as u64 * 1_000);
         let js = h.build(&b, [w.spend(&h.replica, &note), SpendInput::Dummy], [w.pay(change), w.pay(0)]);
         h.submit(&js, vec![]).unwrap();
     }
     let selected = h.mempool.select();
-    let s = h.settlement(&selected, None);
+    let s = h.settlement(&selected);
     let mut paid: Vec<TxOut> = s.outputs[1..].to_vec();
     paid.sort_by_key(|o| o.value);
-    let expected: Vec<TxOut> =
-        (0..3).map(|k| TxOut { value: 4_000 + k as u64 * 1_000, script_pubkey: scripts[k].clone() }).collect();
+    let expected: Vec<TxOut> = locked.iter().map(|(o, _)| o.clone()).collect();
     assert_eq!(paid, expected);
-    let e = h.settle(None).unwrap();
+    let e = h.settle().unwrap();
     assert_eq!(e.new_state.backing_sats, 10_000 + 30_000 - 15_000 - 900);
 }
 
@@ -415,7 +458,7 @@ fn withdrawal_dust_and_redirection_are_rejected() {
     let w = &wallets[0];
     let note = w.notes[0].clone();
     let mut b = h.builder(0);
-    b.withdrawals = vec![TxOut { value: pr_protocol_types::DUST_LIMIT - 1, script_pubkey: WITHDRAW_SPK.to_vec() }];
+    b.set_withdrawals(vec![withdrawal(pr_protocol_types::DUST_LIMIT - 1, &key_tail(&[9; 32])).unwrap()]);
     let dust = b.build(
         &mut rand_core::OsRng,
         [w.spend(&h.replica, &note), SpendInput::Dummy],
@@ -425,19 +468,19 @@ fn withdrawal_dust_and_redirection_are_rejected() {
         assert_eq!(h.submit(&js, vec![]), Err(MempoolError::Rule(TransitionError::Dust)));
     }
 
-    b.withdrawals = vec![TxOut { value: 2_000, script_pubkey: WITHDRAW_SPK.to_vec() }];
+    b.set_withdrawals(vec![withdrawal(2_000, &key_tail(&[9; 32])).unwrap()]);
     let js = h.build(&b, [w.spend(&h.replica, &note), SpendInput::Dummy], [w.pay(8_000), w.pay(0)]);
     h.submit(&js, vec![]).unwrap();
     let selected = h.mempool.select();
-    let mut s = h.settlement(&selected, None);
+    let mut s = h.settlement(&selected);
     s.outputs[1].script_pubkey = vec![0x51, 0x20, 0xee];
     let wit = h.replica.witness(pr_mempool::batch_transactions(&selected), s.clone());
     assert!(apply_batch(&wit).is_err());
-    s = h.settlement(&selected, None);
+    s = h.settlement(&selected);
     s.outputs[1].value -= 1;
     let wit = h.replica.witness(pr_mempool::batch_transactions(&selected), s);
     assert!(apply_batch(&wit).is_err());
-    h.settle(None).unwrap();
+    h.settle().unwrap();
 }
 
 #[test]
@@ -447,17 +490,17 @@ fn batches_are_capped_at_max_batch_transactions() {
     let wallets = funded_wallets(&mut h, n, 1_000);
     for w in &wallets {
         let mut b = h.builder(0);
-        b.withdrawals = vec![TxOut { value: 1_000, script_pubkey: WITHDRAW_SPK.to_vec() }];
+        b.set_withdrawals(vec![withdrawal(1_000, &key_tail(&[9; 32])).unwrap()]);
         let note = w.notes[0].clone();
         let js = h.build(&b, [w.spend(&h.replica, &note), SpendInput::Dummy], [w.pay(0), w.pay(0)]);
         h.submit(&js, vec![]).unwrap();
     }
     let selected = h.mempool.select();
     assert_eq!(selected.len(), pr_protocol_types::MAX_BATCH_TRANSACTIONS);
-    let e = h.settle(None).unwrap();
+    let e = h.settle().unwrap();
     assert_eq!(e.annex.body.nullifiers.len(), 2 * pr_protocol_types::MAX_BATCH_TRANSACTIONS);
     assert_eq!(h.mempool.entries.len(), 1);
-    h.settle(None).unwrap();
+    h.settle().unwrap();
     assert!(h.mempool.entries.is_empty());
 }
 
@@ -471,10 +514,10 @@ fn old_anchor_still_spends_after_many_batches() {
     b.expiry_batch_number = 1_000;
     let stale = h.build(&b, [w.spend(&h.replica, &note), SpendInput::Dummy], [w.pay(5_000), w.pay(0)]);
     for _ in 0..70 {
-        h.settle(None).unwrap();
+        h.settle().unwrap();
     }
     h.submit(&stale, vec![]).unwrap();
-    let e = h.settle(None).unwrap();
+    let e = h.settle().unwrap();
     assert_eq!(e.new_state.anchor_history_commitment, h.replica.tip().anchors.commitment());
     assert_eq!(h.replica.tip().anchors.0.len(), h.replica.state().batch_number as usize + 1);
     assert!(h.replica.spent(&note.nullifier));
@@ -518,7 +561,7 @@ fn lineage_rejects_covenant_copies_and_forged_predecessors() {
     let b = h.deposit_builder(700, &funding, 20_000, None);
     let js = h.build(&b, [SpendInput::Dummy, SpendInput::Dummy], [alice.pay(19_300), alice.pay(0)]);
     h.submit(&js, funding).unwrap();
-    let e = h.settle(None).unwrap();
+    let e = h.settle().unwrap();
     alice.scan(&h.replica, &e);
     let genuine = h.replica.tip().clone();
     assert_eq!(genuine.state.parent, Outpoint { txid: genesis_tx().txid(), vout: 0 });
@@ -527,7 +570,7 @@ fn lineage_rejects_covenant_copies_and_forged_predecessors() {
     stale.predecessor_tx = copy_tx;
     expect(&stale);
     // The next genuine settlement passes with the settlement that created the tip as predecessor.
-    let next = h.replica.witness(vec![], h.settlement(&[], None));
+    let next = h.replica.witness(vec![], h.settlement(&[]));
     assert_eq!(next.predecessor_tx, genuine.creating_tx);
     assert_eq!(apply_batch(&next).unwrap().new_state.parent, genuine.utxo);
 }
@@ -540,7 +583,7 @@ fn escrow_deposits_mint_notes_without_a_join_split() {
     let mut b = Wallet::new(42);
     let escrows = [escrow_coin(0x61, &rid, &a, 30_000, 700), escrow_coin(0x62, &rid, &b, 20_000, 300)];
     let backing = h.replica.state().backing_sats;
-    let e = h.settle_with_escrows(&escrows, None).unwrap();
+    let e = h.settle_with_escrows(&escrows).unwrap();
     a.scan(&h.replica, &e);
     b.scan(&h.replica, &e);
     assert_eq!(a.balance(&h.replica), 30_000);
@@ -557,7 +600,7 @@ fn escrow_deposits_mint_notes_without_a_join_split() {
     let note = a.notes[0].clone();
     let built = h.build(&h.builder(1_000), [a.spend(&h.replica, &note), SpendInput::Dummy], [b.pay(29_000), b.pay(0)]);
     h.submit(&built, vec![]).unwrap();
-    let e = h.settle(None).unwrap();
+    let e = h.settle().unwrap();
     b.scan(&h.replica, &e);
     assert_eq!(b.balance(&h.replica), 49_000);
 }
@@ -569,7 +612,7 @@ fn escrow_openings_that_do_not_match_the_output_are_rejected() {
     let base = escrow_coin(0x63, &rid, &a, 30_000, 700);
     let reject = |c: EscrowCoin| {
         let mut h = Harness::new();
-        h.settle_with_escrows(&[c], None).unwrap_err()
+        h.settle_with_escrows(&[c]).unwrap_err()
     };
     let mut c = base.clone();
     c.amount += 1;
@@ -594,10 +637,10 @@ fn escrow_openings_that_do_not_match_the_output_are_rejected() {
     // Dust notes are rejected.
     reject(escrow_coin(0x65, &rid, &a, 10, 700));
     let mut h = Harness::new();
-    h.settle_with_escrows(std::slice::from_ref(&base), None).unwrap();
+    h.settle_with_escrows(std::slice::from_ref(&base)).unwrap();
     // Without the escrow marker the input could be a funding coin; the transition requires the marker.
     let mut h = Harness::new();
-    h.settle_with_escrows(&[base], None).unwrap();
+    h.settle_with_escrows(&[base]).unwrap();
     let mut w = h.last_witness.clone().unwrap();
     let last = w.settlement.inputs.len() - 1;
     w.settlement.inputs[last].sequence = pr_protocol_types::FUNDING_INPUT_SEQUENCE;
@@ -613,7 +656,7 @@ fn self_change_ciphertexts_are_compact_and_only_the_sender_recovers_them() {
     let b = h.deposit_builder(0, &funding, 9_000, None);
     let js = h.build(&b, [SpendInput::Dummy, SpendInput::Dummy], [bob.pay(3_000), alice.change(6_000)]);
     h.submit(&js, funding).unwrap();
-    let e = h.settle(None).unwrap();
+    let e = h.settle().unwrap();
     let [paid, change] = js.witness.public.output_commitments;
     let find = |c| e.annex.body.outputs.iter().find(|o| o.commitment == c).unwrap();
     let outs = [find(paid), find(change)];
@@ -637,7 +680,7 @@ fn self_change_ciphertexts_are_compact_and_only_the_sender_recovers_them() {
     let js =
         h.build(&h.builder(0), [alice.spend(&h.replica, &note), SpendInput::Dummy], [bob.pay(6_000), alice.change(0)]);
     h.submit(&js, vec![]).unwrap();
-    h.settle(None).unwrap();
+    h.settle().unwrap();
     assert!(h.replica.spent(&note.nullifier));
 }
 
@@ -654,7 +697,12 @@ fn ciphertexts_of_unknown_kind_or_length_do_not_decode() {
     assert!(pr_protocol_types::ExternalData::decode(&bytes).is_err());
     let mut bad = js.external.clone();
     bad.ciphertexts[1].push(0);
-    let tx = pr_protocol_types::RollupTransaction { public: js.witness.public, external: bad, receipt: Vec::new() };
+    let tx = pr_protocol_types::RollupTransaction {
+        public: js.witness.public,
+        external: bad,
+        receipt: Vec::new(),
+        withdrawal_leaves: vec![],
+    };
     assert!(h.mempool.submit(tx, vec![], &h.replica, |_| true).is_err());
 }
 
@@ -664,16 +712,17 @@ fn one_join_split_pays_several_withdrawal_outputs() {
     let wallets = funded_wallets(&mut h, 1, 20_000);
     let w = &wallets[0];
     let note = w.notes[0].clone();
-    let outs: Vec<TxOut> = (0..pr_protocol_types::MAX_WITHDRAWALS_PER_TX as u8)
-        .map(|k| TxOut { value: 1_000 * (k as u64 + 1), script_pubkey: [&[0x00, 0x14][..], &[0x50 + k; 20]].concat() })
+    let locked: Vec<(TxOut, Vec<u8>)> = (0..pr_protocol_types::MAX_WITHDRAWALS_PER_TX as u8)
+        .map(|k| withdrawal(1_000 * (k as u64 + 1), &key_tail(&[0x50 + k; 32])).unwrap())
         .collect();
+    let outs: Vec<TxOut> = locked.iter().map(|(o, _)| o.clone()).collect();
     let mut b = h.builder(500);
-    b.withdrawals = outs.clone();
+    b.set_withdrawals(locked.clone());
     let js = h.build(&b, [w.spend(&h.replica, &note), SpendInput::Dummy], [w.change(20_000 - 500 - 10_000), w.pay(0)]);
     assert_eq!(js.witness.public.withdrawal_sats, 10_000);
     h.submit(&js, vec![]).unwrap();
     let selected = h.mempool.select();
-    let s = h.settlement(&selected, None);
+    let s = h.settlement(&selected);
     assert_eq!(s.outputs[1..=outs.len()], outs[..]);
 
     let mut reordered = s.clone();
@@ -682,14 +731,15 @@ fn one_join_split_pays_several_withdrawal_outputs() {
     assert!(apply_batch(&wit).is_err());
 
     let mut five = h.builder(500);
-    five.withdrawals = outs.clone();
-    five.withdrawals.push(TxOut { value: 1_000, script_pubkey: WITHDRAW_SPK.to_vec() });
+    let mut five_outs = locked.clone();
+    five_outs.push(withdrawal(1_000, &key_tail(&[9; 32])).unwrap());
+    five.set_withdrawals(five_outs);
     if let Ok(js5) =
         five.build(&mut rand_core::OsRng, [w.spend(&h.replica, &note), SpendInput::Dummy], [w.pay(8_500), w.pay(0)])
     {
         assert!(h.submit(&js5, vec![]).is_err());
     }
-    let e = h.settle(None).unwrap();
+    let e = h.settle().unwrap();
     assert_eq!(e.new_state.backing_sats, 10_000 + 20_000 - 10_000 - 500);
     assert_eq!(Annex::decode(&e.annex_bytes).unwrap().body.layout.withdrawals as usize, outs.len());
 }

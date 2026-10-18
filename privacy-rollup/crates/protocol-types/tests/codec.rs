@@ -112,12 +112,12 @@ fn rejects_out_of_range_values() {
 #[test]
 fn annex_rejects_bad_magic_order_and_layout() {
     let good = annex().encode();
-    for (at, val) in [(0, 0x51u8), (1, b'X'), (5, 2)] {
+    for (at, val) in [(0, 0x51u8), (1, 0x01), (2, b'X'), (6, 2)] {
         let mut b = good.clone();
         b[at] = val;
         assert_eq!(Annex::decode(&b), Err(DecodeError::BadMagic));
     }
-    let body_at = 1 + 4 + 1 + 64;
+    let body_at = 2 + 4 + 1 + 64;
     let nullifiers_at = body_at + 32 + 8 + 36 + 6;
 
     let mut a = annex();

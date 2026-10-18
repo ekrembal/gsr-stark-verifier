@@ -162,7 +162,7 @@ def main() -> None:
             tx.wit.vtxinwit[0].scriptWitness.stack = [jd, nr, leaf0.script, leaf0.control] + ([annex] if annex else [])
             return tx
 
-        annex = b"\x50" + b"GSRP\x01" + root0 + root1 + b"batch body"
+        annex = b"\x50\x00" + b"GSRP\x01" + root0 + root1 + b"batch body"
         good = spend(leaf1, annex)
         cases = {
             "wrong_journal_digest": spend(leaf1, annex, jd_override=sha(b"wrong")),

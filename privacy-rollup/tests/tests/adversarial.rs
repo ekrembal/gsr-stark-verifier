@@ -17,16 +17,21 @@ fn competing_settlements_extend_the_chain_once() {
     let b = h.deposit_builder(700, &funding, 20_000, None);
     let js = h.build(&b, [SpendInput::Dummy, SpendInput::Dummy], [alice.pay(19_300), alice.pay(0)]);
     let entry = Entry {
-        tx: RollupTransaction { public: js.witness.public, external: js.external.clone(), receipt: vec![] },
+        tx: RollupTransaction {
+            public: js.witness.public,
+            external: js.external.clone(),
+            receipt: vec![],
+            withdrawal_leaves: vec![],
+        },
         funding: funding.clone(),
         arrival: 1,
     };
-    let settlement = h.settlement(std::slice::from_ref(&entry), None);
+    let settlement = h.settlement(std::slice::from_ref(&entry));
     let loser = h.replica.witness(pr_mempool::batch_transactions(std::slice::from_ref(&entry)), settlement);
     let loser_effects = apply_batch(&loser).unwrap();
 
     // The other settler wins with an empty batch.
-    let winner = h.settle(None).unwrap();
+    let winner = h.settle().unwrap();
     assert_eq!(winner.new_state.batch_number, 1);
     assert_ne!(winner.journal.new_state_root, loser_effects.journal.new_state_root);
     let tip = h.replica.tip().clone();
@@ -42,7 +47,7 @@ fn competing_settlements_extend_the_chain_once() {
 
     // Its join-split is still valid against the new tip and settles in the next batch.
     h.submit(&js, funding).unwrap();
-    let e = h.settle(None).unwrap();
+    let e = h.settle().unwrap();
     assert_eq!(e.new_state.batch_number, 2);
     assert_eq!(e.new_state.backing_sats, tip.state.backing_sats + 20_000 - 700);
 }
@@ -51,7 +56,7 @@ fn competing_settlements_extend_the_chain_once() {
 #[test]
 fn a_mined_settlement_cannot_be_replayed() {
     let mut h = Harness::new();
-    let first = h.settle(None).unwrap();
+    let first = h.settle().unwrap();
     let w = h.last_witness.clone().unwrap();
     let mut replica = h.replica.clone();
     assert_eq!(replica.apply_witness(&w).err(), Some(ScanError::WrongBatchNumber));
@@ -71,7 +76,7 @@ fn malformed_annexes_are_rejected_by_the_scanner() {
     let b = h.deposit_builder(700, &funding, 20_000, None);
     let js = h.build(&b, [SpendInput::Dummy, SpendInput::Dummy], [alice.pay(19_300), alice.pay(0)]);
     h.submit(&js, funding).unwrap();
-    let e = h.settle(None).unwrap();
+    let e = h.settle().unwrap();
     let tx = h.replica.tip().creating_tx.clone();
 
     let replay = |annex: &[u8]| base.clone().accept_annex_bytes(annex, &tx);

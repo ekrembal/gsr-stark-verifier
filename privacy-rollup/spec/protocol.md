@@ -76,19 +76,19 @@ to the old anchor root, and one membership path per transaction anchor:
 
 1. statement checks (`check_transaction`): version, rollup id, expiry, anchor a member of the history tree with
    matching root and count, external-data commitment, ciphertext kinds, deposit/withdrawal declarations (each
-   withdrawal ≥ dust, Σ = `withdrawal_sats`), nonzero
+   withdrawal ≥ dust, Σ = `withdrawal_sats`, each with a withdrawal leaf as below), no deposit change, nonzero
    nullifiers;
 2. all nullifiers sorted, distinct, each inserted with a verified insertion witness;
 3. all output commitments sorted, distinct, appended in that order to the authenticated frontier;
 4. the settlement transaction: version 2, locktime 0, inputs `[rollup, funding.., escrows..]` (funding in
-   declaration order, sequence `0xffffffff`; escrows as below, sequence `0xfffffffd`),
+   declaration order, sequence `FUNDING_INPUT_SEQUENCE = 1`; escrows as below, sequence `ESCROW_INPUT_SEQUENCE = 2`),
    input 0 sequence 1 with empty scriptSig and amount `backing_sats`, spending output 0 of the private
    witness `predecessor_tx` (witness-free; `sha256d(predecessor_tx) = input 0 txid`) whose own input 0
    spent `old.parent`; the new state's `parent` is input 0's prevout (`check_lineage`). Outputs
-   `[rollup successor, withdrawals.., changes.., reward?]`, each funding set paying exactly
-   `deposit + change`;
-5. fees: `F = Σ fee_sats`, optional reward output `R ≥ dust`, miner fee `M = F − R ≥ 0`,
-   `Σ inputs − Σ outputs = M`, new `backing_sats = old + deposits − withdrawals − F ≥ dust`;
+   `[rollup successor, withdrawals..]`, each funding set paying exactly `deposit`, each withdrawal output
+   `P2TR(NUMS, {leaf})` for its committed leaf;
+5. fees: `F = Σ fee_sats` is the miner fee, `Σ inputs − Σ outputs = F`,
+   new `backing_sats = old + deposits − withdrawals − F ≥ dust`;
 6. new anchor leaf (written into the empty slot, giving the new root), data history, annex and the 196-byte journal (`bitcoin-binding.md`).
 
 ## Fee policy (batcher, not consensus)
@@ -102,17 +102,32 @@ Let `r` be the feerate (sat/vB: fixed, or `estimatesmartfee` with a floor) and `
   current pool would pay and whether a settlement is due.
 * **Admission**: a transaction paying less than `fee(entry_weight)` (its own content) is rejected with 400.
 * **Shortfall**: before proving, `Σ fee_sats` (pool selection plus sweepable escrows) must cover
-  `fee(332,000 + content + reward output)`; otherwise `POST /v1/batches` returns 409 and nothing is proven.
-* **Reward / CPFP anchor**: any surplus above dust goes to the reward output (last output); the rest is the
-  miner fee `M`. With `PR_BATCHER_REWARD_KEY` the reward is a BIP86 P2TR key of the operator, and
-  `POST /v1/bump {sat_per_vb}` signs a 1-in/1-out child (111 vB) so the package pays `sat_per_vb`, submitted with
-  `submitpackage`. RBF is not available: the proof fixes every input, output and so the fee; a higher fee
-  than CPFP allows means proving again.
+  `fee(332,000 + content)`; otherwise `POST /v1/batches` returns 409 and nothing is proven.
+* **All fees to the miner**: there is no reward, P2A or other anchor output and no CPFP. A user raises a fee by
+  proving the same join-split again with a higher `fee_sats`; the next batch replaces the pending settlement
+  under ordinary RBF (it spends the same rollup coin and pays more).
 * **When** (`--auto SECS`): only when fees cover the settlement, and then when the pool holds `T` transactions,
   the content would not fit another transfer, or the oldest admitted transaction has waited `--max-wait`.
   Empty settlements are never started automatically.
-* **Submission**: settlements carry an annex and are nonstandard, so `--submit-url` sends them (and CPFP
-  packages) straight to a miner's node rather than to public relay.
+* **Submission**: under the pinned node's policy settlements carry an annex and are nonstandard, so
+  `--submit-url` sends them straight to a miner's node; under bitcoin/bitcoin#36466 (open, not merged) they
+  relay publicly (`reports/relay-pinning.md`).
+* **No spendable handles**: nothing in a settlement is spendable while it is unconfirmed, so it can have no
+  descendants to pin it, and it has no unconfirmed parents:
+  * withdrawal outputs are `P2TR(NUMS, {leaf})` with `leaf = OP_1 OP_CHECKSEQUENCEVERIFY OP_DROP || tail`
+    (`WITHDRAWAL_LEAF_PREFIX`, ≤ `MAX_WITHDRAWAL_LEAF_LEN` = 1,024 bytes, version `0xc0`). The leaf is part
+    of the join-split's `RollupTransaction` (`withdrawal_leaves`) and the guest checks each withdrawal
+    script against it. Wallets build them with `withdrawal(value, key_tail(xonly))`: the recipient's key
+    spends with sequence ≥ 1, one block after the settlement confirms. Paying an exchange address directly
+    is not possible; the recipient forwards the coin. The one-block delay is a protocol choice;
+  * the successor leaf already carries `1 OP_CHECKSEQUENCEVERIFY`;
+  * there are no change, reward or P2A outputs (a declared deposit change is rejected, `ChangeOutput`);
+  * funding inputs (sequence 1) and escrows (sequence 2) are BIP 68 locked, so a settlement spending an
+    unconfirmed funding coin or escrow is non-final. The batcher defers settling while a funding coin is
+    unconfirmed and sweeps escrows only from two confirmations.
+
+  Tests: `settlement_has_no_unconfirmed_spend_path` (`tests/tests/scenario.rs`) and
+  `tools/policy/gsrpp_no_pin_handles.py` (node policy, `reports/no-pin-handles.json`).
 * **Pinning and conflicts**: funding coins and escrows are re-checked with `gettxout` (mempool included) before
   proving and before every (re)broadcast. A coin spent elsewhere, including by a low-fee unconfirmed
   transaction from its own depositor, drops that transaction from the pool and abandons the proven settlement,
@@ -128,9 +143,10 @@ taproot address `P2TR(NUMS, {sweep (leaf version 0xc2), refund (0xc0)})` that an
 * `D = sha256("GSR-rollup/escrow-v1" || rollup_id || authority || randomness || value || fee_sats ||
   sha256(ciphertext))`, where the ciphertext may be either kind (a depositor paying its own wallet can use a
   120-byte self ciphertext); the sweep leaf is `0x20 D OP_DROP || body`, where `body` (`covenant_cli escrow-body`,
-  served at `GET /v1/escrow`) uses `OP_TX` to require that the sweeping transaction's input 0 is a script-path
-  spend of this rollup's covenant (this image and rollup id, any state root) with an annex, and that the escrow
-  input itself has sequence `ESCROW_INPUT_SEQUENCE = 0xfffffffd`.
+  served at `GET /v1/escrow`) uses `OP_TX` to require that the escrow input's own annex is exactly the one-byte marker `0x50`, that the
+  sweeping transaction's input 0 is a script-path spend of this rollup's covenant (this image and rollup id, any
+  state root) with an annex, and that the escrow input itself has sequence `ESCROW_INPUT_SEQUENCE = 2` (matched as
+  `OP_TX`'s minimal numeric encoding `02`; as a BIP 68 lock it also requires two confirmations of the escrow).
 * The refund leaf is `<delay> OP_CHECKSEQUENCEVERIFY OP_DROP <xonly> OP_CHECKSIG`; the batcher requires
   `delay ≥ --min-refund-delay` (default 144 blocks).
 * `apply_batch` gets each escrow's opening privately (`BatchWitness::escrows`), checks that the sweep leaf

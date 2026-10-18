@@ -1,0 +1,17 @@
+{
+  "unconfirmed_funding": "non-BIP68-final",
+  "settlement_vsize": 200,
+  "children": {
+    "vout0_seq0x0": "mempool-script-verify-flag-failed (Locktime requirement not satisfied)",
+    "vout1_seq0x0": "mempool-script-verify-flag-failed (Locktime requirement not satisfied)",
+    "vout0_seq0x1": "non-BIP68-final",
+    "vout1_seq0x1": "non-BIP68-final",
+    "vout0_seq0xfffffffd": "mempool-script-verify-flag-failed (Locktime requirement not satisfied)",
+    "vout1_seq0xfffffffd": "mempool-script-verify-flag-failed (Locktime requirement not satisfied)",
+    "vout0_seq0xffffffff": "mempool-script-verify-flag-failed (Locktime requirement not satisfied)",
+    "vout1_seq0xffffffff": "mempool-script-verify-flag-failed (Locktime requirement not satisfied)"
+  },
+  "rbf_replaced": true,
+  "rbf_extra_fee": 20000,
+  "withdrawal_spend_after_confirmation": true
+}

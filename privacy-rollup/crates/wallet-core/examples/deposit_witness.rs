@@ -18,6 +18,7 @@ fn main() {
             100_000,
         )),
         withdrawals: Vec::new(),
+        withdrawal_leaves: Vec::new(),
         fee_sats: 500,
     };
     let built = b

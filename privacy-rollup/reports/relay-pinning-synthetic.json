@@ -1,0 +1,337 @@
+{
+ "annex_encoding": {
+  "current GSRP annex (0x50 'G' ...)": [
+   false,
+   "bad-witness-nonstandard bad-witness-nonstandard"
+  ],
+  "0x50 0x00 'GSRP' ... (proposed)": [
+   true,
+   ""
+  ],
+  "marker-only 0x50": [
+   true,
+   ""
+  ],
+  "0x50 0x01 ... (reserved prefix)": [
+   false,
+   "bad-witness-nonstandard bad-witness-nonstandard"
+  ]
+ },
+ "mixed_inputs": {
+  "rollup(annex) + taproot input without annex": [
+   false,
+   "bad-witness-nonstandard bad-witness-nonstandard"
+  ],
+  "rollup(annex) + taproot input with marker annex": [
+   true,
+   ""
+  ],
+  "rollup(annex) + P2WSH input": [
+   false,
+   "bad-witness-nonstandard bad-witness-nonstandard"
+  ],
+  "rollup(annex) + taproot input with 20 kB annex": [
+   true,
+   ""
+  ]
+ },
+ "growing_batches_current": {
+  "start_feerate_sat_vb": 5,
+  "s0_vsize": 84407,
+  "s0_fee": 422035,
+  "s0_bytes_relayed": 337241,
+  "single_step": [
+   {
+    "added_transfers": 1,
+    "old_vsize": 84407,
+    "old_fee": 422035,
+    "new_vsize": 84778,
+    "min_new_fee": 430513,
+    "min_delta_fee": 8478,
+    "incremental_only_bound": 8478,
+    "same_feerate_bound": 1855,
+    "same_fee_higher_size": [
+     false,
+     "insufficient fee insufficient fee, rejecting replacement b8049be11d9d3f0158af349647bf617ec695501ab5c40b2fa46830dfd6f30b60, not enough additional fees to relay; 0.00 < 0.00008478"
+    ],
+    "old_fee_plus_incremental": [
+     true,
+     ""
+    ]
+   },
+   {
+    "added_transfers": 4,
+    "old_vsize": 84407,
+    "old_fee": 422035,
+    "new_vsize": 85889,
+    "min_new_fee": 430624,
+    "min_delta_fee": 8589,
+    "incremental_only_bound": 8589,
+    "same_feerate_bound": 7410,
+    "same_fee_higher_size": [
+     false,
+     "insufficient fee insufficient fee, rejecting replacement 84fe3854dbdc36494977b488bc34b3fa55d10d727b32dedbd29cf5bb0932d9be, not enough additional fees to relay; 0.00 < 0.00008589"
+    ],
+    "old_fee_plus_incremental": [
+     true,
+     ""
+    ]
+   }
+  ],
+  "chain": [
+   {
+    "vsize": 84778,
+    "size": 338699,
+    "fee": 430513,
+    "delta_fee": 8478,
+    "bytes_relayed_to_peer": 338723
+   },
+   {
+    "vsize": 85148,
+    "size": 340181,
+    "fee": 439028,
+    "delta_fee": 8515,
+    "bytes_relayed_to_peer": 340205
+   },
+   {
+    "vsize": 85519,
+    "size": 341663,
+    "fee": 447580,
+    "delta_fee": 8552,
+    "bytes_relayed_to_peer": 341687
+   },
+   {
+    "vsize": 85889,
+    "size": 343145,
+    "fee": 456169,
+    "delta_fee": 8589,
+    "bytes_relayed_to_peer": 343169
+   },
+   {
+    "vsize": 86260,
+    "size": 344627,
+    "fee": 464795,
+    "delta_fee": 8626,
+    "bytes_relayed_to_peer": 344651
+   }
+  ]
+ },
+ "pinning_current": {
+  "v2": {
+   "parent_vsize": 84407,
+   "parent_accepted": [
+    true,
+    ""
+   ],
+   "child_vsize": 16543,
+   "child_fee": 16543,
+   "child_accepted": [
+    true,
+    ""
+   ],
+   "child_over_cluster_limit": [
+    false,
+    "too-large-cluster"
+   ],
+   "replacement_min_fee_unpinned": 430513,
+   "replacement_min_fee_pinned": 447056,
+   "pin_overhead_sats": 16543
+  },
+  "v3": {
+   "parent_vsize": 84407,
+   "parent_accepted": [
+    false,
+    "TRUC-violation TRUC-violation, version=3 tx d43a18a4a482e94389c1c96ec6c518d6b852de10b02b88451322eabeb35cee62 (wtxid=21443975f47235914cda355e95d34a285cdbdbce3595089767eb1cae777b9afa) is too big: 84407 > 10000 virtual bytes"
+   ]
+  }
+ },
+ "growing_batches_target": {
+  "start_feerate_sat_vb": 5,
+  "s0_vsize": 5482,
+  "s0_fee": 27410,
+  "s0_bytes_relayed": 21541,
+  "single_step": [
+   {
+    "added_transfers": 1,
+    "old_vsize": 5482,
+    "old_fee": 27410,
+    "new_vsize": 5853,
+    "min_new_fee": 29263,
+    "min_delta_fee": 1853,
+    "incremental_only_bound": 586,
+    "same_feerate_bound": 1855,
+    "same_fee_higher_size": [
+     false,
+     "insufficient fee insufficient fee, rejecting replacement 7fadad84e81da9d857d0e8e582aa8601ab8c7cd228a699db54b3d67bc5d83ad8, not enough additional fees to relay; 0.00 < 0.00000586"
+    ],
+    "old_fee_plus_incremental": [
+     false,
+     "replacement-failed replacement-failed, insufficient feerate: does not improve feerate diagram"
+    ]
+   },
+   {
+    "added_transfers": 4,
+    "old_vsize": 5482,
+    "old_fee": 27410,
+    "new_vsize": 6964,
+    "min_new_fee": 34820,
+    "min_delta_fee": 7410,
+    "incremental_only_bound": 697,
+    "same_feerate_bound": 7410,
+    "same_fee_higher_size": [
+     false,
+     "insufficient fee insufficient fee, rejecting replacement 21786521cea2ff92587e106aaa5a506025f5d55d3cab0f91f40e0d9f4001db87, not enough additional fees to relay; 0.00 < 0.00000697"
+    ],
+    "old_fee_plus_incremental": [
+     false,
+     "replacement-failed replacement-failed, insufficient feerate: does not improve feerate diagram"
+    ]
+   }
+  ],
+  "chain": [
+   {
+    "vsize": 5853,
+    "size": 22999,
+    "fee": 29263,
+    "delta_fee": 1853,
+    "bytes_relayed_to_peer": 23023
+   },
+   {
+    "vsize": 6223,
+    "size": 24481,
+    "fee": 31116,
+    "delta_fee": 1853,
+    "bytes_relayed_to_peer": 24505
+   },
+   {
+    "vsize": 6594,
+    "size": 25963,
+    "fee": 32969,
+    "delta_fee": 1853,
+    "bytes_relayed_to_peer": 25987
+   },
+   {
+    "vsize": 6964,
+    "size": 27445,
+    "fee": 34822,
+    "delta_fee": 1853,
+    "bytes_relayed_to_peer": 27469
+   },
+   {
+    "vsize": 7335,
+    "size": 28927,
+    "fee": 36675,
+    "delta_fee": 1853,
+    "bytes_relayed_to_peer": 28951
+   }
+  ]
+ },
+ "pinning_target": {
+  "v2": {
+   "parent_vsize": 5482,
+   "parent_accepted": [
+    true,
+    ""
+   ],
+   "child_vsize": 95468,
+   "child_fee": 95468,
+   "child_accepted": [
+    true,
+    ""
+   ],
+   "child_over_cluster_limit": [
+    false,
+    "too-large-cluster"
+   ],
+   "replacement_min_fee_unpinned": 29263,
+   "replacement_min_fee_pinned": 123464,
+   "pin_overhead_sats": 94201
+  },
+  "v3": {
+   "parent_vsize": 5482,
+   "parent_accepted": [
+    true,
+    ""
+   ],
+   "v2_child_of_v3": [
+    false,
+    "TRUC-violation"
+   ],
+   "child_1001_vb": [
+    false,
+    "TRUC-violation"
+   ],
+   "child_vsize": 1000,
+   "child_fee": 1000,
+   "child_accepted": [
+    true,
+    ""
+   ],
+   "child_over_cluster_limit": [
+    false,
+    "TRUC-violation"
+   ],
+   "replacement_min_fee_unpinned": 29263,
+   "replacement_min_fee_pinned": 29263,
+   "pin_overhead_sats": 0
+  }
+ },
+ "p2a": {
+  "v3_fee_paying_p2a_0_sat": [
+   false,
+   "dust dust, tx with dust output must be 0-fee"
+  ],
+  "v3_fee_paying_p2a_239_sat": [
+   false,
+   "dust dust, tx with dust output must be 0-fee"
+  ],
+  "v3_fee_paying_p2a_240_sat": [
+   true,
+   ""
+  ],
+  "v3_zero_fee_parent_p2a_0_sat_alone": [
+   false,
+   "min relay fee not met min relay fee not met, 0 < 549"
+  ],
+  "third_party_p2a_cpfp": [
+   true,
+   ""
+  ],
+  "recipient_child_after_p2a_child_sibling_eviction": [
+   true,
+   ""
+  ],
+  "p2a_child_vsize": 145,
+  "v2_replacement_min_fee_unpinned": 29263,
+  "v2_parent_p2a_child_90kvb_1satvb": [
+   true,
+   ""
+  ],
+  "v2_replacement_min_fee_after_p2a_pin": 118005,
+  "v2_parent_fee": 27410
+ },
+ "escrow_annex_inflation": {
+  "honest_first": {
+   "honest_vsize": 5482,
+   "inflated_vsize": 20483,
+   "fee": 50000,
+   "second_accepted": [
+    false,
+    "txn-same-nonwitness-data-in-mempool txn-same-nonwitness-data-in-mempool"
+   ],
+   "peer_has_wtxid": true,
+   "reproved_replacement_min_fee": 53380
+  },
+  "inflated_first": {
+   "honest_vsize": 5482,
+   "inflated_vsize": 20483,
+   "fee": 50000,
+   "second_accepted": [
+    false,
+    "txn-same-nonwitness-data-in-mempool txn-same-nonwitness-data-in-mempool"
+   ],
+   "peer_has_wtxid": true,
+   "reproved_replacement_min_fee": 50586
+  }
+ }
+}

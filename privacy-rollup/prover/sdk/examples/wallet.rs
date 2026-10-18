@@ -9,15 +9,18 @@
 //! wallet register <url> <deposit-address.json> <txid> <vout>      register the paid escrow output
 //! wallet scan    <url> <seed-hex>
 //! wallet send    <url> <seed-hex> <leaf> <to-address|self> <amount-sats> <fee-sats> [po2]
-//! wallet withdraw <url> <seed-hex> <leaf> <script-pubkey-hex>[:<sats>,<script-pubkey-hex>:<sats>..] <amount-sats> <fee-sats> [po2]
+//! wallet withdraw <url> <seed-hex> <leaf> <xonly-key-hex>[:<sats>,<xonly-key-hex>:<sats>..] <amount-sats> <fee-sats> [po2]
+//!   (each withdrawal pays `P2TR(NUMS, {OP_1 OP_CSV OP_DROP <key> OP_CHECKSIG})`, spendable one block after settlement)
 //! wallet settle  <url>                                                 request a batch, wait for it
 use std::time::{Duration, Instant};
 
 use anyhow::{bail, ensure, Context, Result};
 use pr_sdk::api::{EscrowRegistration, FundingInput, Stage};
 use pr_sdk::client::Client;
-use pr_sdk::pr_protocol_types::TxOut;
-use pr_sdk::{decode_address, encode_address, fe_from_hex, prove, submission, DepositAddress, OutputSpec, Wallet};
+use pr_sdk::{
+    decode_address, encode_address, fe_from_hex, key_tail, prove, submission, withdrawal, DepositAddress, OutputSpec,
+    Wallet,
+};
 use rand_core::OsRng;
 use serde_json::json;
 
@@ -90,28 +93,37 @@ fn main() -> Result<()> {
             let notes = w.scan(&fe_from_hex(&status.rollup_id)?, &client.notes(0)?);
             let note = notes.into_iter().find(|n| n.leaf_index == leaf).context("no owned note at that leaf")?;
             let amount: u64 = a[5].parse()?;
-            let (payments, withdrawal) = if cmd == "send" {
+            let (payments, withdrawals) = if cmd == "send" {
                 let recipient = if a[4] == "self" { w.address() } else { decode_address(&a[4])? };
                 (vec![OutputSpec { value: amount, recipient, memo: [0; 32], self_key: None }], Vec::new())
             } else {
+                let locked = |key: &str, value: u64| -> Result<_> {
+                    let x: [u8; 32] =
+                        hex::decode(key)?.try_into().map_err(|_| anyhow::anyhow!("x-only key is 32 bytes"))?;
+                    withdrawal(value, &key_tail(&x)).context("withdrawal key")
+                };
                 let outs = if a[4].contains(':') {
                     a[4].split(',')
                         .map(|o| {
-                            let (spk, v) = o.split_once(':').context("<script-pubkey>:<sats>")?;
-                            Ok(TxOut { value: v.parse()?, script_pubkey: hex::decode(spk).context("script-pubkey")? })
+                            let (key, v) = o.split_once(':').context("<xonly-key>:<sats>")?;
+                            locked(key, v.parse()?)
                         })
                         .collect::<Result<Vec<_>>>()?
                 } else {
-                    vec![TxOut { value: amount, script_pubkey: hex::decode(&a[4]).context("script-pubkey")? }]
+                    vec![locked(&a[4], amount)?]
                 };
-                ensure!(outs.iter().map(|o| o.value).sum::<u64>() == amount, "withdrawal outputs must sum to <sats>");
+                ensure!(
+                    outs.iter().map(|(o, _)| o.value).sum::<u64>() == amount,
+                    "withdrawal outputs must sum to <sats>"
+                );
                 (Vec::new(), outs)
             };
             let t = Instant::now();
             let path = client.path(leaf)?;
-            let built = w.transfer(&mut OsRng, &status, &[(note, path)], payments, withdrawal, a[6].parse()?, 1)?;
+            let built = w.transfer(&mut OsRng, &status, &[(note, path)], payments, withdrawals, a[6].parse()?, 1)?;
             let witness_seconds = t.elapsed().as_secs_f64();
-            let (tx, stats) = prove(&built.witness, &built.external, po2(&a, 7)?)?;
+            let (mut tx, stats) = prove(&built.witness, &built.external, po2(&a, 7)?)?;
+            tx.withdrawal_leaves = built.withdrawal_leaves.clone();
             let r = client.submit(&submission(&tx, Vec::new()))?;
             json!({"witness_seconds": witness_seconds, "prove": stats, "pending": r.pending,
                    "withdrawal_sats": tx.public.withdrawal_sats, "fee_sats": tx.public.fee_sats})

@@ -11,7 +11,7 @@ use pr_mempool::{
     assemble_settlement_with_escrows, batch_transactions, escrow_weight, Entry, EscrowCoin, FundingCoin, Mempool,
 };
 use pr_protocol_types::{
-    Canonical, Outpoint, RollupDescriptor, RollupTransaction, TxOut, EMPTY_SETTLEMENT_WEIGHT, MAX_SETTLEMENT_WEIGHT,
+    Canonical, Outpoint, RollupDescriptor, RollupTransaction, EMPTY_SETTLEMENT_WEIGHT, MAX_SETTLEMENT_WEIGHT,
 };
 use pr_scanner::Replica;
 use pr_state_transition::{apply_batch, BatchEffects, BatchWitness};
@@ -153,13 +153,8 @@ impl Store {
 
     /// Assembles the next settlement from the pool. `successor` is the covenant output for the new
     /// root; the new root never depends on it, so it may be empty for a first pass.
-    pub fn build(
-        &self,
-        rollup_script_pubkey: Vec<u8>,
-        successor: Vec<u8>,
-        reward: Option<TxOut>,
-    ) -> Result<BuiltBatch> {
-        self.build_with_escrows(rollup_script_pubkey, successor, &[], reward)
+    pub fn build(&self, rollup_script_pubkey: Vec<u8>, successor: Vec<u8>) -> Result<BuiltBatch> {
+        self.build_with_escrows(rollup_script_pubkey, successor, &[])
     }
 
     /// As [`Store::build`], also sweeping `escrows` (confirmed escrow outputs) into minted notes.
@@ -168,13 +163,11 @@ impl Store {
         rollup_script_pubkey: Vec<u8>,
         successor: Vec<u8>,
         escrows: &[EscrowCoin],
-        reward: Option<TxOut>,
     ) -> Result<BuiltBatch> {
         let (replica, _) = self.load()?;
         let entries = self.select(&replica, escrows)?;
-        let settlement =
-            assemble_settlement_with_escrows(&replica, rollup_script_pubkey, successor, &entries, escrows, reward)
-                .context("batch withdraws more than it backs")?;
+        let settlement = assemble_settlement_with_escrows(&replica, rollup_script_pubkey, successor, &entries, escrows)
+            .context("batch withdraws more than it backs")?;
         let openings = escrows.iter().map(|c| c.opening.clone()).collect();
         let witness = replica.witness_with_escrows(batch_transactions(&entries), openings, settlement);
         let effects = apply_batch(&witness).map_err(|e| anyhow::anyhow!("transition: {e:?}"))?;

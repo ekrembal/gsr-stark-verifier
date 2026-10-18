@@ -1,12 +1,11 @@
 #!/usr/bin/env python3
 """Check the covenant's transaction binding on a jmoik/bitcoin `gsr` regtest node, without a receipt.
 
-The settlement leaf is `decls || <old_root> 1 CSV DROP || prologue || verifier`. The verifier part needs a proof
-bound to the spending transaction; this check replaces it with `<journal digest from the witness> EQUALVERIFY`,
-keeping the real declarations (so the root sits at the real `decl_len` offset), the real head and the real prologue.
-A spend therefore succeeds exactly when
+The settlement leaf is `decls || 1 CSV DROP || prologue || verifier`, at one fixed address for every state. The
+verifier part needs a proof bound to the spending transaction; this check replaces it with `<journal digest from
+the witness> EQUALVERIFY`, keeping the real head and the real prologue. A spend therefore succeeds exactly when
 
-  * the index, shape (NUMS, single leaf) and successor-leaf checks pass, and
+  * the index, shape (NUMS, single leaf) and output-0-pays-own-address checks pass, and
   * the journal digest the Script rebuilds with OP_TX equals the one computed here from the transaction,
 
 which is what an `apply_batch` receipt is bound to. Negative spends must fail. Annex-bearing spends are nonstandard,
@@ -62,39 +61,24 @@ def rpc(method: str, *args):
 
 
 class TestLeaf:
-    """The real declarations, head and prologue, then a journal-digest check instead of the verifier."""
+    """The real head and prologue, then a journal-digest check instead of the verifier."""
 
-    def __init__(self, cov: rc.Covenant, rollup_id: bytes, root: bytes) -> None:
-        stmt = rc.RollupStatement(json.loads(TEMPLATE.read_text()), rollup_id, root)
-        stmt.decl_len = cov.decl_len
+    def __init__(self, rollup_id: bytes) -> None:
+        stmt = rc.RollupStatement(json.loads(TEMPLATE.read_text()), rollup_id)
         V.serial = 0
-        jd_w, new = V("jd_w"), V("new_root")
-        old = V("old_root")
-        m = Asm([jd_w, new, old])
-        stmt.prologue(m, {"new_root": new}, [old])
+        jd_w, old, new = V("jd_w"), V("old_root"), V("new_root")
+        m = Asm([jd_w, old, new])
+        stmt.prologue(m, {"old_root": old, "new_root": new}, [])
         m.roll(stmt.journal_digest(m))
         m.roll(jd_w)
         m.op("EQUALVERIFY", 2)
         m.drop_top(len(m.st))
-        # The prologue's CompactSize prefix width (5) assumes a script of at least 64 KiB, as the real one is.
-        m.s.data(bytes(60_000)).op("DROP")
         m.s.int(1)
-        decls = cov.script[:cov.decl_len]
-        self.script = decls + bytes(stmt.head().code) + bytes(m.s.code)
-        self.decl_len, self.root = cov.decl_len, root
-        assert self.script[self.decl_len:self.decl_len + 33] == b"\x20" + root
+        self.script = bytes(stmt.head().code) + bytes(m.s.code)
+        self.prologue_bytes = len(m.s.code) - 1
         tr = taproot_construct(rc.NUMS, [("rollup", CScript(self.script), rc.LEAF)])
         self.spk = bytes(tr.scriptPubKey)
         self.control = bytes([rc.LEAF | tr.negflag]) + rc.NUMS
-
-    def for_root(self, root: bytes) -> "TestLeaf":
-        other = object.__new__(TestLeaf)
-        d = self.decl_len
-        other.script = self.script[:d] + b"\x20" + root + self.script[d + 33:]
-        other.decl_len, other.root = d, root
-        tr = taproot_construct(rc.NUMS, [("rollup", CScript(other.script), rc.LEAF)])
-        other.spk, other.control = bytes(tr.scriptPubKey), bytes([rc.LEAF | tr.negflag]) + rc.NUMS
-        return other
 
 
 def journal_digest(tx: CTransaction, spent: list[tuple[int, bytes]], rollup_id: bytes, old: bytes, new: bytes,
@@ -114,20 +98,18 @@ def main() -> None:
     template = json.loads(TEMPLATE.read_text())
     rollup_id, root0, root1 = sha(b"binding-check rollup"), sha(b"root 0"), sha(b"root 1")
     t = time.time()
-    cov = rc.Covenant(template, rollup_id, root0)
+    cov = rc.Covenant(template, rollup_id)
     gen_s = time.time() - t
-    leaf0 = TestLeaf(cov, rollup_id, root0)
-    leaf1 = leaf0.for_root(root1)
-    # The real covenant's successor for root1 and the test leaf's share the splice code path.
-    assert cov.for_root(root1).script[:cov.decl_len] == cov.script[:cov.decl_len]
+    leaf = TestLeaf(rollup_id)
+    copy = TestLeaf(sha(b"another rollup"))
 
     shutil.rmtree(DATADIR, ignore_errors=True)
     DATADIR.mkdir(parents=True)
     subprocess.run([str(BITCOIN / "bitcoind"), "-regtest", f"-datadir={DATADIR}", "-daemonwait", "-server",
                     "-listen=0", f"-rpcport={PORT}", f"-port={PORT + 1}", "-acceptnonstdtxn=1",
                     "-vbparams=tapleaf_0xc2:0:3999999999", "-fallbackfee=0.0001"], check=True)
-    results: dict = {"covenant_bytes": len(cov.script), "decl_len": cov.decl_len, "generation_s": round(gen_s, 1),
-                     "test_leaf_bytes": len(leaf0.script)}
+    results: dict = {"covenant_bytes": len(cov.script), "generation_s": round(gen_s, 1),
+                     "test_leaf_bytes": len(leaf.script), "prologue_bytes": leaf.prologue_bytes}
     try:
         desc = rpc("getdescriptorinfo", "raw(51)")["descriptor"]
         rpc("generatetodescriptor", 101, desc)
@@ -143,33 +125,38 @@ def main() -> None:
         fund = CTransaction()
         fund.version = 2
         fund.vin = [CTxIn(COutPoint(int(cb["txid"], 16), 0), b"", 0xFFFFFFFF)]
-        fund.vout = [CTxOut(v0, CScript(leaf0.spk)), CTxOut(cb_value - v0 - FEE, CScript(OP_TRUE_SPK))]
+        fund.vout = [CTxOut(v0, CScript(leaf.spk)), CTxOut(cb_value - v0 - FEE, CScript(OP_TRUE_SPK))]
         fund_txid = rpc("sendrawtransaction", fund.serialize().hex())
         rpc("generatetodescriptor", 1, desc)
         results["fund_txid"] = fund_txid
 
-        def spend(new_leaf: TestLeaf, annex: bytes, *, out0_spk=None, jd_override=None, seq=1, new_root=None):
+        def spend(annex: bytes, *, out0_spk=None, jd_override=None, seq=1, old_root=root0, root_out=None):
             tx = CTransaction()
             tx.version = 2
             tx.vin = [CTxIn(COutPoint(int(fund_txid, 16), 0), b"", seq),
                       CTxIn(COutPoint(int(fund_txid, 16), 1), b"", 0xFFFFFFFF)]
-            tx.vout = [CTxOut(v0, CScript(out0_spk or new_leaf.spk)),
+            tx.vout = [CTxOut(v0, CScript(out0_spk or leaf.spk)),
+                       CTxOut(0, CScript(root_out or rc.state_root_script(root1))),
                        CTxOut(cb_value - v0 - 2 * FEE, CScript(OP_TRUE_SPK))]
-            spent = [(v0, leaf0.spk), (cb_value - v0 - FEE, OP_TRUE_SPK)]
-            nr = new_root or new_leaf.root
-            jd = jd_override or journal_digest(tx, spent, rollup_id, root0, nr, annex)
+            spent = [(v0, leaf.spk), (cb_value - v0 - FEE, OP_TRUE_SPK)]
+            jd = jd_override or journal_digest(tx, spent, rollup_id, root0, root1, annex)
             tx.wit.vtxinwit = [CTxInWitness(), CTxInWitness()]
-            tx.wit.vtxinwit[0].scriptWitness.stack = [jd, nr, leaf0.script, leaf0.control] + ([annex] if annex else [])
+            tx.wit.vtxinwit[0].scriptWitness.stack = [jd, old_root, root1, leaf.script, leaf.control] + \
+                ([annex] if annex else [])
             return tx
 
         annex = b"\x50\x00" + b"GSRP\x01" + root0 + root1 + b"batch body"
-        good = spend(leaf1, annex)
+        good = spend(annex)
         cases = {
-            "wrong_journal_digest": spend(leaf1, annex, jd_override=sha(b"wrong")),
-            "redirected_successor": spend(leaf1, annex, out0_spk=leaf0.for_root(sha(b"other")).spk),
-            "successor_not_matching_new_root": spend(leaf1, annex, new_root=sha(b"other")),
-            "sequence_0_fails_csv": spend(leaf1, annex, seq=0),
+            "wrong_journal_digest": spend(annex, jd_override=sha(b"wrong")),
+            "output0_to_covenant_copy": spend(annex, out0_spk=copy.spk),
+            "output0_to_other_address": spend(annex, out0_spk=bytes(CScript(b"\x51\x20" + bytes(32)))),
+            "stale_old_root_in_witness": spend(annex, old_root=sha(b"stale")),
+            "sequence_0_fails_csv": spend(annex, seq=0),
         }
+        # Output 1 is bound only through the output digest: a different OP_RETURN passes the Script when the
+        # journal is recomputed for it, and is rejected by the guest (RootOutput), not here.
+        results["root_output_bytes"] = len(rc.state_root_script(root1))
         r = {}
         for name, tx in cases.items():
             acc = rpc("testmempoolaccept", [tx.serialize().hex()])[0]

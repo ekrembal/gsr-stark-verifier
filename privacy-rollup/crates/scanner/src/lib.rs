@@ -226,8 +226,12 @@ impl Replica {
             backing_sats: rollup_value,
             parent: tip.utxo,
         };
-        if state.root() != annex.new_state_root {
+        let published = TxOut { value: 0, script_pubkey: state_root_script(&annex.new_state_root) };
+        if state.root() != annex.new_state_root || tx.outputs.get(1) != Some(&published) {
             return Err(ScanError::NewRootMismatch);
+        }
+        if tx.outputs.first().map(|o| &o.script_pubkey) != tip.creating_tx.outputs.first().map(|o| &o.script_pubkey) {
+            return Err(ScanError::WrongRollup);
         }
         self.commitments = commitments;
         self.nullifiers = nullifiers;

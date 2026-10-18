@@ -2,13 +2,14 @@
 """Non-interactive deposit escrows: `P2TR(NUMS, {sweep (0xc2), refund (0xc0)})`.
 
 The sweep leaf is `0x20 D OP_DROP || body`. The body uses OP_TX to require that input 0 of the sweeping
-transaction is a taproot script-path spend of this rollup's covenant (this image and rollup id, any state
-root), with exactly the covenant's witness item count and an annex, that the escrow input itself carries
-`ESCROW_INPUT_SEQUENCE`, and that the escrow input's own annex is the one-byte marker `0x50` (bitcoin/bitcoin#36466
-requires an annex on every non-P2A input once one has it; pinning it stops a relayer inflating it). The guest accepts that sequence only on escrow inputs, and only if the input's output
-key opens to a sweep leaf committing to `D`; `D` commits to the rollup id, and P2a lineage means only the
-genuine rollup coin has receipts, so the escrow mints exactly its note in exactly this rollup. `python3 deposit_escrow.py node-test` checks the body's
-semantics on the gsr regtest node against a small stand-in covenant leaf.
+transaction spends the rollup's fixed address (`P2TR(NUMS, covenant leaf)`, the same for every state), that the
+escrow input itself carries `ESCROW_INPUT_SEQUENCE`, and that the escrow input's own annex is the one-byte marker
+`0x50` (bitcoin/bitcoin#36466 requires an annex on every non-P2A input once one has it; pinning it stops a relayer
+inflating it). The only spend path of that address is the covenant, which needs a receipt of `apply_batch`, and
+recursive lineage means only the genuine rollup coin has receipts. The guest accepts that sequence only on escrow
+inputs, and only if the input's output key opens to a sweep leaf committing to `D`; `D` commits to the rollup id,
+so the escrow mints exactly its note in exactly this rollup. `python3 deposit_escrow.py node-test` checks the
+body's semantics on the gsr regtest node against a small stand-in covenant leaf.
 """
 import hashlib
 import json
@@ -29,8 +30,6 @@ from test_framework.script import (OP_CHECKSEQUENCEVERIFY, OP_CHECKSIG, OP_DROP,
 
 SWEEP_LEAF, REFUND_LEAF = 0xc2, 0xc0
 SEL_SPK = bytes([0, 0, 0, 0x30, 0x08, 0])
-SEL_WITNESS_COUNT = bytes([0, 0, 0, 0x30, 0x40, 0])
-SEL_WITNESS_ITEMS = bytes([0, 0, 0, 0x30, 0x80, 0])
 SEL_CURRENT_SEQUENCE = bytes([0, 0, 0, 0x10, 0x20, 0])
 SEL_CURRENT_ANNEX = bytes([0, 0, 0x02, 0, 0, 0])
 ANNEX_MARKER = b"\x50"
@@ -38,47 +37,13 @@ ESCROW_INPUT_SEQUENCE = 2  # pr_protocol_types::ESCROW_INPUT_SEQUENCE
 ROLLUP_ID_PUSH = b"\x24" + struct.pack("<I", 1)
 
 
-class Template:
-    """Where the root sits in a covenant leaf (which must hold the rollup id push once), and the hash of the rest."""
-
-    def __init__(self, script: bytes, root_offset: int, rollup_id: bytes, witness_items: int) -> None:
-        d = root_offset
-        assert script[d] == 0x20
-        hits = [i for i in range(len(script)) if script.startswith(ROLLUP_ID_PUSH + rollup_id, i)]
-        assert len(hits) == 1, "rollup id push must be unique"
-        r = hits[0] + len(ROLLUP_ID_PUSH)
-        assert d + 33 <= r and r + 32 <= len(script)
-        self.d, self.r, self.length, self.k = d, r, len(script), witness_items
-        self.masked = hashlib.sha256(script[:d + 1] + script[d + 33:]).digest()
-
-    @staticmethod
-    def of(cov: rc.Covenant) -> "Template":
-        return Template(cov.script, cov.decl_len, cov.gen.stmt.rollup_id, covenant_witness_items())
-
-
-def covenant_witness_items() -> int:
-    """Items of a covenant spend: the verifier stack plus new root, leaf, control block and annex."""
-    g = rc.g
-    return rc.ref.QUERIES * len(g.QUERY_ITEMS) + len(g.SETUP_ITEMS) + 4
-
-
-def sweep_body(t: Template) -> bytes:
-    d, n = t.d, t.length
+def sweep_body(rollup_spk: bytes) -> bytes:
+    assert len(rollup_spk) == 34 and rollup_spk[:2] == b"\x51\x20"
     seq = ESCROW_INPUT_SEQUENCE.to_bytes(4, "little").rstrip(b"\0")  # OP_TX pushes a BIP 441 minimal unsigned number
-    drops = ["2DROP"] * ((t.k - 3) // 2) + ["DROP"] * ((t.k - 3) % 2)
     return bytes(assemble([
         SEL_CURRENT_ANNEX, "TX", ANNEX_MARKER, "EQUALVERIFY",
         SEL_CURRENT_SEQUENCE, "TX", seq, "EQUALVERIFY",
-        0, SEL_SPK, "TX", "SIZE", 34, "EQUALVERIFY", 0, 2, "SUBSTR", b"\x51\x20", "EQUALVERIFY",
-        0, SEL_WITNESS_COUNT, "TX", t.k, "NUMEQUALVERIFY",
-        0, SEL_WITNESS_ITEMS, "TX",
-        0, 1, "SUBSTR", b"\x50", "EQUALVERIFY",
-        "SIZE", 33, "EQUALVERIFY", "DUP", 1, 32, "SUBSTR", NUMS, "EQUALVERIFY",
-        0, 1, "SUBSTR", "DUP", b"\xc2", "EQUAL", "SWAP", b"\xc3", "EQUAL", "ADD", "VERIFY",
-        "SIZE", n, "EQUALVERIFY",
-        "DUP", 0, d + 1, "SUBSTR", "SWAP",
-        d + 33, n - d - 33, "SUBSTR", "CAT", "SHA256", t.masked, "EQUALVERIFY",
-        *drops, 1,
+        0, SEL_SPK, "TX", rollup_spk, "EQUAL",
     ]).code)
 
 
@@ -107,8 +72,8 @@ class Escrow:
 
 # ---- node test against a stand-in covenant leaf ----------------------------------------------------------
 
-def standin(root: bytes, rollup_id: bytes, tail: bytes = b"\x51") -> bytes:
-    return b"\x20" + root + b"\x75" + ROLLUP_ID_PUSH + rollup_id + b"\x75" + tail
+def standin(rollup_id: bytes, tail: bytes = b"\x51") -> bytes:
+    return ROLLUP_ID_PUSH + rollup_id + b"\x75" + tail
 
 
 def node_test() -> dict:
@@ -141,21 +106,20 @@ def node_test() -> dict:
             rpc("generatetoaddress", 144, miner)
         cb = rpc("getblock", first, 2)["tx"][0]
         rid, other_rid = hashlib.sha256(b"rid").digest(), hashlib.sha256(b"other").digest()
-        tmpl = Template(standin(b"\0" * 32, rid), 0, rid, 3)
-        body = sweep_body(tmpl)
         user = generate_privkey()
         user_x = compute_xonly_pubkey(user)[0]
         delay = 5
-        escrow = Escrow(hashlib.sha256(b"deposit").digest(), body, user_x, delay)
 
         def leaf_coin(script, key=NUMS):
             tr = taproot_construct(key, [("c", CScript(script), SWEEP_LEAF)])
             return bytes(tr.scriptPubKey), bytes([SWEEP_LEAF | tr.negflag]) + key
-        good_spk, good_ctl = leaf_coin(standin(b"\x11" * 32, rid))
-        rid2_spk, rid2_ctl = leaf_coin(standin(b"\x22" * 32, other_rid))
-        bad_spk, bad_ctl = leaf_coin(standin(b"\x11" * 32, rid, b"\x51\x51\x75"))  # different template tail
+        good_spk, good_ctl = leaf_coin(standin(rid))
+        body = sweep_body(good_spk)
+        escrow = Escrow(hashlib.sha256(b"deposit").digest(), body, user_x, delay)
+        rid2_spk, rid2_ctl = leaf_coin(standin(other_rid))
+        bad_spk, bad_ctl = leaf_coin(standin(rid, b"\x51\x51\x75"))  # a copy with any other leaf
         nk = compute_xonly_pubkey(generate_privkey())[0]
-        key_spk, key_ctl = leaf_coin(standin(b"\x11" * 32, rid), nk)
+        key_spk, key_ctl = leaf_coin(standin(rid), nk)
         p2wsh = bytes(CScript(b"\x00\x20" + hashlib.sha256(op_true).digest()))
         mimic_ws = b"\x6d\x51"  # 2DROP TRUE: a valid P2WSH spend carrying the covenant leaf and control block
         mimic = bytes(CScript(b"\x00\x20" + hashlib.sha256(mimic_ws).digest()))
@@ -203,17 +167,16 @@ def node_test() -> dict:
             assert ok or first_vout is None or "input 1 of" in err or "non-BIP68-final" in err, (name, err)
             return ok
 
-        good_wit = [standin(b"\x11" * 32, rid), good_ctl, annex]
+        good_wit = [standin(rid), good_ctl, annex]
         # ESCROW_INPUT_SEQUENCE is also a BIP 68 lock of two blocks: a sweep never spends an unconfirmed escrow.
         attempt("reject_sweep_escrow_one_confirmation", coin[good_spk], good_wit, escrow_vouts[0], False)
         rpc("generatetoaddress", 1, miner)
-        attempt("reject_template_mismatch", coin[bad_spk], [standin(b"\x11" * 32, rid, b"\x51\x51\x75"), bad_ctl, annex],
+        attempt("reject_other_leaf", coin[bad_spk], [standin(rid, b"\x51\x51\x75"), bad_ctl, annex],
                 escrow_vouts[0], False)
-        attempt("reject_non_nums_internal_key", coin[key_spk], [standin(b"\x11" * 32, rid), key_ctl, annex],
+        attempt("reject_non_nums_internal_key", coin[key_spk], [standin(rid), key_ctl, annex],
                 escrow_vouts[0], False)
-        attempt("reject_p2wsh_mimic", coin[mimic], [standin(b"\x11" * 32, rid), good_ctl, mimic_ws], escrow_vouts[0],
+        attempt("reject_p2wsh_mimic", coin[mimic], [standin(rid), good_ctl, mimic_ws], escrow_vouts[0],
                 False)
-        attempt("reject_no_annex", coin[good_spk], good_wit[:2], escrow_vouts[0], False)
         attempt("reject_escrow_alone", None, None, escrow_vouts[0], False)
         attempt("reject_refund_before_delay", None, None, escrow_vouts[0], False, seq=delay, sign=True)
         attempt("reject_sweep_without_escrow_sequence", coin[good_spk], good_wit, escrow_vouts[1], False,
@@ -222,9 +185,9 @@ def node_test() -> dict:
                 escrow_wit=escrow.sweep_witness()[:2])
         attempt("reject_escrow_inflated_annex", coin[good_spk], good_wit, escrow_vouts[0], False,
                 escrow_wit=escrow.sweep_witness()[:2] + [b"\x50\x00" + bytes(20_000)])
-        attempt("accept_sweep_genuine_template", coin[good_spk], good_wit, escrow_vouts[0], True)
+        attempt("accept_sweep_genuine_address", coin[good_spk], good_wit, escrow_vouts[0], True)
         attempt("reject_sweep_other_rollup_id_same_image", coin[rid2_spk],
-                [standin(b"\x22" * 32, other_rid), rid2_ctl, annex], escrow_vouts[1], False)
+                [standin(other_rid), rid2_ctl, annex], escrow_vouts[1], False)
         rpc("generatetoaddress", delay, miner)
         attempt("accept_refund_after_delay", None, None, escrow_vouts[2], True, seq=delay, sign=True)
         report["sweep_body_bytes"] = len(body)

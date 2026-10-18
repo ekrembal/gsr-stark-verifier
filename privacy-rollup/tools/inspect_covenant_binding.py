@@ -71,8 +71,8 @@ def main():
         parameters['claim']['output'] = rc.ref.output_digest(
             sha(journal), bytes.fromhex(parameters['claim']['assumptions_digest'])).hex()
         parameters['claim_digest'] = rc.ref.claim_digest(parameters['claim']).hex()
-        covenant = rc.Covenant(parameters, journal[4:36], journal[36:68])
-        successor = covenant.for_root(journal[68:100])
+        covenant = rc.Covenant(parameters, journal[4:36])
+        successor = covenant
         changed = copy.deepcopy(tx)
         changed['inputs'][0]['script_pubkey'] = list(covenant.script_pubkey)
         changed['outputs'][0]['script_pubkey'] = list(successor.script_pubkey)

@@ -110,7 +110,7 @@ def main() -> None:
     report["reject_missing_funding"] = rejected(OPERATOR, "submit", state, js / "tx.json")
 
     req = WORK / "request.json"
-    req.write_text(json.dumps({"rollup_script_pubkey": ROLLUP_SPK, "successor_script_pubkey": ROLLUP_SPK}))
+    req.write_text(json.dumps({"rollup_script_pubkey": ROLLUP_SPK}))
     run(OPERATOR, "build", state, req, out)
     batch = json.loads((out / "batch.json").read_text())
     assert batch["transactions"] == 1 and batch["assumption_receipts"] == ["receipt0.bin"]

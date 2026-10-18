@@ -1,4 +1,6 @@
-# Privacy rollup on GSR
+# gsr-privacy-pool: privacy rollup on GSR
+
+Short explainer: [docs/explainer.md](docs/explainer.md). Whitepaper-style specification: [docs/whitepaper.md](docs/whitepaper.md).
 
 A two-input/two-output private join-split rollup whose state is a single Taproot UTXO. Each settlement
 spends the current rollup UTXO and creates its successor; the only spending condition is a RISC Zero

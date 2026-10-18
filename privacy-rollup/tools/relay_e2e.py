@@ -73,7 +73,7 @@ def start_node(node: str, *extra: str) -> None:
     datadir.mkdir(parents=True, exist_ok=True)
     subprocess.run([str(BIN / "bitcoind"), "-regtest", f"-datadir={datadir}", "-daemonwait", "-server", "-listen=1",
                     f"-rpcport={port}", f"-port={port + 1}", "-acceptnonstdtxn=0", *RPC_AUTH,
-                    "-vbparams=tapleaf_0xc2:0:3999999999", *extra], check=True)
+                    "-vbparams=tapleaf_0xc2:0:3999999999", "-debug=net", "-debug=mempool", "-debug=mempoolrej", *extra], check=True)
 
 
 def restart_empty(node: str) -> None:
@@ -90,7 +90,9 @@ def connect() -> None:
     rpc("a", "setnetworkactive", True)
     rpc("b", "addnode", f"127.0.0.1:{NODES['a'][1] + 1}", "onetry")
     for _ in range(100):
-        if rpc("a", "getconnectioncount") and rpc("b", "getconnectioncount"):
+        # A peer is only offered transactions once its version handshake has completed.
+        if all(any("verack" in q["bytesrecv_per_msg"] and q["relaytxes"] for q in rpc(n, "getpeerinfo"))
+               for n in NODES):
             return
         time.sleep(0.2)
     raise RuntimeError("nodes did not connect")
@@ -223,9 +225,8 @@ def main() -> None:
         p, b1 = settle_until_broadcast("a")
         settles.append(p)
         tx1 = b1["txid"]
-        for _ in range(150):
-            if tx1 in rpc("b", "getrawmempool"):
-                break
+        t0 = time.time()
+        while time.time() - t0 < 180 and tx1 not in rpc("b", "getrawmempool"):
             time.sleep(0.2)
         report["batch_a"] = {**b1, "node_a": entry("a", tx1),
                              "relayed_to_node_b": tx1 in rpc("b", "getrawmempool")}
@@ -253,9 +254,8 @@ def main() -> None:
         restart_empty("b")
         connect()
         rpc("b", "sendrawtransaction", raw2)
-        for _ in range(300):
-            if tx2 in rpc("a", "getrawmempool"):
-                break
+        t0 = time.time()
+        while time.time() - t0 < 180 and tx2 not in rpc("a", "getrawmempool"):
             time.sleep(0.2)
         mp = rpc("a", "getrawmempool")
         e1 = report["batch_a"]["node_a"]
@@ -294,9 +294,9 @@ def main() -> None:
         assert not report["consensus"]["escrow_annex_missing"][0]
         assert not report["consensus"]["escrow_annex_inflated_20kB"][0]
 
-        rpc("a", "generatetoaddress", 1, miner)
+        block = rpc("a", "generatetoaddress", 1, miner)[0]
         sync_blocks()
-        mined = rpc("a", "getrawtransaction", tx2, 1)
+        mined = rpc("a", "getrawtransaction", tx2, 1, block)
         report["mined"] = {"txid": tx2, "confirmations": mined.get("confirmations"), "weight": mined["weight"],
                            "annex_bytes": len(mined["vin"][0]["txinwitness"][-1]) // 2,
                            "annex_prefix": mined["vin"][0]["txinwitness"][-1][:12],

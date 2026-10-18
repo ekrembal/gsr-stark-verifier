@@ -12,7 +12,7 @@ Two harnesses:
   Policy depends only on size, fee, version, annexes and topology, so these measure policy; they do not
   run the GSR verifier. Results: `reports/relay-pinning-synthetic.json`.
 * `tools/relay_e2e.py` relays and replaces real, proven settlements between two patched nodes.
-  Results: `build/relay-e2e.json` (summarised below).
+  Results: `reports/relay-e2e.json` (summarised below).
 
 Two size regimes are measured with the stand-ins: "current" (84,407 vB, the size of today's settlement)
 and "target" (5,482 vB, a stand-in for a small future verifier; that size is an assumption, not a
@@ -128,3 +128,26 @@ while it is unconfirmed, so it can have no descendant to pin it:
 `tools/deposit_escrow.py node-test` adds `reject_sweep_escrow_one_confirmation` (an escrow swept with one
 confirmation is `bad-txns-nonfinal`). The cost of the design: a withdrawal cannot pay an arbitrary address
 (e.g. an exchange deposit) directly; the recipient forwards it one block later.
+
+## Real settlements: relay, replacement and mining
+
+`tools/relay_e2e.py` with two patched nodes, two batchers and the optimized GSR covenant (this PR's
+format: `50 00` annex, sequences `[1, 2, 2]`, no change, reward or P2A output). Results in
+`reports/relay-e2e.json`.
+
+| step | measured |
+| --- | --- |
+| batch A (node A): 333,803 WU, 10,000 sats, 8 segments, 1,825 s segment proving | relayed to node B over P2P |
+| batch B (node B, 2 escrow deposits): 335,903 WU, 20,000 sats, 12 segments, 2,908 s segment proving | relayed to node A in 3.5 s; replaced batch A (minimum delta 8,398 sats, paid 10,000) |
+| re-sending batch A to node A | rejected: `insufficient fee, rejecting replacement` |
+| batch B with escrow annex missing / inflated by 20 kB | invalid at consensus (`OP_EQUALVERIFY` in the sweep leaf) |
+| batch B mined | 335,903 WU, 2,683-byte annex starting `500047535250`, 3 inputs, 1 output |
+| both depositors scan through batcher B | one 20,000-sat note each |
+
+How the run went: the first attempt timed out while waiting for P2P relay; batch A was valid
+(`testmempoolaccept` allowed) but was held in node A's unbroadcast set. In the second attempt batch A
+relayed, but batch B was sent before the restarted node's version handshake finished, so it was never
+announced. `connect()` now waits for `verack` and `relaytxes` on both peers, and the relay wait is 180 s.
+The replacement stage onward was then rerun with the same persisted nodes, batchers and proven
+transactions (not re-proven), and passed. A clean end-to-end run with the fixed harness has not been
+repeated (about 1.5 h of proving on this machine).

@@ -10,11 +10,11 @@ use std::collections::BTreeSet;
 use serde::{Deserialize, Serialize};
 
 use pr_bitcoin_adapter::{SettlementTx, TxInput};
+use pr_protocol_types::state_root_script;
 use pr_protocol_types::{
     Canonical, Fe, Outpoint, RollupTransaction, TxOut, EMPTY_SETTLEMENT_WEIGHT, ESCROW_INPUT_SEQUENCE,
     FUNDING_INPUT_SEQUENCE, MAX_BATCH_TRANSACTIONS, MAX_SETTLEMENT_WEIGHT, ROLLUP_INPUT_SEQUENCE, TX_VERSION,
 };
-use pr_protocol_types::state_root_script;
 use pr_scanner::Replica;
 use pr_state_transition::escrow::EscrowDeposit;
 use pr_state_transition::{check_transaction, BatchTransaction, TransitionError};

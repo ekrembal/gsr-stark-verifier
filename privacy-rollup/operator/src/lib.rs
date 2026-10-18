@@ -161,11 +161,7 @@ impl Store {
     }
 
     /// As [`Store::build`], also sweeping `escrows` (confirmed escrow outputs) into minted notes.
-    pub fn build_with_escrows(
-        &self,
-        rollup_script_pubkey: Vec<u8>,
-        escrows: &[EscrowCoin],
-    ) -> Result<BuiltBatch> {
+    pub fn build_with_escrows(&self, rollup_script_pubkey: Vec<u8>, escrows: &[EscrowCoin]) -> Result<BuiltBatch> {
         let (replica, _) = self.load()?;
         let entries = self.select(&replica, escrows)?;
         let settlement = assemble_settlement_with_escrows(&replica, rollup_script_pubkey, &entries, escrows)

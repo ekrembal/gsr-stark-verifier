@@ -4,11 +4,11 @@
 use pr_bitcoin_adapter::{PlainTx, SettlementTx};
 use pr_commitment_tree::Tree;
 use pr_indexed_nullifier_tree::IndexedTree;
+use pr_protocol_types::state_root_script;
 use pr_protocol_types::{
     hash::sha256, next_data_history, AnchorEntry, AnchorHistory, AnchorProof, Annex, Canonical, Fe, Outpoint,
     RollupDescriptor, RollupState, TxOut, DUST_LIMIT,
 };
-use pr_protocol_types::state_root_script;
 use pr_state_transition::escrow::EscrowDeposit;
 use pr_state_transition::successor_root;
 use pr_state_transition::{

@@ -74,7 +74,8 @@ JoinSplitWitness
                                     settlement tx + witness  ─────────────►  rollup leaf:
                                                                               Script STARK verifier
                                                                               + OP_TX journal binding
-                                                                              -> successor output
+                                                                              -> output 0: same address
+                                                                              -> output 1: OP_RETURN <new root>
 ```
 
 **Roles.**
@@ -205,7 +206,9 @@ The same Rust code runs natively (batcher, scanner, tests) and in the guest (`pr
    - **Header:** version 2, locktime 0.
    - **Input order:** `[rollup, funding.., escrows..]`. Input 0 spends output 0 of the private
      `predecessor_tx` with sequence 1 and amount `backing_sats`; lineage is checked (§9).
-   - **Output order:** `[successor, withdrawals..]`; no change or reward outputs.
+   - **Output order:** `[rollup, OP_RETURN <new_state_root>, withdrawals..]`. Output 0 pays `backing_sats` to the
+     same scriptPubKey input 0 spent (the pool's fixed address); output 1 is exactly `0x6a 0x20 <new root>` with
+     value 0 (`RootOutput`); no change or reward outputs.
    - **Sequences:** funding inputs 1, escrows 2 (BIP 68 locks: no unconfirmed parents).
    - **Funding:** each funding set pays exactly `deposit`.
 5. **Fees:** `F = Σ fee_sats` is the miner fee: `Σ inputs − Σ outputs = F`. The new `backing_sats = old + deposits − withdrawals − F ≥ dust`.
@@ -270,18 +273,19 @@ statements.
 
 ## 9. Bitcoin binding and lineage
 
-The pool output is P2TR with the NUMS internal key and exactly one `0xc2` leaf:
+The pool output is P2TR with the NUMS internal key and exactly one `0xc2` leaf, the same for every state, so
+the pool has one fixed address:
 
 ```
-leaf(root) = PUSH32 <state_root> 1 OP_CHECKSEQUENCEVERIFY OP_DROP || suffix
+leaf = 1 OP_CHECKSEQUENCEVERIFY OP_DROP || suffix
 ```
 
-`suffix` is the same for every state. It embeds the rollup id, the `apply_batch` image ID, the control root
-and the complete verifier. Using `OP_TX`, the suffix checks that:
+`suffix` embeds the rollup id, the `apply_batch` image ID, the control root and the complete verifier. The
+state root is not in the script: each settlement publishes its new root as output 1, `OP_RETURN <new_root>`,
+in non-witness data that the next settlement's txid-checked lineage reads. Using `OP_TX`, the suffix checks that:
 - it runs as input 0;
 - the coin is a single-leaf tree under NUMS;
-- output 0 is the successor `P2TR(NUMS, leaf(new_root))`, derived in Script from its own tapscript with the
-  root swapped;
+- output 0 pays the scriptPubKey input 0 spent (its own address);
 - the journal's three digests match the real transaction (every input's prevout, amount, scriptPubKey,
   scriptSig and sequence, plus version and locktime; every output; and input 0's annex).
 
@@ -292,7 +296,7 @@ The guest reads the transaction from the same bytes whose digests the Script rec
 transaction the guest checked is the one being spent.
 
 **Lineage.** A script sees only its own coin, so anyone can create a *copy*: another output paying the same
-leaf, or the leaf of a state root they made up. The guest closes this recursively:
+address (with any `OP_RETURN` root beside it), or a leaf of their own. The guest closes this recursively:
 1. `state.parent` is the outpoint that input 0 of the creating transaction spent.
 2. The settlement witness includes that transaction, `predecessor_tx`, without its witness data, and the
    outputs its inputs spent.
@@ -300,16 +304,17 @@ leaf, or the leaf of a state root they made up. The guest closes this recursivel
    that `predecessor_tx`'s own input 0 spent `state.parent`. The new state sets `parent` to input 0's prevout.
 4. At batch 0 the old state must be `genesis(descriptor)` (`parent = genesis_nonce`).
 5. Past genesis, the guest rebuilds the predecessor's journal (its inputs and outputs digests from
-   `predecessor_tx` and the spent outputs, its old root and annex digest, and `new_state_root = old.root()`)
+   `predecessor_tx` and the spent outputs, its old root and annex digest, and `new_state_root = old.root()`,
+   which must also be what `predecessor_tx` published in its output 1)
    and verifies a receipt of the pool's own image for it. The batcher supplies the predecessor's unconditional
    receipt as an assumption, which recursion discharges (`resolve`); anyone holding only the chain can instead
    pass the predecessor's on-chain padded-SHA receipt, which the guest verifies itself.
 
 Steps 1–3 alone are not enough: an attacker can choose a state with the genuine rollup id and its own coin as
 `parent`. Step 5 makes every proven state descend from the genuine genesis, so no receipt can exist for a copy,
-and paying to a copied leaf burns the coins. This costs no extra on-chain bytes; the guest and proving cost is measured in `reports/lineage.md`.
+and paying to the pool's address outside a settlement burns the coins. This costs no extra on-chain bytes; the guest and proving cost is measured in `reports/lineage.md`.
 
-**Cadence.** `1 CSV` stops the successor being spent in the block that creates it, so there is at most one
+**Cadence.** `1 CSV` stops the new pool output being spent in the block that creates it, so there is at most one
 settlement per block.
 
 ## 10. Deposits
@@ -329,8 +334,8 @@ address = P2TR(NUMS, { sweep (0xc2): 0x20 D OP_DROP || body,
 ```
 
 - **The sweep body** uses `OP_TX` to require three things: the escrow input's own annex is exactly the marker `0x50`
-  (so a relayer cannot inflate its weight), input 0 of the sweeping transaction is a script-path spend of this
-  pool's covenant (this image and rollup id, any state root) with an annex, and the escrow input has sequence
+  (so a relayer cannot inflate its weight), input 0 of the sweeping transaction spends the pool's fixed address (`P2TR(NUMS, leaf)`, whose only
+  spend path is the covenant), and the escrow input has sequence
   `2` (a BIP 68 lock: the escrow needs two confirmations).
 - **The guest** receives the escrow opening privately. It checks `D`, the taproot tweak, the sequence and the
   exact amount `value + fee_sats`, then mints the note and counts `fee_sats` as fee.
@@ -374,7 +379,8 @@ amount). The guest enforces only that `Σ fee_sats` is the miner fee (§7). How 
 - **No reward, no CPFP:** every fee goes to the miner. A user bumps by proving the join-split again with a
   higher `fee_sats`; the next batch replaces the pending settlement under ordinary RBF. No Bitcoin coin of
   the user is spent, so bumping links no address.
-- **No pinning handle:** withdrawal outputs carry `1 OP_CSV` in their leaf, the successor carries `1 OP_CSV`,
+- **No pinning handle:** withdrawal outputs carry `1 OP_CSV` in their leaf, the pool output carries `1 OP_CSV`, the root output is
+  an unspendable `OP_RETURN`,
   and there are no change, reward or P2A outputs, so nothing in an unconfirmed settlement can be spent and
   it can have no descendants. Funding and escrow sequences are BIP 68 locks, so it has no unconfirmed
   parents either. Measured on a node patched with bitcoin/bitcoin#36466 (`reports/no-pin-handles.json`):
@@ -457,7 +463,7 @@ Native tests (`cargo test --workspace`):
 On the `gsr` node with a real receipt (`tools/p6_adversarial.py`, `reports/p6-adversarial.json`), a settlement
 was proven (532.9 s, 332,411 WU) and broadcast, then the batcher was killed. Each tampered copy was offered in
 a block:
-- Rejected by the covenant Script (`OP_VERIFY` failure on input 0): successor value −1, last output −1,
+- Rejected by the covenant Script (`OP_VERIFY` failure on input 0): rollup output value −1, last output −1,
   last output redirected, an extra output, annex byte flipped, annex padded by 100 kB, seal byte flipped, and
   the real witness on a covenant copy.
 - Rejected earlier, on the value balance: the variant with the funding input dropped.
@@ -483,7 +489,7 @@ The restarted batcher resumed the in-flight settlement and recorded it once mine
 | no double spend | nullifier tree |
 | value conserved, no overflow | range checks + checked arithmetic |
 | the transaction is the one proven | `OP_TX` digests in the journal |
-| state continuity, verifier can't be replaced | leaf prefix + successor derived in Script, single leaf under NUMS |
+| state continuity, verifier can't be replaced | output 0 = own address (fixed leaf, single leaf under NUMS); root in output 1, checked by the guest |
 | only the genuine pool settles | recursive lineage (predecessor receipt) |
 | data availability | annex bound by the journal |
 | ≤ 1 settlement per block | `1 CSV` |

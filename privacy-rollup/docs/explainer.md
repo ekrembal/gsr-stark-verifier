@@ -16,7 +16,8 @@ it can only be spent by a transaction that carries a valid zero-knowledge proof 
 2. **A batcher aggregates.** Anyone can run a batcher. It collects up to 16 user receipts, runs the
    `apply_batch` program, which checks each receipt (`env::verify`, discharged by `resolve_zk`) and updates
    the pool's trees, and proves the whole batch as one receipt.
-3. **Bitcoin verifies.** The settlement transaction spends the pool output and creates its successor. The
+3. **Bitcoin verifies.** The settlement transaction spends the pool output, pays the pool's one fixed
+   address again and publishes the new state root in an `OP_RETURN`. The
    pool's script is a complete STARK verifier in Bitcoin Script. It checks the receipt, and uses `OP_TX` to
    check that the receipt was about exactly this transaction: its inputs, outputs and annex. The annex
    carries the batch data (nullifiers, commitments, ciphertexts), so anyone can rebuild the pool's state from
@@ -38,8 +39,8 @@ it can only be spent by a transaction that carries a valid zero-knowledge proof 
   proofs stay valid because old tree roots (anchors) never expire.
 - **Fees:** each user pays `fee_sats`, fixed in their proof, all to the miner. To bump, a user re-proves with a
   higher fee and the next batch replaces the old one (RBF); there is no CPFP, so no address is linked.
-- **No pinning:** nothing in a pending settlement is spendable: withdrawals and the successor are `1 CSV`
-  locked and there are no change, reward or anchor outputs. A withdrawal recipient spends one block later.
+- **No pinning:** nothing in a pending settlement is spendable: withdrawals and the new pool output are `1 CSV`
+  locked, the root output is an `OP_RETURN`, and there are no change, reward or anchor outputs. A withdrawal recipient spends one block later.
 
 **Measured (8-vCPU CPU machine, regtest on the `gsr` node).**
 

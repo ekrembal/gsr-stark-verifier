@@ -1,8 +1,9 @@
 # Protocol (version 1)
 
 A BTC-only shielded pool whose entire state lives in one Taproot output, the *rollup output*. Each Bitcoin
-settlement transaction spends the rollup output and creates its successor; a RISC Zero receipt of the
-`apply_batch` guest proves that the successor state is the correct transition for exactly that transaction.
+settlement transaction spends the rollup output and pays the same fixed rollup address again, publishing the
+new state root as `OP_RETURN <root>` in output 1; a RISC Zero receipt of the `apply_batch` guest proves that
+the new state is the correct transition for exactly that transaction.
 
 ## Identity and genesis
 
@@ -87,8 +88,9 @@ to the old anchor root, and one membership path per transaction anchor:
    spent `old.parent`; the new state's `parent` is input 0's prevout (`check_lineage`). At batch 0 `old` must
    be `genesis(descriptor)`; past it, the guest verifies a receipt of `descriptor.image_id` for the
    predecessor journal rebuilt from `predecessor_tx`, the outputs it spent, its old root and annex digest
-   (`LineageClaim`). Outputs
-   `[rollup successor, withdrawals..]`, each funding set paying exactly `deposit`, each withdrawal output
+   (`LineageClaim`); `predecessor_tx` output 1 must be `OP_RETURN 0x20 <old.root()>` with value 0. Outputs
+   `[rollup (same scriptPubKey as input 0, RollupScript), OP_RETURN 0x20 <new root> (value 0, RootOutput),
+   withdrawals..]`, each funding set paying exactly `deposit`, each withdrawal output
    `P2TR(NUMS, {leaf})` for its committed leaf;
 5. fees: `F = Σ fee_sats` is the miner fee, `Σ inputs − Σ outputs = F`,
    new `backing_sats = old + deposits − withdrawals − F ≥ dust`;
@@ -123,7 +125,7 @@ Let `r` be the feerate (sat/vB: fixed, or `estimatesmartfee` with a floor) and `
     script against it. Wallets build them with `withdrawal(value, key_tail(xonly))`: the recipient's key
     spends with sequence ≥ 1, one block after the settlement confirms. Paying an exchange address directly
     is not possible; the recipient forwards the coin. The one-block delay is a protocol choice;
-  * the successor leaf already carries `1 OP_CHECKSEQUENCEVERIFY`;
+  * the rollup leaf already carries `1 OP_CHECKSEQUENCEVERIFY`, and the root output is an unspendable `OP_RETURN`;
   * there are no change, reward or P2A outputs (a declared deposit change is rejected, `ChangeOutput`);
   * funding inputs (sequence 1) and escrows (sequence 2) are BIP 68 locked, so a settlement spending an
     unconfirmed funding coin or escrow is non-final. The batcher defers settling while a funding coin is
@@ -147,8 +149,8 @@ taproot address `P2TR(NUMS, {sweep (leaf version 0xc2), refund (0xc0)})` that an
   sha256(ciphertext))`, where the ciphertext may be either kind (a depositor paying its own wallet can use a
   120-byte self ciphertext); the sweep leaf is `0x20 D OP_DROP || body`, where `body` (`covenant_cli escrow-body`,
   served at `GET /v1/escrow`) uses `OP_TX` to require that the escrow input's own annex is exactly the one-byte marker `0x50`, that the
-  sweeping transaction's input 0 is a script-path spend of this rollup's covenant (this image and rollup id, any
-  state root) with an annex, and that the escrow input itself has sequence `ESCROW_INPUT_SEQUENCE = 2` (matched as
+  sweeping transaction's input 0 spends this rollup's fixed address (its scriptPubKey, the same for every state,
+  whose only spend path is the covenant), and that the escrow input itself has sequence `ESCROW_INPUT_SEQUENCE = 2` (matched as
   `OP_TX`'s minimal numeric encoding `02`; as a BIP 68 lock it also requires two confirmations of the escrow).
 * The refund leaf is `<delay> OP_CHECKSEQUENCEVERIFY OP_DROP <xonly> OP_CHECKSIG`; the batcher requires
   `delay ≥ --min-refund-delay` (default 144 blocks).
@@ -170,5 +172,5 @@ An empty batch (no transactions) is valid and only advances the batch number, an
 
 ## Cadence
 
-The rollup leaf starts with `<old_root> 1 OP_CHECKSEQUENCEVERIFY OP_DROP`, so a successor cannot be spent in
+The rollup leaf starts with `1 OP_CHECKSEQUENCEVERIFY OP_DROP`, so a new rollup output cannot be spent in
 the block that creates it: at most one settlement per block, enforced by consensus.

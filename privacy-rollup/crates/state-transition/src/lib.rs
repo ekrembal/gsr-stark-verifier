@@ -11,6 +11,7 @@ use pr_bitcoin_adapter::{PlainTx, SettlementTx, TxInput};
 use pr_commitment_tree::Frontier;
 use pr_indexed_nullifier_tree::{verify_batch_insertion, BatchInsertionWitness, NullifierError};
 use pr_protocol_types::hash::sha256;
+use pr_protocol_types::state_root_script;
 use pr_protocol_types::{
     anchor_leaf, anchor_root_from_path, ciphertext_kind, next_data_history, AnchorEntry, AnchorHistory, AnchorProof,
     Annex, BatchBody, BatchJournal, Canonical, ExternalData, Fe, JoinSplitPublic, NoteOutput, Outpoint,
@@ -19,7 +20,6 @@ use pr_protocol_types::{
     MAX_WITHDRAWALS_PER_TX, MAX_WITHDRAWAL_LEAF_LEN, PROTOCOL_VERSION, ROLLUP_INPUT_SEQUENCE, TX_VERSION,
     WITHDRAWAL_LEAF_PREFIX, WITHDRAWAL_LEAF_VERSION,
 };
-use pr_protocol_types::state_root_script;
 use serde::{Deserialize, Serialize};
 
 /// One join-split as seen by the transition: its statement and the public data it commits to. The

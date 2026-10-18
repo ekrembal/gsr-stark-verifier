@@ -6,7 +6,7 @@
   * with the nodes disconnected, batcher A settles {a} through `sendrawtransaction` on node A and batcher B
     (its own state, same genesis) settles {a, b} on node B, both under default mempool policy;
   * the nodes reconnect and node B re-announces its settlement: node A must take it over P2P as an ordinary
-    RBF replacement (different txid, since the successor output commits to the new state root);
+    RBF replacement (different txid, since output 1 publishes the new state root);
   * variants of the replacement with the escrow input's annex missing or inflated fail consensus
     (`generateblock` with `submit=false`), and the replacement is mined and recorded by batcher B.
 
@@ -247,7 +247,7 @@ def main() -> None:
         assert tx1 != tx2
 
         report["batch_b"]["outputs"] = len(rpc("b", "getrawtransaction", tx2, 1)["vout"])
-        assert report["batch_b"]["outputs"] == 1, "a deposit-only settlement pays only its successor"
+        assert report["batch_b"]["outputs"] == 2, "a deposit-only settlement pays only the rollup and its root"
 
         # Node B announces a transaction only when it enters its mempool, so empty it, reconnect, resubmit:
         # node A must replace tx1 with tx2 through P2P relay.

@@ -442,10 +442,6 @@ What changed in P5:
 A second parallel worker saved only 4–9% and doubled memory, so the default is one worker. A full 16-transaction
 settlement (with `resolve_zk` and the final wrap) has not been run.
 
-**Browser.** The SDK compiles to WASI and runs in a browser worker. One segment of 2^16 rows took 407 s in
-desktop Chrome, using 1.54 GB. A full receipt was not completed in a browser: about 20 h single-threaded is an
-estimate. Segments of 2^20 rows or more exceed the 2 GiB that a single wasm32 allocation can hold.
-
 ## 13. Adversarial evaluation
 
 Native tests (`cargo test --workspace`):

@@ -1,11 +1,8 @@
-//! HTTP API (`/v1`) and the static benchmark site.
-use std::fs::OpenOptions;
-use std::io::Write;
-use std::path::PathBuf;
+//! HTTP API (`/v1`).
 use std::sync::Arc;
 
 use axum::extract::{DefaultBodyLimit, Path, Query, State};
-use axum::http::{HeaderMap, StatusCode};
+use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
 use axum::routing::{get, post};
 use axum::{Json, Router};
@@ -15,8 +12,6 @@ use serde::Deserialize;
 use serde_json::{json, Value};
 
 use crate::service::{Batcher, Rejection};
-
-pub const MAX_BENCHMARK_BYTES: usize = 64 << 10;
 
 impl IntoResponse for Rejection {
     fn into_response(self) -> Response {
@@ -95,40 +90,8 @@ async fn batch(State(b): Shared, Path(n): Path<u64>) -> Result<Response, Rejecti
     b.report(n).map(|r| Json(r).into_response()).ok_or(Rejection::NotFound(format!("no batch {n}")))
 }
 
-fn benchmarks_path(b: &Batcher) -> PathBuf {
-    b.store.dir.join("benchmarks.jsonl")
-}
-
-/// Stores one benchmark result posted by the website, with the time and user agent it arrived with.
-async fn post_benchmark(State(b): Shared, headers: HeaderMap, Json(mut v): Json<Value>) -> Result<Response, Rejection> {
-    if !v.is_object() {
-        return Err(Rejection::Invalid("a benchmark result is a JSON object".into()));
-    }
-    v["received_unix"] =
-        json!(std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_secs()).unwrap_or(0));
-    v["received_user_agent"] = json!(headers.get("user-agent").and_then(|h| h.to_str().ok()).unwrap_or(""));
-    let path = benchmarks_path(&b);
-    blocking(move || {
-        let mut f = OpenOptions::new().create(true).append(true).open(path).map_err(anyhow::Error::from)?;
-        writeln!(f, "{v}").map_err(anyhow::Error::from)?;
-        Ok(())
-    })
-    .await?;
-    Ok(StatusCode::CREATED.into_response())
-}
-
-async fn get_benchmarks(State(b): Shared) -> Result<Response, Rejection> {
-    let path = benchmarks_path(&b);
-    let rows = blocking(move || {
-        let text = std::fs::read_to_string(path).unwrap_or_default();
-        Ok(text.lines().filter_map(|l| serde_json::from_str::<Value>(l).ok()).collect::<Vec<_>>())
-    })
-    .await?;
-    Ok(Json(rows).into_response())
-}
-
-pub fn router(b: Arc<Batcher>, web: Option<PathBuf>) -> Router {
-    let api = Router::new()
+pub fn router(b: Arc<Batcher>) -> Router {
+    Router::new()
         .route("/v1/status", get(status))
         .route("/v1/transactions", post(submit).layer(DefaultBodyLimit::max(MAX_TX_JSON_BYTES as usize)))
         .route("/v1/escrow", get(escrow_terms))
@@ -138,15 +101,7 @@ pub fn router(b: Arc<Batcher>, web: Option<PathBuf>) -> Router {
         .route("/v1/batches", post(settle).get(batches))
         .route("/v1/fees", get(fees))
         .route("/v1/batches/{n}", get(batch))
-        .route(
-            "/v1/benchmarks",
-            post(post_benchmark).get(get_benchmarks).layer(DefaultBodyLimit::max(MAX_BENCHMARK_BYTES)),
-        )
-        .with_state(b);
-    match web {
-        Some(dir) => api.fallback_service(tower_http::services::ServeDir::new(dir)),
-        None => api,
-    }
+        .with_state(b)
 }
 
 #[cfg(test)]
@@ -204,7 +159,7 @@ mod tests {
 
     #[tokio::test]
     async fn status_reports_the_genesis_state() {
-        let app = router(batcher("status"), None);
+        let app = router(batcher("status"));
         let (code, v) = call(&app, "GET", "/v1/status", Vec::new()).await;
         assert_eq!(code, StatusCode::OK);
         assert_eq!(v["batch_number"], 0);
@@ -214,7 +169,7 @@ mod tests {
 
     #[tokio::test]
     async fn malformed_and_oversized_submissions_are_rejected() {
-        let app = router(batcher("submit"), None);
+        let app = router(batcher("submit"));
         let not_hex = json!({"transaction": "zz", "funding": []}).to_string().into_bytes();
         assert_eq!(call(&app, "POST", "/v1/transactions", not_hex).await.0, StatusCode::BAD_REQUEST);
         let truncated = json!({"transaction": "00", "funding": []}).to_string().into_bytes();
@@ -228,26 +183,11 @@ mod tests {
 
     #[tokio::test]
     async fn empty_pool_is_not_settled_and_unknown_resources_are_404() {
-        let app = router(batcher("settle"), None);
+        let app = router(batcher("settle"));
         assert_eq!(call(&app, "POST", "/v1/batches", Vec::new()).await.0, StatusCode::CONFLICT);
         assert_eq!(call(&app, "GET", "/v1/batches/1", Vec::new()).await.0, StatusCode::NOT_FOUND);
         assert_eq!(call(&app, "GET", "/v1/paths/0", Vec::new()).await.0, StatusCode::NOT_FOUND);
         let (code, v) = call(&app, "GET", "/v1/batches", Vec::new()).await;
         assert_eq!((code, v), (StatusCode::OK, json!([])));
-    }
-
-    #[tokio::test]
-    async fn benchmarks_are_stored_and_bounded() {
-        let app = router(batcher("bench"), None);
-        let result = json!({"mode": "profile", "ok": true}).to_string().into_bytes();
-        assert_eq!(call(&app, "POST", "/v1/benchmarks", result).await.0, StatusCode::CREATED);
-        assert_eq!(call(&app, "POST", "/v1/benchmarks", b"[1]".to_vec()).await.0, StatusCode::BAD_REQUEST);
-        let mut big = b"{\"pad\": \"".to_vec();
-        big.resize(MAX_BENCHMARK_BYTES + 1, b'a');
-        assert_eq!(call(&app, "POST", "/v1/benchmarks", big).await.0, StatusCode::PAYLOAD_TOO_LARGE);
-        let (code, v) = call(&app, "GET", "/v1/benchmarks", Vec::new()).await;
-        assert_eq!(code, StatusCode::OK);
-        assert_eq!(v.as_array().unwrap().len(), 1);
-        assert_eq!(v[0]["mode"], "profile");
     }
 }

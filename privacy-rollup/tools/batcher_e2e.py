@@ -81,8 +81,8 @@ def internal(txid: str) -> str:
 def serve(state: Path, miner: str, log: Path) -> subprocess.Popen:
     env = {**os.environ, **PROVER_ENV, "BITCOIN_RPC_URL": f"http://127.0.0.1:{PORT}",
            "BITCOIN_RPC_COOKIE": str(DATADIR / "regtest/.cookie")}
-    p = subprocess.Popen([str(BATCHER), "serve", str(state), "--listen", f"127.0.0.1:{HTTP}", "--mine-to", miner,
-                          "--web", str(PR / "prover/web")], env=env, stdout=log.open("ab"), stderr=subprocess.STDOUT)
+    p = subprocess.Popen([str(BATCHER), "serve", str(state), "--listen", f"127.0.0.1:{HTTP}", "--mine-to", miner],
+                         env=env, stdout=log.open("ab"), stderr=subprocess.STDOUT)
     for _ in range(100):
         try:
             if http("GET", "/v1/status")[0] == 200:

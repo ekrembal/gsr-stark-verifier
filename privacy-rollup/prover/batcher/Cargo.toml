@@ -14,7 +14,6 @@ pr-bitcoin-adapter = { path = "../../crates/bitcoin-adapter" }
 pr-scanner = { path = "../../crates/scanner" }
 axum = "0.8.9"
 tokio = { version = "1.53.1", features = ["rt-multi-thread", "macros", "signal", "time", "sync"] }
-tower-http = { version = "0.6.11", features = ["fs"] }
 reqwest = { version = "0.12.28", default-features = false, features = ["json"] }
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"

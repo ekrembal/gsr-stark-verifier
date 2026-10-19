@@ -1,6 +1,6 @@
 //! pr-batcher init  <dir> <descriptor.json>       create the operator directory; prints the genesis covenant output
 //! pr-batcher genesis <dir> <tx-hex>              record the genesis tx (spends genesis_nonce, rollup at output 0)
-//! pr-batcher serve <dir> [--listen ADDR] [--web DIR] [--interval SECS] [--mine-to ADDRESS]
+//! pr-batcher serve <dir> [--listen ADDR] [--interval SECS] [--mine-to ADDRESS]
 //!                        [--confirmations N] [--min-transactions N] [--min-refund-delay BLOCKS]
 //!                        [--fee-rate SAT_PER_VB | --fee-target BLOCKS [--fee-floor SAT_PER_VB]]
 //!                        [--target-transactions N] [--max-wait SECS]
@@ -109,7 +109,7 @@ async fn main() -> Result<()> {
                 });
             }
             let listen = flag(&a, "--listen").unwrap_or_else(|| "127.0.0.1:8080".to_owned());
-            let app = pr_batcher::http::router(b, flag(&a, "--web").map(PathBuf::from));
+            let app = pr_batcher::http::router(b);
             let listener = tokio::net::TcpListener::bind(&listen).await?;
             eprintln!("pr-batcher listening on http://{listen}");
             axum::serve(listener, app)

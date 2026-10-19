@@ -1,0 +1,235 @@
+//! Operator state store, shared by the `pr-operator` CLI and the `pr-batcher` service. The durable
+//! state is the rollup descriptor, the genesis transaction, the chain of accepted settlements (annex
+//! and witness-free transaction) and the pending pool; every load replays the chain through the scanner and re-admits
+//! the pool against the replayed tip, so restart and reorg handling share one code path.
+use std::fs;
+use std::path::{Path, PathBuf};
+
+use anyhow::{bail, ensure, Context, Result};
+use pr_bitcoin_adapter::PlainTx;
+use pr_mempool::{
+    assemble_settlement_with_escrows, batch_transactions, escrow_weight, Entry, EscrowCoin, FundingCoin, Mempool,
+};
+use pr_protocol_types::{
+    Canonical, Outpoint, RollupDescriptor, RollupTransaction, TxOut, EMPTY_SETTLEMENT_WEIGHT, MAX_SETTLEMENT_WEIGHT,
+};
+use pr_scanner::Replica;
+use pr_state_transition::{apply_batch, BatchEffects, BatchWitness};
+use risc0_zkvm::{sha::Digestible, ReceiptClaim, SuccinctReceipt, VerifierContext};
+use serde::{Deserialize, Serialize};
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct Settled {
+    pub annex: String,
+    /// The settlement transaction, hex; any serialization is accepted, stored without witnesses.
+    pub tx: String,
+    /// The output each input of `tx` spent, in input order: the next settlement rebuilds this
+    /// one's journal from them for its lineage proof.
+    #[serde(default)]
+    pub spent: Vec<TxOut>,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize, Default)]
+pub struct Chain {
+    /// The genesis transaction (spends `genesis_nonce`, rollup at output 0), hex without witnesses.
+    pub genesis: Option<String>,
+    pub settlements: Vec<Settled>,
+}
+
+/// Decodes a transaction in legacy or segwit serialization.
+pub fn plain_tx(hex_tx: &str) -> Result<PlainTx> {
+    PlainTx::decode(&hex::decode(hex_tx)?).map_err(|e| anyhow::anyhow!("transaction encoding: {e:?}"))
+}
+
+const PENDING: &str = "pending.json";
+/// Image ID of the user-side `joinsplit` guest, as compiled into `apply_batch`.
+pub const JOINSPLIT_ID: [u32; 8] = include!("../../methods/guest/src/joinsplit_id.rs");
+
+/// Bound on a submitted `tx.json`: a `MAX_RECEIPT_BYTES` receipt as a JSON byte array is at most
+/// 4 MiB, plus the statement and external data.
+pub const MAX_TX_JSON_BYTES: u64 = 8 << 20;
+
+/// Accepts a transaction only if its receipt is a zero-knowledge (`identity_zk`) seal of the
+/// `joinsplit` guest whose journal is the transaction's own statement.
+pub fn verify_receipt(tx: &RollupTransaction) -> Result<()> {
+    let receipt: SuccinctReceipt<ReceiptClaim> = postcard::from_bytes(&tx.receipt).context("receipt encoding")?;
+    receipt.verify_integrity_zk_with_context(&VerifierContext::default()).context("zero-knowledge seal")?;
+    let expected = ReceiptClaim::ok(JOINSPLIT_ID, tx.public.encode());
+    ensure!(receipt.claim.digest() == expected.digest(), "receipt is not of this statement");
+    Ok(())
+}
+
+/// Parses a JSON `RollupTransaction` of at most `MAX_TX_JSON_BYTES` and requires it to round-trip
+/// through the canonical decoder (which bounds the receipt by `MAX_RECEIPT_BYTES`).
+pub fn parse_transaction_json(bytes: &[u8]) -> Result<RollupTransaction> {
+    let len = bytes.len() as u64;
+    ensure!(len <= MAX_TX_JSON_BYTES, "tx.json is {len} bytes, more than {MAX_TX_JSON_BYTES}");
+    let tx: RollupTransaction = serde_json::from_slice(bytes)?;
+    RollupTransaction::decode(&tx.encode()).map_err(|e| anyhow::anyhow!("non-canonical transaction: {e:?}"))
+}
+
+pub fn outpoint(txid: &str, vout: u32) -> Result<Outpoint> {
+    let txid: [u8; 32] = hex::decode(txid)?.try_into().map_err(|_| anyhow::anyhow!("txid length"))?;
+    Ok(Outpoint { txid, vout })
+}
+
+/// A settlement assembled from the pool's fee-ordered selection.
+pub struct BuiltBatch {
+    pub entries: Vec<Entry>,
+    pub witness: BatchWitness,
+    pub effects: BatchEffects,
+}
+
+/// The operator directory.
+pub struct Store {
+    pub dir: PathBuf,
+}
+
+impl Store {
+    pub fn new(dir: impl AsRef<Path>) -> Store {
+        Store { dir: dir.as_ref().to_path_buf() }
+    }
+
+    /// Creates the directory with `descriptor` and an empty chain; returns the genesis state.
+    pub fn init(&self, descriptor: &RollupDescriptor) -> Result<pr_protocol_types::RollupState> {
+        fs::create_dir_all(&self.dir)?;
+        ensure!(!self.dir.join("chain.json").exists(), "{} is already initialised", self.dir.display());
+        fs::write(self.dir.join("descriptor.json"), serde_json::to_vec_pretty(descriptor)?)?;
+        self.save(&Chain::default())?;
+        Ok(pr_state_transition::genesis(descriptor).0)
+    }
+
+    pub fn descriptor(&self) -> Result<RollupDescriptor> {
+        Ok(serde_json::from_slice(&fs::read(self.dir.join("descriptor.json"))?)?)
+    }
+
+    pub fn chain(&self) -> Result<Chain> {
+        Ok(serde_json::from_slice(&fs::read(self.dir.join("chain.json"))?)?)
+    }
+
+    /// Records the genesis transaction; returns its rollup outpoint.
+    pub fn genesis(&self, tx_hex: &str) -> Result<Outpoint> {
+        let mut chain = self.chain()?;
+        ensure!(chain.genesis.is_none(), "genesis already recorded");
+        let tx = plain_tx(tx_hex)?;
+        let replica = Replica::new(self.descriptor()?, tx.clone())
+            .map_err(|e| anyhow::anyhow!("genesis must spend genesis_nonce and seed output 0: {e:?}"))?;
+        chain.genesis = Some(hex::encode(tx.serialize_legacy()));
+        self.save(&chain)?;
+        Ok(replica.tip().utxo)
+    }
+
+    pub fn load(&self) -> Result<(Replica, Chain)> {
+        let chain = self.chain()?;
+        let genesis = plain_tx(chain.genesis.as_deref().context("genesis transaction not recorded")?)?;
+        let mut replica = Replica::new(self.descriptor()?, genesis).map_err(|e| anyhow::anyhow!("genesis: {e:?}"))?;
+        for s in &chain.settlements {
+            replica
+                .accept_settlement(&hex::decode(&s.annex)?, &plain_tx(&s.tx)?, s.spent.clone())
+                .map_err(|e| anyhow::anyhow!("replaying batch: {e:?}"))?;
+        }
+        Ok((replica, chain))
+    }
+
+    pub fn load_pool(&self, replica: &Replica) -> Result<Mempool> {
+        let path = self.dir.join(PENDING);
+        let entries: Vec<Entry> = if path.exists() { serde_json::from_slice(&fs::read(path)?)? } else { Vec::new() };
+        Ok(Mempool::restore(entries, replica))
+    }
+
+    pub fn save_pool(&self, pool: &Mempool) -> Result<()> {
+        write_atomic(&self.dir.join(PENDING), &serde_json::to_vec(&pool.entries)?)
+    }
+
+    fn save(&self, chain: &Chain) -> Result<()> {
+        write_atomic(&self.dir.join("chain.json"), &serde_json::to_vec_pretty(chain)?)
+    }
+
+    /// Verifies the receipt, admits the transaction against the tip and queues it; returns the pool size.
+    pub fn submit(&self, tx: RollupTransaction, funding: Vec<FundingCoin>) -> Result<usize> {
+        let (replica, _) = self.load()?;
+        let mut pool = self.load_pool(&replica)?;
+        pool.submit(tx, funding, &replica, |t| verify_receipt(t).is_ok())
+            .map_err(|e| anyhow::anyhow!("rejected: {e:?}"))?;
+        self.save_pool(&pool)?;
+        Ok(pool.entries.len())
+    }
+
+    /// Assembles the next settlement from the pool; `rollup_script_pubkey` is the rollup's fixed address.
+    pub fn build(&self, rollup_script_pubkey: Vec<u8>) -> Result<BuiltBatch> {
+        self.build_with_escrows(rollup_script_pubkey, &[])
+    }
+
+    /// As [`Store::build`], also sweeping `escrows` (confirmed escrow outputs) into minted notes.
+    pub fn build_with_escrows(&self, rollup_script_pubkey: Vec<u8>, escrows: &[EscrowCoin]) -> Result<BuiltBatch> {
+        let (replica, _) = self.load()?;
+        let entries = self.select(&replica, escrows)?;
+        let settlement = assemble_settlement_with_escrows(&replica, rollup_script_pubkey, &entries, escrows)
+            .context("batch withdraws more than it backs")?;
+        let openings = escrows.iter().map(|c| c.opening.clone()).collect();
+        let witness = replica.witness_with_escrows(batch_transactions(&entries), openings, settlement);
+        let effects = apply_batch(&witness).map_err(|e| anyhow::anyhow!("transition: {e:?}"))?;
+        Ok(BuiltBatch { entries, witness, effects })
+    }
+
+    /// The pool transactions the next settlement sweeping `escrows` would carry.
+    pub fn select(&self, replica: &Replica, escrows: &[EscrowCoin]) -> Result<Vec<Entry>> {
+        let swept: u64 = escrows.iter().map(escrow_weight).sum();
+        let budget = (MAX_SETTLEMENT_WEIGHT - EMPTY_SETTLEMENT_WEIGHT).saturating_sub(swept);
+        Ok(self.load_pool(replica)?.select_within(budget))
+    }
+
+    /// Records a mined settlement and drops what it settled from the pool.
+    pub fn accept(&self, settled: Settled) -> Result<Replica> {
+        let (mut replica, mut chain) = self.load()?;
+        let tx = plain_tx(&settled.tx)?;
+        replica
+            .accept_settlement(&hex::decode(&settled.annex)?, &tx, settled.spent.clone())
+            .map_err(|e| anyhow::anyhow!("annex rejected: {e:?}"))?;
+        chain.settlements.push(Settled {
+            annex: settled.annex,
+            tx: hex::encode(tx.serialize_legacy()),
+            spent: settled.spent,
+        });
+        self.save(&chain)?;
+        self.save_pool(&self.load_pool(&replica)?)?;
+        Ok(replica)
+    }
+
+    pub fn rollback(&self) -> Result<Replica> {
+        let (_, mut chain) = self.load()?;
+        if chain.settlements.pop().is_none() {
+            bail!("nothing to roll back");
+        }
+        self.save(&chain)?;
+        let replica = self.load()?.0;
+        self.save_pool(&self.load_pool(&replica)?)?;
+        Ok(replica)
+    }
+
+    /// The tip as wallets need it (anchor for new join-splits) plus the pool size.
+    pub fn status(&self, replica: &Replica) -> Result<serde_json::Value> {
+        let tip = replica.tip();
+        let anchor = tip.anchors.0.last().context("anchor")?;
+        Ok(serde_json::json!({
+            "anchor": {"root": hex::encode(anchor.commitment_root.0), "commitment_count": anchor.commitment_count,
+                       "batch_number": anchor.batch_number},
+            "rollup_id": hex::encode(tip.state.rollup_id.0),
+            "batch_number": tip.state.batch_number,
+            "state_root": hex::encode(tip.state.root()),
+            "commitment_count": tip.state.commitment_count,
+            "nullifier_next_index": tip.state.nullifier_next_index,
+            "backing_sats": tip.state.backing_sats,
+            "utxo": [hex::encode(tip.utxo.txid), tip.utxo.vout],
+            "pending": self.load_pool(replica)?.entries.len(),
+        }))
+    }
+}
+
+/// Writes `bytes` to a sibling temporary file and renames it over `path`.
+pub fn write_atomic(path: &Path, bytes: &[u8]) -> Result<()> {
+    let tmp = path.with_extension("tmp");
+    fs::write(&tmp, bytes)?;
+    fs::rename(&tmp, path)?;
+    Ok(())
+}

@@ -3,11 +3,12 @@ use std::fmt::Write as _;
 
 pub use pr_joinsplit::JoinSplitWitness;
 use pr_protocol_types::{
-    DepositDeclaration, ExternalData, Fe, JoinSplitPublic, COMMITMENT_TREE_DEPTH, PROTOCOL_VERSION,
+    DepositDeclaration, ExternalData, Fe, JoinSplitPublic, TxOut, COMMITMENT_TREE_DEPTH, PROTOCOL_VERSION,
+    WITHDRAWAL_LEAF_PREFIX,
 };
 use rand_core::{CryptoRng, RngCore};
 
-use crate::encryption::{encrypt_note, NotePlaintext};
+use crate::encryption::{encrypt_note, encrypt_self, NotePlaintext};
 use crate::keys::Address;
 use crate::{Note, OwnedNote};
 
@@ -83,6 +84,9 @@ pub struct OutputSpec {
     pub value: u64,
     pub recipient: Address,
     pub memo: [u8; 32],
+    /// The sender's outgoing key when the output is the sender's own (change): the note is then
+    /// published with a 120-byte self ciphertext instead of an ML-KEM one.
+    pub self_key: Option<[u8; 32]>,
 }
 
 pub struct JoinSplitBuilder {
@@ -92,17 +96,37 @@ pub struct JoinSplitBuilder {
     pub anchor_batch_number: u64,
     pub expiry_batch_number: u64,
     pub deposit: Option<(DepositDeclaration, u64)>,
-    pub withdrawal: Option<(Vec<u8>, u64)>,
+    pub withdrawals: Vec<TxOut>,
+    /// The leaf behind each of `withdrawals`, in order (see [`withdrawal`]).
+    pub withdrawal_leaves: Vec<Vec<u8>>,
     pub fee_sats: u64,
 }
 
 pub struct BuiltJoinSplit {
     pub witness: JoinSplitWitness,
     pub external: ExternalData,
+    pub withdrawal_leaves: Vec<Vec<u8>>,
     pub output_notes: [Note; 2],
 }
 
+/// A withdrawal of `value` to the tapscript `tail`: the output is `P2TR(NUMS, {OP_1 OP_CSV OP_DROP || tail})`,
+/// so the recipient spends it with `tail`'s witness one block after the settlement confirms.
+pub fn withdrawal(value: u64, tail: &[u8]) -> Option<(TxOut, Vec<u8>)> {
+    let leaf = [&WITHDRAWAL_LEAF_PREFIX[..], tail].concat();
+    let script_pubkey = pr_state_transition::withdrawal_script_pubkey(&leaf)?;
+    Some((TxOut { value, script_pubkey }, leaf))
+}
+
+/// The withdrawal tail `<xonly key> OP_CHECKSIG`.
+pub fn key_tail(xonly: &[u8; 32]) -> Vec<u8> {
+    [&[0x20][..], xonly, &[0xac]].concat()
+}
+
 impl JoinSplitBuilder {
+    pub fn set_withdrawals(&mut self, ws: Vec<(TxOut, Vec<u8>)>) {
+        (self.withdrawals, self.withdrawal_leaves) = ws.into_iter().unzip();
+    }
+
     pub fn build<R: RngCore + CryptoRng>(
         &self,
         rng: &mut R,
@@ -157,12 +181,15 @@ impl JoinSplitBuilder {
             out_auth[j] = pt.authority;
             out_randomness[j] = pt.randomness;
             commitments[j] = pt.note().commitment(&self.rollup_id);
-            ciphertexts[j] = encrypt_note(rng, &o.recipient.encapsulation_key, &self.rollup_id, &pt);
+            ciphertexts[j] = match &o.self_key {
+                Some(k) => encrypt_self(k, &self.rollup_id, &pt),
+                None => encrypt_note(rng, &o.recipient.encapsulation_key, &self.rollup_id, &pt),
+            };
             output_notes[j] = pt.note();
         }
         let external = ExternalData {
             deposit: self.deposit.as_ref().map(|d| d.0.clone()),
-            withdrawal_script: self.withdrawal.as_ref().map(|w| w.0.clone()),
+            withdrawals: self.withdrawals.clone(),
             ciphertexts,
         };
         let public = JoinSplitPublic {
@@ -174,7 +201,11 @@ impl JoinSplitBuilder {
             nullifiers,
             output_commitments: commitments,
             deposit_sats: self.deposit.as_ref().map_or(0, |d| d.1),
-            withdrawal_sats: self.withdrawal.as_ref().map_or(0, |w| w.1),
+            withdrawal_sats: self
+                .withdrawals
+                .iter()
+                .try_fold(0u64, |a, o| a.checked_add(o.value))
+                .ok_or("withdrawals overflow")?,
             fee_sats: self.fee_sats,
             external_data_commitment: external.commitment(),
             expiry_batch_number: self.expiry_batch_number,
@@ -191,6 +222,6 @@ impl JoinSplitBuilder {
             out_randomness,
         };
         witness.check()?;
-        Ok(BuiltJoinSplit { witness, external, output_notes })
+        Ok(BuiltJoinSplit { witness, external, withdrawal_leaves: self.withdrawal_leaves.clone(), output_notes })
     }
 }

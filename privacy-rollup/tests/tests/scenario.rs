@@ -1,15 +1,18 @@
 //! End-to-end native scenarios and negative transition cases.
-use pr_mempool::MempoolError;
+use pr_bitcoin_adapter::PlainTx;
+use pr_indexed_nullifier_tree::NullifierError;
+use pr_mempool::{EscrowCoin, MempoolError};
+use pr_protocol_types::MAX_WITHDRAWAL_LEAF_LEN;
 use pr_protocol_types::{Annex, Canonical, Outpoint, TxOut};
 use pr_scanner::{Replica, ScanError};
 use pr_state_transition::{apply_batch, BatchWitness, TransitionError};
-use pr_tests::{coin, descriptor, Harness, Wallet};
-use pr_wallet_core::SpendInput;
+use pr_tests::{coin, descriptor, escrow_coin, genesis_tx, Harness, Wallet};
+use pr_wallet_core::{decrypt_any, key_tail, withdrawal, SpendInput};
 
 const WITHDRAW_SPK: [u8; 22] = [0x00, 0x14, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20];
 
-/// `(annex, rollup value, rollup outpoint)` of every settlement, as published on chain.
-type Published = Vec<(Vec<u8>, u64, Outpoint)>;
+/// `(annex, settlement without witnesses, outputs it spent)` of every settlement, as on chain.
+type Published = Vec<(Vec<u8>, PlainTx, Vec<TxOut>)>;
 
 /// Alice deposits, pays Bob, Bob withdraws; returns the harness, wallets and every published annex.
 fn lifecycle() -> (Harness, Wallet, Wallet, Published) {
@@ -17,16 +20,16 @@ fn lifecycle() -> (Harness, Wallet, Wallet, Published) {
     let (mut alice, mut bob) = (Wallet::new(1), Wallet::new(2));
     let mut published = Vec::new();
     let mut record = |h: &Harness, e: &pr_state_transition::BatchEffects| {
-        published.push((e.annex_bytes.clone(), e.new_state.backing_sats, h.replica.tip().utxo));
+        let tip = h.replica.tip();
+        published.push((e.annex_bytes.clone(), tip.creating_tx.clone(), tip.creating_spent.clone()));
     };
 
-    // Batch 1: deposit 50_000 from a 60_000 coin with 10_000 change; fee 1_000 of which 600 is the prover reward.
-    let funding = vec![coin(0x31, 60_000)];
-    let change = TxOut { value: 10_000, script_pubkey: vec![0x51, 0x20, 0x31] };
-    let b = h.deposit_builder(1_000, &funding, 50_000, Some(change));
+    // Batch 1: deposit a whole 50_000 coin (no change output); fee 1_000, all to the miner.
+    let funding = vec![coin(0x31, 50_000)];
+    let b = h.deposit_builder(1_000, &funding, 50_000, None);
     let js = h.build(&b, [SpendInput::Dummy, SpendInput::Dummy], [alice.pay(49_000), alice.pay(0)]);
     h.submit(&js, funding).unwrap();
-    let e = h.settle(Some(TxOut { value: 600, script_pubkey: vec![0x51, 0x20, 0x99] })).unwrap();
+    let e = h.settle().unwrap();
     record(&h, &e);
     alice.scan(&h.replica, &e);
     bob.scan(&h.replica, &e);
@@ -38,7 +41,7 @@ fn lifecycle() -> (Harness, Wallet, Wallet, Published) {
     let note = alice.notes[0].clone();
     let js = h.build(&b, [alice.spend(&h.replica, &note), SpendInput::Dummy], [bob.pay(30_000), alice.pay(18_500)]);
     h.submit(&js, vec![]).unwrap();
-    let e = h.settle(None).unwrap();
+    let e = h.settle().unwrap();
     record(&h, &e);
     alice.scan(&h.replica, &e);
     bob.scan(&h.replica, &e);
@@ -46,19 +49,20 @@ fn lifecycle() -> (Harness, Wallet, Wallet, Published) {
     assert_eq!(e.new_state.backing_sats, 58_500);
 
     // Batch 3: empty (anchor-only) settlement.
-    let e = h.settle(None).unwrap();
+    let e = h.settle().unwrap();
     record(&h, &e);
 
     // Batch 4: Bob withdraws 29_000 with fee 1_000 (anchor from batch 2, still in the window).
     let mut b = h.builder(1_000);
-    b.withdrawal = Some((WITHDRAW_SPK.to_vec(), 29_000));
+    let (out, leaf) = withdrawal(29_000, &key_tail(&[9; 32])).unwrap();
+    b.set_withdrawals(vec![(out.clone(), leaf)]);
     let note = bob.notes[0].clone();
     let js = h.build(&b, [bob.spend(&h.replica, &note), SpendInput::Dummy], [bob.pay(0), bob.pay(0)]);
     h.submit(&js, vec![]).unwrap();
     let w_settle = h.mempool.select();
-    let s = h.settlement(&w_settle, None);
-    assert_eq!(s.outputs[1], TxOut { value: 29_000, script_pubkey: WITHDRAW_SPK.to_vec() });
-    let e = h.settle(None).unwrap();
+    let s = h.settlement(&w_settle);
+    assert_eq!((s.outputs.len(), &s.outputs[2]), (3, &out));
+    let e = h.settle().unwrap();
     record(&h, &e);
     bob.scan(&h.replica, &e);
     assert_eq!((alice.balance(&h.replica), bob.balance(&h.replica)), (18_500, 0));
@@ -70,9 +74,9 @@ fn lifecycle() -> (Harness, Wallet, Wallet, Published) {
 #[test]
 fn deposit_transfer_withdraw_and_scanner_replay() {
     let (h, _, _, published) = lifecycle();
-    let mut fresh = Replica::new(descriptor(), Outpoint { txid: [1; 32], vout: 0 });
-    for (annex, value, utxo) in &published {
-        fresh.accept_annex_bytes(annex, *value, *utxo).unwrap();
+    let mut fresh = Replica::new(descriptor(), genesis_tx()).unwrap();
+    for (annex, tx, spent) in &published {
+        fresh.accept_settlement(annex, tx, spent.clone()).unwrap();
     }
     assert_eq!(fresh.tip(), h.replica.tip());
     assert_eq!(fresh.commitments.root(), h.replica.commitments.root());
@@ -82,23 +86,27 @@ fn deposit_transfer_withdraw_and_scanner_replay() {
 #[test]
 fn scanner_rejects_tampered_or_out_of_order_annexes() {
     let (_, _, _, published) = lifecycle();
-    let genesis = Outpoint { txid: [1; 32], vout: 0 };
-    let mut r = Replica::new(descriptor(), genesis);
-    let (a2, v2, u2) = &published[1];
-    assert_eq!(r.accept_annex_bytes(a2, *v2, *u2), Err(ScanError::WrongBatchNumber));
-    let (a1, v1, u1) = &published[0];
-    assert_eq!(r.accept_annex_bytes(a1, v1 + 1, *u1), Err(ScanError::NewRootMismatch));
+    let mut r = Replica::new(descriptor(), genesis_tx()).unwrap();
+    let (a2, t2, _) = &published[1];
+    assert_eq!(r.accept_annex_bytes(a2, t2), Err(ScanError::WrongBatchNumber));
+    let (a1, t1, _) = &published[0];
+    let mut inflated = t1.clone();
+    inflated.outputs[0].value += 1;
+    assert_eq!(r.accept_annex_bytes(a1, &inflated), Err(ScanError::NewRootMismatch));
+    let mut other_parent = t1.clone();
+    other_parent.inputs[0].prevout.vout = 1;
+    assert_eq!(r.accept_annex_bytes(a1, &other_parent), Err(ScanError::WrongPredecessor));
     let mut bad = a1.clone();
     *bad.last_mut().unwrap() ^= 1;
-    assert!(r.accept_annex_bytes(&bad, *v1, *u1).is_err());
+    assert!(r.accept_annex_bytes(&bad, t1).is_err());
     let mut trailing = a1.clone();
     trailing.push(0);
-    assert_eq!(r.accept_annex_bytes(&trailing, *v1, *u1), Err(ScanError::BadAnnex));
+    assert_eq!(r.accept_annex_bytes(&trailing, t1), Err(ScanError::BadAnnex));
     let mut decoded = Annex::decode(a1).unwrap();
     decoded.body.predecessor.vout = 1;
-    assert_eq!(r.accept_annex(&decoded, *v1, *u1), Err(ScanError::WrongPredecessor));
-    r.accept_annex_bytes(a1, *v1, *u1).unwrap();
-    assert_eq!(r.accept_annex_bytes(a1, *v1, *u1), Err(ScanError::WrongBatchNumber));
+    assert_eq!(r.accept_annex(&decoded, t1), Err(ScanError::WrongPredecessor));
+    r.accept_annex_bytes(a1, t1).unwrap();
+    assert_eq!(r.accept_annex_bytes(a1, t1), Err(ScanError::WrongBatchNumber));
 }
 
 #[test]
@@ -107,8 +115,8 @@ fn rollback_restores_state_and_allows_reapplication() {
     let before = h.replica.tip().clone();
     h.replica.rollback().unwrap();
     assert_eq!(h.replica.state().batch_number, 3);
-    let (a, v, u) = &published[3];
-    h.replica.accept_annex_bytes(a, *v, *u).unwrap();
+    let (a, t, spent) = &published[3];
+    h.replica.accept_settlement(a, t, spent.clone()).unwrap();
     assert_eq!(h.replica.tip(), &before);
     for _ in 0..4 {
         h.replica.rollback().unwrap();
@@ -142,13 +150,21 @@ fn double_spend_is_rejected_by_mempool_and_transition() {
     // Bypassing the mempool: both in one batch is a duplicate nullifier in the transition.
     let w = h.replica.witness(
         vec![
-            pr_state_transition::BatchTransaction { public: js1.witness.public, external: js1.external.clone() },
-            pr_state_transition::BatchTransaction { public: js2.witness.public, external: js2.external.clone() },
+            pr_state_transition::BatchTransaction {
+                public: js1.witness.public,
+                external: js1.external.clone(),
+                withdrawal_leaves: vec![],
+            },
+            pr_state_transition::BatchTransaction {
+                public: js2.witness.public,
+                external: js2.external.clone(),
+                withdrawal_leaves: vec![],
+            },
         ],
-        h.settlement(&[], None),
+        h.settlement(&[]),
     );
     assert_eq!(apply_batch(&w).err(), Some(TransitionError::DuplicateNullifier));
-    let _ = h.settle(None).unwrap();
+    let _ = h.settle().unwrap();
     alice.notes.clear();
 }
 
@@ -167,11 +183,12 @@ fn deposit_witness(
             public: js.witness.public,
             external: js.external.clone(),
             receipt: vec![],
+            withdrawal_leaves: vec![],
         },
         funding,
         arrival: 1,
     };
-    let s = h.settlement(std::slice::from_ref(&entry), None);
+    let s = h.settlement(std::slice::from_ref(&entry));
     (h.replica.witness(pr_mempool::batch_transactions(&[entry]), s), js)
 }
 
@@ -204,13 +221,18 @@ fn transition_rejects_every_settlement_tamper() {
         TransitionError::InputCount,
     );
     expect(&|w| w.settlement.inputs[1].prevout.vout = 9, TransitionError::FundingInput);
+    // A funding input carrying the escrow marker (how an escrow would be claimed as a join-split's coin).
+    expect(
+        &|w| w.settlement.inputs[1].sequence = pr_protocol_types::ESCROW_INPUT_SEQUENCE,
+        TransitionError::FundingInput,
+    );
     expect(&|w| w.settlement.inputs[1].amount -= 1, TransitionError::FundingAmount);
     expect(&|w| w.settlement.outputs[0].value -= 1, TransitionError::RolloverOutput);
+    // Any output beyond the successor and the declared withdrawals (a reward, change or anchor) is rejected.
     expect(
         &|w| w.settlement.outputs.push(TxOut { value: 701, script_pubkey: vec![0x6a] }),
-        TransitionError::FeeShortfall,
+        TransitionError::OutputCount,
     );
-    expect(&|w| w.settlement.outputs.push(TxOut { value: 1, script_pubkey: vec![0x6a] }), TransitionError::Dust);
     expect(
         &|w| {
             w.settlement.outputs.push(TxOut { value: 400, script_pubkey: vec![] });
@@ -246,17 +268,22 @@ fn transition_rejects_every_settlement_tamper() {
     );
     expect(
         &|w| {
-            w.nullifier_witnesses.pop();
+            w.nullifier_witness.lows.pop();
         },
-        TransitionError::NullifierWitnessCount,
+        TransitionError::Nullifier(NullifierError::Coverage),
     );
     expect(&|w| w.frontier = None, TransitionError::FrontierMissing);
     expect(&|w| w.old_state.commitment_count += 1, TransitionError::Frontier);
+    expect(&|w| w.old_state.commitment_frontier[0] ^= 1, TransitionError::Frontier);
     expect(&|w| w.old_state.backing_sats += 1, TransitionError::PredecessorAmount);
-    expect(&|w| w.anchors.0[0].commitment_count = 5, TransitionError::AnchorHistoryMismatch);
+    expect(&|w| w.anchor_slot[0][0] ^= 1, TransitionError::AnchorHistoryMismatch);
+    expect(&|w| w.anchor_slot.pop().map(|_| ()).unwrap(), TransitionError::AnchorHistoryMismatch);
+    expect(&|w| w.anchor_proofs.clear(), TransitionError::AnchorHistoryMismatch);
+    expect(&|w| w.anchor_proofs[0].entry.commitment_count = 5, TransitionError::UnknownAnchor);
+    expect(&|w| w.anchor_proofs[0].path[3][0] ^= 1, TransitionError::UnknownAnchor);
     expect(&|w| w.old_state.protocol_version = 2, TransitionError::UnsupportedVersion);
     let mut w = good.clone();
-    w.nullifier_witnesses.swap(0, 1);
+    w.nullifier_witness.lows[0].path[0][0] ^= 1;
     assert!(matches!(apply_batch(&w), Err(TransitionError::Nullifier(_))));
 }
 
@@ -272,7 +299,7 @@ fn journal_binds_digests_of_the_transaction() {
     assert_eq!(e.journal.annex_digest, pr_protocol_types::hash::sha256(&e.annex_bytes));
     assert_eq!(e.journal.old_state_root, w.old_state.root());
     assert_eq!(e.journal.new_state_root, e.new_state.root());
-    // A different change script, reward, or funding coin changes the bound digests.
+    // A different funding coin changes the bound digests.
     let mut w2 = w.clone();
     w2.settlement.inputs[1].script_pubkey.push(0);
     assert_ne!(apply_batch(&w2).unwrap().journal.transaction_inputs_digest, e.journal.transaction_inputs_digest);
@@ -290,6 +317,7 @@ fn mempool_admission_rules() {
         public: js.witness.public,
         external: js.external.clone(),
         receipt: vec![],
+        withdrawal_leaves: vec![],
     };
     assert_eq!(h.mempool.submit(tx, funding.clone(), &h.replica, |_| false), Err(MempoolError::Proof));
     h.submit(&js, funding.clone()).unwrap();
@@ -310,38 +338,428 @@ fn mempool_admission_rules() {
     h.submit(&c, vec![]).unwrap();
     assert_eq!(h.mempool.entries.len(), 3);
     h.mempool.entries.retain(|e| e.tx.public.deposit_sats > 0);
-    let e = h.settle(None).unwrap();
+    let e = h.settle().unwrap();
     assert_eq!(e.new_state.backing_sats, 15_000);
     assert!(h.mempool.entries.is_empty());
 }
 
+/// Anchors stay in the history tree forever; only the statement's own expiry ends a transaction.
 #[test]
-fn anchors_expire_after_the_window() {
+fn anchors_never_leave_the_history() {
     let mut h = Harness::new();
     let alice = Wallet::new(1);
     let mut b = h.builder(0);
-    b.expiry_batch_number = 1_000;
+    b.expiry_batch_number = 100;
     let js = h.build(&b, [SpendInput::Dummy, SpendInput::Dummy], [alice.pay(0), alice.pay(0)]);
-    for _ in 0..pr_protocol_types::ANCHOR_WINDOW {
-        h.settle(None).unwrap();
+    for _ in 0..99 {
+        h.settle().unwrap();
     }
-    assert_eq!(h.submit(&js, vec![]), Err(MempoolError::Rule(TransitionError::UnknownAnchor)));
+    h.submit(&js, vec![]).unwrap();
+    h.mempool.entries.clear();
+    h.settle().unwrap();
+    assert_eq!(h.submit(&js, vec![]), Err(MempoolError::Rule(TransitionError::Expired)));
 }
 
+/// Nothing in a settlement is spendable before it confirms: no reward, change or anchor output, and every
+/// withdrawal is `P2TR(NUMS, {OP_1 OP_CSV OP_DROP || tail})`.
 #[test]
-fn reward_cannot_exceed_fees() {
+fn settlement_has_no_unconfirmed_spend_path() {
     let mut h = Harness::new();
     let alice = Wallet::new(1);
-    let b = h.builder(500);
     let funding = vec![coin(0x61, 1_000)];
     let bd = h.deposit_builder(500, &funding, 1_000, None);
     let js = h.build(&bd, [SpendInput::Dummy, SpendInput::Dummy], [alice.pay(500), alice.pay(0)]);
-    let _ = b;
-    h.submit(&js, funding).unwrap();
+    h.submit(&js, funding.clone()).unwrap();
     let sel = h.mempool.select();
-    let s = h.settlement(&sel, Some(TxOut { value: 501, script_pubkey: vec![0x51] }));
+    let mut s = h.settlement(&sel);
+    assert_eq!(s.outputs.len(), 2);
+    s.outputs.push(TxOut { value: 400, script_pubkey: [&[0x51, 0x20][..], &[7; 32]].concat() });
     let w = h.replica.witness(pr_mempool::batch_transactions(&sel), s);
-    assert_eq!(apply_batch(&w).err(), Some(TransitionError::FeeShortfall));
-    let e = h.settle(Some(TxOut { value: 500, script_pubkey: vec![0x51] })).unwrap();
+    assert_eq!(apply_batch(&w).err(), Some(TransitionError::OutputCount), "reward / anchor output");
+    let p2a = TxOut { value: 400, script_pubkey: vec![0x51, 0x02, 0x4e, 0x73] };
+    let mut s = h.settlement(&sel);
+    s.outputs.push(p2a);
+    let w = h.replica.witness(pr_mempool::batch_transactions(&sel), s);
+    assert_eq!(apply_batch(&w).err(), Some(TransitionError::OutputCount), "P2A output");
+    let e = h.settle().unwrap();
     assert_eq!(e.new_state.backing_sats, 10_500);
+
+    let change = TxOut { value: 400, script_pubkey: [&[0x51, 0x20][..], &[8; 32]].concat() };
+    let funding = vec![coin(0x62, 1_400)];
+    let bc = h.deposit_builder(0, &funding, 1_000, Some(change));
+    let js = h.build(&bc, [SpendInput::Dummy, SpendInput::Dummy], [alice.pay(1_000), alice.pay(0)]);
+    assert_eq!(h.submit(&js, funding), Err(MempoolError::Rule(TransitionError::ChangeOutput)));
+
+    let mut alice = alice;
+    alice.scan(&h.replica, &e);
+    let note = alice.notes[0].clone();
+    let (locked, leaf) = withdrawal(400, &key_tail(&[9; 32])).unwrap();
+    let cases = [
+        (vec![TxOut { value: 400, script_pubkey: WITHDRAW_SPK.to_vec() }], vec![], "plain script, no leaf"),
+        (vec![TxOut { value: 400, script_pubkey: WITHDRAW_SPK.to_vec() }], vec![leaf.clone()], "plain script"),
+        (vec![locked.clone()], vec![key_tail(&[9; 32])], "leaf without the CSV prefix"),
+        (vec![locked.clone()], vec![[&leaf[..], &[0x75]].concat()], "another leaf"),
+    ];
+    for (outs, leaves, what) in cases {
+        let mut b = h.builder(100);
+        b.withdrawals = outs;
+        b.withdrawal_leaves = leaves;
+        let js = h.build(&b, [alice.spend(&h.replica, &note), SpendInput::Dummy], [alice.pay(0), alice.pay(0)]);
+        assert_eq!(h.submit(&js, vec![]), Err(MempoolError::Rule(TransitionError::WithdrawalLock)), "{what}");
+    }
+    assert!(withdrawal(400, &[0; MAX_WITHDRAWAL_LEAF_LEN]).is_none(), "oversized leaf");
+}
+
+/// `n` wallets each deposit `amount` (fee 0) in one batch; returns the wallets after scanning it.
+fn funded_wallets(h: &mut Harness, n: u8, amount: u64) -> Vec<Wallet> {
+    let mut wallets: Vec<Wallet> = (0..n).map(|k| Wallet::new(10 + k)).collect();
+    for (k, w) in wallets.iter().enumerate() {
+        let funding = vec![coin(0x70 + k as u8, amount)];
+        let b = h.deposit_builder(0, &funding, amount, None);
+        let js = h.build(&b, [SpendInput::Dummy, SpendInput::Dummy], [w.pay(amount), w.pay(0)]);
+        h.submit(&js, funding).unwrap();
+    }
+    while !h.mempool.entries.is_empty() {
+        let e = h.settle().unwrap();
+        for w in wallets.iter_mut() {
+            w.scan(&h.replica, &e);
+        }
+    }
+    wallets
+}
+
+#[test]
+fn batch_withdrawals_pay_each_declared_script_in_order() {
+    let mut h = Harness::new();
+    let wallets = funded_wallets(&mut h, 3, 10_000);
+    let locked: Vec<(TxOut, Vec<u8>)> =
+        (0..3u8).map(|k| withdrawal(4_000 + k as u64 * 1_000, &key_tail(&[0x40 + k; 32])).unwrap()).collect();
+    for (k, w) in wallets.iter().enumerate() {
+        let mut b = h.builder(300);
+        b.set_withdrawals(vec![locked[k].clone()]);
+        let note = w.notes[0].clone();
+        let change = 10_000 - 300 - (4_000 + k as u64 * 1_000);
+        let js = h.build(&b, [w.spend(&h.replica, &note), SpendInput::Dummy], [w.pay(change), w.pay(0)]);
+        h.submit(&js, vec![]).unwrap();
+    }
+    let selected = h.mempool.select();
+    let s = h.settlement(&selected);
+    let mut paid: Vec<TxOut> = s.outputs[2..].to_vec();
+    paid.sort_by_key(|o| o.value);
+    let expected: Vec<TxOut> = locked.iter().map(|(o, _)| o.clone()).collect();
+    assert_eq!(paid, expected);
+    let e = h.settle().unwrap();
+    assert_eq!(e.new_state.backing_sats, 10_000 + 30_000 - 15_000 - 900);
+}
+
+#[test]
+fn withdrawal_dust_and_redirection_are_rejected() {
+    let mut h = Harness::new();
+    let wallets = funded_wallets(&mut h, 1, 10_000);
+    let w = &wallets[0];
+    let note = w.notes[0].clone();
+    let mut b = h.builder(0);
+    b.set_withdrawals(vec![withdrawal(pr_protocol_types::DUST_LIMIT - 1, &key_tail(&[9; 32])).unwrap()]);
+    let dust = b.build(
+        &mut rand_core::OsRng,
+        [w.spend(&h.replica, &note), SpendInput::Dummy],
+        [w.pay(10_000 - pr_protocol_types::DUST_LIMIT + 1), w.pay(0)],
+    );
+    if let Ok(js) = dust {
+        assert_eq!(h.submit(&js, vec![]), Err(MempoolError::Rule(TransitionError::Dust)));
+    }
+
+    b.set_withdrawals(vec![withdrawal(2_000, &key_tail(&[9; 32])).unwrap()]);
+    let js = h.build(&b, [w.spend(&h.replica, &note), SpendInput::Dummy], [w.pay(8_000), w.pay(0)]);
+    h.submit(&js, vec![]).unwrap();
+    let selected = h.mempool.select();
+    let mut s = h.settlement(&selected);
+    s.outputs[2].script_pubkey = vec![0x51, 0x20, 0xee];
+    let wit = h.replica.witness(pr_mempool::batch_transactions(&selected), s.clone());
+    assert!(apply_batch(&wit).is_err());
+    s = h.settlement(&selected);
+    s.outputs[2].value -= 1;
+    let wit = h.replica.witness(pr_mempool::batch_transactions(&selected), s);
+    assert!(apply_batch(&wit).is_err());
+    h.settle().unwrap();
+}
+
+#[test]
+fn batches_are_capped_at_max_batch_transactions() {
+    let mut h = Harness::new();
+    let n = pr_protocol_types::MAX_BATCH_TRANSACTIONS as u8 + 1;
+    let wallets = funded_wallets(&mut h, n, 1_000);
+    for w in &wallets {
+        let mut b = h.builder(0);
+        b.set_withdrawals(vec![withdrawal(1_000, &key_tail(&[9; 32])).unwrap()]);
+        let note = w.notes[0].clone();
+        let js = h.build(&b, [w.spend(&h.replica, &note), SpendInput::Dummy], [w.pay(0), w.pay(0)]);
+        h.submit(&js, vec![]).unwrap();
+    }
+    let selected = h.mempool.select();
+    assert_eq!(selected.len(), pr_protocol_types::MAX_BATCH_TRANSACTIONS);
+    let e = h.settle().unwrap();
+    assert_eq!(e.annex.body.nullifiers.len(), 2 * pr_protocol_types::MAX_BATCH_TRANSACTIONS);
+    assert_eq!(h.mempool.entries.len(), 1);
+    h.settle().unwrap();
+    assert!(h.mempool.entries.is_empty());
+}
+
+#[test]
+fn old_anchor_still_spends_after_many_batches() {
+    let mut h = Harness::new();
+    let wallets = funded_wallets(&mut h, 1, 5_000);
+    let w = &wallets[0];
+    let note = w.notes[0].clone();
+    let mut b = h.builder(0);
+    b.expiry_batch_number = 1_000;
+    let stale = h.build(&b, [w.spend(&h.replica, &note), SpendInput::Dummy], [w.pay(5_000), w.pay(0)]);
+    for _ in 0..70 {
+        h.settle().unwrap();
+    }
+    h.submit(&stale, vec![]).unwrap();
+    let e = h.settle().unwrap();
+    assert_eq!(e.new_state.anchor_history_commitment, h.replica.tip().anchors.commitment());
+    assert_eq!(h.replica.tip().anchors.0.len(), h.replica.state().batch_number as usize + 1);
+    assert!(h.replica.spent(&note.nullifier));
+}
+
+/// A copy of the covenant (same script, any root) is a coin whose creating transaction did not spend
+/// the genuine rollup's parent, so no witness for it passes the lineage check.
+#[test]
+fn lineage_rejects_covenant_copies_and_forged_predecessors() {
+    let mut h = Harness::new();
+    let (good, _) = deposit_witness(&h, 20_000, 20_000, 700);
+    let ok = apply_batch(&good).unwrap();
+    assert_eq!(ok.new_state.parent, h.replica.tip().utxo);
+    assert_eq!(h.replica.state().parent, descriptor().genesis_nonce);
+    let expect = |w: &BatchWitness| assert_eq!(apply_batch(w).err(), Some(TransitionError::Lineage));
+
+    // Copy at the current root: funded by any other transaction paying the same script at output 0.
+    let mut copy_tx: PlainTx = genesis_tx();
+    copy_tx.inputs[0].prevout = Outpoint { txid: [0x66; 32], vout: 3 };
+    let mut w = good.clone();
+    w.settlement.inputs[0].prevout = Outpoint { txid: copy_tx.txid(), vout: 0 };
+    w.predecessor_tx = copy_tx.clone();
+    expect(&w);
+    // ... even if the copier claims the genuine creating transaction as the predecessor.
+    let mut w = good.clone();
+    w.settlement.inputs[0].prevout = Outpoint { txid: copy_tx.txid(), vout: 0 };
+    expect(&w);
+    // Copy at output 1 of the genuine genesis transaction.
+    let mut w = good.clone();
+    w.settlement.inputs[0].prevout.vout = 1;
+    expect(&w);
+    // Forged predecessor whose txid does not match input 0.
+    let mut w = good.clone();
+    w.predecessor_tx.outputs[0].value += 1;
+    expect(&w);
+
+    // After a genuine settlement, a copy at an older root (genesis state) still fails: its parent is
+    // the genesis nonce, which only the genuine genesis transaction spent.
+    let mut alice = Wallet::new(1);
+    let funding = vec![coin(0x42, 20_000)];
+    let b = h.deposit_builder(700, &funding, 20_000, None);
+    let js = h.build(&b, [SpendInput::Dummy, SpendInput::Dummy], [alice.pay(19_300), alice.pay(0)]);
+    h.submit(&js, funding).unwrap();
+    let e = h.settle().unwrap();
+    alice.scan(&h.replica, &e);
+    let genuine = h.replica.tip().clone();
+    assert_eq!(genuine.state.parent, Outpoint { txid: genesis_tx().txid(), vout: 0 });
+    let mut stale = good.clone();
+    stale.settlement.inputs[0].prevout = Outpoint { txid: copy_tx.txid(), vout: 0 };
+    stale.predecessor_tx = copy_tx;
+    expect(&stale);
+    // The next genuine settlement passes with the settlement that created the tip as predecessor.
+    let next = h.replica.witness(vec![], h.settlement(&[]));
+    assert_eq!(next.predecessor_tx, genuine.creating_tx);
+    assert_eq!(apply_batch(&next).unwrap().new_state.parent, genuine.utxo);
+}
+
+#[test]
+fn escrow_deposits_mint_notes_without_a_join_split() {
+    let mut h = Harness::new();
+    let rid = h.replica.descriptor.rollup_id();
+    let mut a = Wallet::new(41);
+    let mut b = Wallet::new(42);
+    let escrows = [escrow_coin(0x61, &rid, &a, 30_000, 700), escrow_coin(0x62, &rid, &b, 20_000, 300)];
+    let backing = h.replica.state().backing_sats;
+    let e = h.settle_with_escrows(&escrows).unwrap();
+    a.scan(&h.replica, &e);
+    b.scan(&h.replica, &e);
+    assert_eq!(a.balance(&h.replica), 30_000);
+    assert_eq!(b.balance(&h.replica), 20_000);
+    assert_eq!(e.annex.body.layout.escrows, 2);
+    assert_eq!(e.new_state.backing_sats, backing + 50_000);
+    let w = h.last_witness.clone().unwrap();
+    assert_eq!(w.settlement.inputs.len(), 3);
+    assert_eq!(w.settlement.inputs.iter().map(|i| i.amount).sum::<u64>() - w.settlement.outputs[0].value, 1_000);
+    // The annex round-trips with the minted notes.
+    assert_eq!(<Annex as Canonical>::decode(&e.annex_bytes).unwrap(), e.annex);
+
+    // The minted note is spendable by a normal join-split.
+    let note = a.notes[0].clone();
+    let built = h.build(&h.builder(1_000), [a.spend(&h.replica, &note), SpendInput::Dummy], [b.pay(29_000), b.pay(0)]);
+    h.submit(&built, vec![]).unwrap();
+    let e = h.settle().unwrap();
+    b.scan(&h.replica, &e);
+    assert_eq!(b.balance(&h.replica), 49_000);
+}
+
+#[test]
+fn escrow_openings_that_do_not_match_the_output_are_rejected() {
+    let rid = Harness::new().replica.descriptor.rollup_id();
+    let a = Wallet::new(43);
+    let base = escrow_coin(0x63, &rid, &a, 30_000, 700);
+    let reject = |c: EscrowCoin| {
+        let mut h = Harness::new();
+        h.settle_with_escrows(&[c]).unwrap_err()
+    };
+    let mut c = base.clone();
+    c.amount += 1;
+    reject(c);
+    let mut c = base.clone();
+    c.opening.value += 1;
+    reject(c);
+    let mut c = base.clone();
+    c.opening.fee_sats = 0;
+    reject(c);
+    let mut c = base.clone();
+    c.script_pubkey[5] ^= 1;
+    reject(c);
+    let mut c = base.clone();
+    c.opening.sibling = [6; 32];
+    reject(c);
+    let mut c = base.clone();
+    c.opening.ciphertext.pop();
+    reject(c);
+    // An escrow for another rollup id cannot be swept here.
+    reject(escrow_coin(0x64, &pr_protocol_types::Fe([3; 32]), &a, 30_000, 700));
+    // Dust notes are rejected.
+    reject(escrow_coin(0x65, &rid, &a, 10, 700));
+    let mut h = Harness::new();
+    h.settle_with_escrows(std::slice::from_ref(&base)).unwrap();
+    // Without the escrow marker the input could be a funding coin; the transition requires the marker.
+    let mut h = Harness::new();
+    h.settle_with_escrows(&[base]).unwrap();
+    let mut w = h.last_witness.clone().unwrap();
+    let last = w.settlement.inputs.len() - 1;
+    w.settlement.inputs[last].sequence = pr_protocol_types::FUNDING_INPUT_SEQUENCE;
+    assert_eq!(apply_batch(&w).err(), Some(TransitionError::Escrow));
+}
+
+#[test]
+fn self_change_ciphertexts_are_compact_and_only_the_sender_recovers_them() {
+    let mut h = Harness::new();
+    let mut alice = Wallet::new(1);
+    let mut bob = Wallet::new(2);
+    let funding = vec![coin(0x81, 9_000)];
+    let b = h.deposit_builder(0, &funding, 9_000, None);
+    let js = h.build(&b, [SpendInput::Dummy, SpendInput::Dummy], [bob.pay(3_000), alice.change(6_000)]);
+    h.submit(&js, funding).unwrap();
+    let e = h.settle().unwrap();
+    let [paid, change] = js.witness.public.output_commitments;
+    let find = |c| e.annex.body.outputs.iter().find(|o| o.commitment == c).unwrap();
+    let outs = [find(paid), find(change)];
+    assert_eq!(outs[0].ciphertext.len(), pr_protocol_types::NOTE_CIPHERTEXT_LEN);
+    assert_eq!(outs[1].ciphertext.len(), pr_protocol_types::SELF_CIPHERTEXT_LEN);
+    alice.scan(&h.replica, &e);
+    bob.scan(&h.replica, &e);
+    assert_eq!(alice.notes.iter().map(|n| n.note.value).collect::<Vec<_>>(), vec![6_000]);
+    assert_eq!(bob.notes.iter().map(|n| n.note.value).collect::<Vec<_>>(), vec![3_000]);
+
+    let rid = h.replica.descriptor.rollup_id();
+    let c = &outs[1];
+    assert!(decrypt_any(&alice.keys, &rid, &c.commitment, &c.ciphertext).is_some());
+    let mut tampered = c.ciphertext.clone();
+    tampered[7] ^= 1;
+    assert!(decrypt_any(&alice.keys, &rid, &c.commitment, &tampered).is_none());
+    assert!(decrypt_any(&alice.keys, &rid, &outs[0].commitment, &c.ciphertext).is_none());
+
+    // Spending the change works like any other note.
+    let note = alice.notes[0].clone();
+    let js =
+        h.build(&h.builder(0), [alice.spend(&h.replica, &note), SpendInput::Dummy], [bob.pay(6_000), alice.change(0)]);
+    h.submit(&js, vec![]).unwrap();
+    h.settle().unwrap();
+    assert!(h.replica.spent(&note.nullifier));
+}
+
+#[test]
+fn ciphertexts_of_unknown_kind_or_length_do_not_decode() {
+    let mut h = Harness::new();
+    let alice = Wallet::new(1);
+    let js = h.build(&h.builder(0), [SpendInput::Dummy, SpendInput::Dummy], [alice.pay(0), alice.change(0)]);
+    let mut bytes = js.external.encode();
+    assert_eq!(pr_protocol_types::ExternalData::decode(&bytes).unwrap(), js.external);
+    let at = bytes.len() - pr_protocol_types::SELF_CIPHERTEXT_LEN - 1;
+    assert_eq!(bytes[at], 1);
+    bytes[at] = 2;
+    assert!(pr_protocol_types::ExternalData::decode(&bytes).is_err());
+    let mut bad = js.external.clone();
+    bad.ciphertexts[1].push(0);
+    let tx = pr_protocol_types::RollupTransaction {
+        public: js.witness.public,
+        external: bad,
+        receipt: Vec::new(),
+        withdrawal_leaves: vec![],
+    };
+    assert!(h.mempool.submit(tx, vec![], &h.replica, |_| true).is_err());
+}
+
+#[test]
+fn one_join_split_pays_several_withdrawal_outputs() {
+    let mut h = Harness::new();
+    let wallets = funded_wallets(&mut h, 1, 20_000);
+    let w = &wallets[0];
+    let note = w.notes[0].clone();
+    let locked: Vec<(TxOut, Vec<u8>)> = (0..pr_protocol_types::MAX_WITHDRAWALS_PER_TX as u8)
+        .map(|k| withdrawal(1_000 * (k as u64 + 1), &key_tail(&[0x50 + k; 32])).unwrap())
+        .collect();
+    let outs: Vec<TxOut> = locked.iter().map(|(o, _)| o.clone()).collect();
+    let mut b = h.builder(500);
+    b.set_withdrawals(locked.clone());
+    let js = h.build(&b, [w.spend(&h.replica, &note), SpendInput::Dummy], [w.change(20_000 - 500 - 10_000), w.pay(0)]);
+    assert_eq!(js.witness.public.withdrawal_sats, 10_000);
+    h.submit(&js, vec![]).unwrap();
+    let selected = h.mempool.select();
+    let s = h.settlement(&selected);
+    assert_eq!(s.outputs[2..2 + outs.len()], outs[..]);
+
+    let mut reordered = s.clone();
+    reordered.outputs.swap(2, 3);
+    let wit = h.replica.witness(pr_mempool::batch_transactions(&selected), reordered);
+    assert!(apply_batch(&wit).is_err());
+
+    let mut five = h.builder(500);
+    let mut five_outs = locked.clone();
+    five_outs.push(withdrawal(1_000, &key_tail(&[9; 32])).unwrap());
+    five.set_withdrawals(five_outs);
+    if let Ok(js5) =
+        five.build(&mut rand_core::OsRng, [w.spend(&h.replica, &note), SpendInput::Dummy], [w.pay(8_500), w.pay(0)])
+    {
+        assert!(h.submit(&js5, vec![]).is_err());
+    }
+    let e = h.settle().unwrap();
+    assert_eq!(e.new_state.backing_sats, 10_000 + 20_000 - 10_000 - 500);
+    assert_eq!(Annex::decode(&e.annex_bytes).unwrap().body.layout.withdrawals as usize, outs.len());
+}
+
+#[test]
+fn selection_respects_the_settlement_weight_budget() {
+    let mut h = Harness::new();
+    let n = pr_protocol_types::MAX_BATCH_TRANSACTIONS as u8;
+    let wallets = funded_wallets(&mut h, n, 1_000);
+    for w in &wallets {
+        let note = w.notes[0].clone();
+        let js = h.build(&h.builder(0), [w.spend(&h.replica, &note), SpendInput::Dummy], [w.pay(1_000), w.pay(0)]);
+        h.submit(&js, vec![]).unwrap();
+    }
+    let all = h.mempool.select();
+    assert_eq!(all.len(), n as usize);
+    let total: u64 = all.iter().map(pr_mempool::entry_weight).sum();
+    assert!(total <= pr_protocol_types::MAX_SETTLEMENT_WEIGHT - pr_protocol_types::EMPTY_SETTLEMENT_WEIGHT);
+    let one = pr_mempool::entry_weight(&all[0]);
+    assert_eq!(h.mempool.select_within(3 * one).len(), 3);
+    assert!(h.mempool.select_within(one - 1).is_empty());
 }

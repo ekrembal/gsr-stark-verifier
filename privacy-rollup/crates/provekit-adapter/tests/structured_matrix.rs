@@ -1,9 +1,9 @@
 use ark_ff::{AdditiveGroup, Field};
-use sha2::Digest;
 use provekit_common::{
     utils::{structured_matrix, sumcheck::calculate_external_row_by_scatter},
     FieldElement, R1CS,
 };
+use sha2::Digest;
 use std::path::Path;
 
 fn fixture() -> provekit_common::Verifier {
@@ -114,10 +114,7 @@ fn compiled_entry_point_is_the_hash_bound_key_configuration() {
     let verifier = fixture();
     pr_provekit_adapter::ensure_guest_key(&verifier).unwrap();
     let encoded = pr_provekit_adapter::guest_verifier_bytes(&verifier).unwrap();
-    assert_eq!(
-        sha2::Sha256::digest(&encoded).as_slice(),
-        FixedJoinSplitVerifier::KEY_HASH.as_slice()
-    );
+    assert_eq!(sha2::Sha256::digest(&encoded).as_slice(), FixedJoinSplitVerifier::KEY_HASH.as_slice());
     assert!(FixedJoinSplitVerifier::compiled().is_ok());
     let mut other = verifier.clone();
     other.r1cs.num_public_inputs += 1;
@@ -188,7 +185,11 @@ fn lazy_covectors_match_prefix_folds_and_cache_each_commitment_point() {
     for seed in [0, 1, 2, 7, 19, 2, 0] {
         for (g, (actual, expected)) in groups.iter().enumerate() {
             // Includes points longer than the domain dimension and machine word.
-            let dimension = match seed { 7 => 65, 19 => 19, _ => 17 };
+            let dimension = match seed {
+                7 => 65,
+                19 => 19,
+                _ => 17,
+            };
             let point: Vec<_> = (0..dimension)
                 .map(|i| match seed {
                     0 => FieldElement::ZERO,

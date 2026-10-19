@@ -8,3 +8,4 @@ version.workspace = true
 pr-protocol-types.workspace = true
 pr-crypto.workspace = true
 serde.workspace = true
+sha2.workspace = true

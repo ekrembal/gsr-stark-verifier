@@ -2,8 +2,11 @@
 //! mempool admits them, the operator assembles the settlement, the full transition applies it and
 //! wallets recover their notes by trial decryption. Proofs are out of scope here (the ProveKit
 //! adapter and the guest test them); `submit` passes an always-accepting verifier.
-use pr_bitcoin_adapter::SettlementTx;
-use pr_mempool::{assemble_settlement, batch_transactions, Entry, FundingCoin, Mempool, MempoolError};
+use pr_bitcoin_adapter::{PlainInput, PlainTx, SettlementTx};
+use pr_mempool::{
+    assemble_settlement, assemble_settlement_with_escrows, batch_transactions, Entry, EscrowCoin, FundingCoin, Mempool,
+    MempoolError,
+};
 use pr_protocol_types::{
     DepositDeclaration, Fe, Outpoint, RollupDescriptor, RollupTransaction, TxOut, COMMITMENT_TREE_DEPTH,
 };
@@ -56,7 +59,12 @@ impl Wallet {
         }
     }
     pub fn pay(&self, value: u64) -> OutputSpec {
-        OutputSpec { value, recipient: self.keys.address(), memo: [0; 32] }
+        OutputSpec { value, recipient: self.keys.address(), memo: [0; 32], self_key: None }
+    }
+
+    /// An output to this wallet sealed under its outgoing key (compact change ciphertext).
+    pub fn change(&self, value: u64) -> OutputSpec {
+        OutputSpec { value, recipient: self.keys.address(), memo: [0; 32], self_key: Some(self.keys.outgoing_key) }
     }
 }
 
@@ -72,10 +80,21 @@ impl Default for Harness {
     }
 }
 
+/// A genesis transaction for `descriptor()`: spends the genesis nonce and holds the rollup at output 0.
+pub fn genesis_tx() -> PlainTx {
+    let d = descriptor();
+    PlainTx {
+        version: 2,
+        lock_time: 0,
+        inputs: vec![PlainInput { prevout: d.genesis_nonce, script_sig: Vec::new(), sequence: 0xffff_ffff }],
+        outputs: vec![TxOut { value: d.seed_sats, script_pubkey: ROLLUP_SPK.to_vec() }],
+    }
+}
+
 impl Harness {
     pub fn new() -> Harness {
         Harness {
-            replica: Replica::new(descriptor(), Outpoint { txid: [1; 32], vout: 0 }),
+            replica: Replica::new(descriptor(), genesis_tx()).expect("genesis"),
             mempool: Mempool::new(),
             last_witness: None,
         }
@@ -92,7 +111,8 @@ impl Harness {
             anchor_batch_number: a.batch_number,
             expiry_batch_number: tip.state.batch_number + 10,
             deposit: None,
-            withdrawal: None,
+            withdrawals: Vec::new(),
+            withdrawal_leaves: Vec::new(),
             fee_sats: fee,
         }
     }
@@ -115,28 +135,55 @@ impl Harness {
     }
 
     pub fn submit(&mut self, built: &BuiltJoinSplit, funding: Vec<FundingCoin>) -> Result<(), MempoolError> {
-        let tx =
-            RollupTransaction { public: built.witness.public, external: built.external.clone(), receipt: Vec::new() };
+        let tx = RollupTransaction {
+            public: built.witness.public,
+            external: built.external.clone(),
+            receipt: Vec::new(),
+            withdrawal_leaves: built.withdrawal_leaves.clone(),
+        };
         self.mempool.submit(tx, funding, &self.replica, |_| true)
     }
 
-    pub fn settlement(&self, selected: &[Entry], reward: Option<TxOut>) -> SettlementTx {
-        assemble_settlement(&self.replica, ROLLUP_SPK.to_vec(), ROLLUP_SPK.to_vec(), selected, reward)
-            .expect("assemble")
+    pub fn settlement(&self, selected: &[Entry]) -> SettlementTx {
+        assemble_settlement(&self.replica, ROLLUP_SPK.to_vec(), selected).expect("assemble")
     }
 
     /// Settles the mempool's selection and applies it to the replica.
-    pub fn settle(&mut self, reward: Option<TxOut>) -> Result<BatchEffects, ScanError> {
+    pub fn settle(&mut self) -> Result<BatchEffects, ScanError> {
         let selected = self.mempool.select();
-        let settlement = self.settlement(&selected, reward);
-        let utxo = Outpoint { txid: settlement.txid(), vout: 0 };
+        let settlement = self.settlement(&selected);
         let w = self.replica.witness(batch_transactions(&selected), settlement);
-        let effects = self.replica.apply_witness(&w, utxo)?;
+        let effects = self.replica.apply_witness(&w)?;
         self.last_witness = Some(w);
         self.mempool.remove_settled(&selected);
         self.mempool.revalidate(&self.replica);
         Ok(effects)
     }
+}
+
+impl Harness {
+    /// Settles the mempool's selection plus `escrows` and applies it to the replica.
+    pub fn settle_with_escrows(&mut self, escrows: &[EscrowCoin]) -> Result<BatchEffects, ScanError> {
+        let selected = self.mempool.select();
+        let settlement =
+            assemble_settlement_with_escrows(&self.replica, ROLLUP_SPK.to_vec(), &selected, escrows).expect("assemble");
+        let openings = escrows.iter().map(|c| c.opening.clone()).collect();
+        let w = self.replica.witness_with_escrows(batch_transactions(&selected), openings, settlement);
+        let effects = self.replica.apply_witness(&w)?;
+        self.last_witness = Some(w);
+        self.mempool.remove_settled(&selected);
+        self.mempool.revalidate(&self.replica);
+        Ok(effects)
+    }
+}
+
+/// A confirmed escrow paying `value + fee` to `to`, swept by a leaf with body `OP_TRUE` in tests.
+pub fn escrow_coin(tag: u8, rollup_id: &Fe, to: &Wallet, value: u64, fee: u64) -> EscrowCoin {
+    let (opening, _) =
+        pr_wallet_core::escrow_deposit(&mut OsRng, rollup_id, &to.keys.address(), value, fee, &[0x51], [5; 32]);
+    let script_pubkey =
+        pr_state_transition::escrow::escrow_script_pubkey(&opening.sweep_leaf, &opening.sibling).expect("valid tweak");
+    EscrowCoin { outpoint: Outpoint { txid: [tag; 32], vout: 0 }, amount: value + fee, script_pubkey, opening }
 }
 
 pub fn coin(tag: u8, amount: u64) -> FundingCoin {

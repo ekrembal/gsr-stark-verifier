@@ -33,10 +33,43 @@
 
 ## Copies of the covenant
 
-Anyone can pay to the leaf of an existing state root, creating a second coin with the same script. Spending it
-requires a valid receipt whose predecessor amount equals the copied state's `backing_sats`, so a copy is a
-self-funded fork: notes valid at the forked state could be withdrawn from it, paid entirely by whoever funded
-the copy. Wallets and the operator follow only the outpoint chain that descends from the genesis output.
+Anyone can pay to the leaf of an existing state root, creating a second coin with the same script, or pay to
+the leaf of a root they made up. The covenant only sees its own prevout, so `apply_batch` proves lineage
+recursively:
+
+1. The state commits to `parent`, the outpoint spent by input 0 of the transaction that created the coin. A
+   settlement must spend output 0 of `predecessor_tx` (a private, witness-free witness hashed to input 0's
+   txid, which the journal's input digest commits), whose input 0 spent `parent`.
+2. At batch 0 the old state must equal `genesis(descriptor)`, whose `parent` is `genesis_nonce`; no
+   predecessor proof is taken.
+3. Past genesis, the guest rebuilds the predecessor settlement's journal from `predecessor_tx`, the outputs its
+   inputs spent (`PredecessorSettlement::spent`), the predecessor's old root and annex digest, and
+   `new_state_root = old.root()`. It then verifies a receipt for `ReceiptClaim::ok(descriptor.image_id, journal)`:
+   either `env::verify` on an assumption that recursion discharges with the predecessor's unconditional
+   receipt, or the predecessor's on-chain `sha-256-padded` receipt verified inside the guest.
+
+The rebuilt journal names the predecessor's real inputs, outputs and annex, so a valid receipt for it exists
+only if `predecessor_tx` was itself a valid settlement of `old`. By induction from genesis every proven state
+descends from `genesis_nonce`. A copy coin, or a coin paying a made-up root, has no such predecessor receipt,
+so paying to it burns the coins. This is what lets deposit escrows trust "input 0 is the rollup leaf".
+
+Without step 3 (the P2a check alone), an attacker could choose `old` with the genuine rollup id and `parent`
+set to a coin of their own, create a coin paying the leaf of that state's root, and sweep escrows into it:
+the native transition accepted that before step 3. Tests: `tests/tests/lineage.rs`,
+`lineage_rejects_covenant_copies_and_forged_predecessors` in `tests/tests/scenario.rs`, and
+`tools/lineage_e2e.py` (real proofs: genesis, receipt and seal modes; missing, wrong and fabricated
+predecessors rejected).
+
+## Deposit escrows
+
+Escrow deposits (`protocol.md`) can be swept only by a settlement whose input 0 runs this rollup's covenant
+(script, checked with `OP_TX`) and whose receipt opens the escrow to the note it commits to (guest). The
+depositor can refund through the CSV leaf after the delay. Remaining risk: a refund and a sweep race once the
+delay has passed; the batcher stops sweeping an escrow at half its delay, but a settlement that is proven and
+then delayed past the refund height can be invalidated by the refund, which costs the operator a re-prove.
+Tests: `tools/deposit_escrow.py node-test` (sweep body on the gsr node), `tools/escrow_e2e.py` (SDK → batcher →
+proven sweep, refunds), `deposit_addresses` in `prover/sdk/src/tests.rs`, escrow cases in
+`tests/tests/scenario.rs`.
 
 ## Not implemented / not yet established
 
@@ -47,4 +80,4 @@ the copy. Wallets and the operator follow only the outpoint chain that descends 
   `funding.json` rather than looked up over Bitcoin RPC, nothing is signed or broadcast (the demo builds,
   signs and mines the transactions itself), and cadence is left to the leaf's `1 CSV` rather than tracked.
 * **Relay policy**: annex-bearing spends are nonstandard on the pinned node.
-* **External review** of the circuit, adapter, guest, covenant script and wallet has not happened.
+* **External review** of the ZK mode, `resolve_zk.zkr`, the guests, the covenant script and the wallet has not happened. The scope, threat model, adversarial coverage and open questions for one are in [../review/README.md](../review/README.md).

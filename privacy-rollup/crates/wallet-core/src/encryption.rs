@@ -2,12 +2,17 @@
 //! `rollup_id || commitment` as associated data.
 //!
 //! Ciphertext layout (1,232 bytes): `kem_ciphertext[1088] || nonce[24] || sealed[104 + 16]`.
+//!
+//! Notes a wallet pays to itself (change) use a 120-byte self ciphertext instead: `sealed[104 + 16]`
+//! under the wallet's outgoing key, with nonce `sha256(commitment)[..24]` (commitments are unique, so a
+//! nonce never repeats under one key).
 use chacha20poly1305::aead::{Aead, KeyInit, Payload};
 use chacha20poly1305::{XChaCha20Poly1305, XNonce};
 use kem::{Decapsulate, Encapsulate};
 use ml_kem::kem::EncapsulationKey;
 use ml_kem::{EncodedSizeUser, MlKem768Params};
-use pr_protocol_types::{Fe, NOTE_CIPHERTEXT_LEN, NOTE_PLAINTEXT_LEN};
+use pr_protocol_types::hash::sha256;
+use pr_protocol_types::{Fe, NOTE_CIPHERTEXT_LEN, NOTE_PLAINTEXT_LEN, SELF_CIPHERTEXT_LEN};
 use rand_core::{CryptoRng, RngCore};
 
 use crate::keys::{Keys, ENCAPSULATION_KEY_LEN};
@@ -16,7 +21,7 @@ use crate::Note;
 const KEM_CT_LEN: usize = 1088;
 const NONCE_LEN: usize = 24;
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct NotePlaintext {
     pub value: u64,
     pub randomness: Fe,
@@ -91,6 +96,38 @@ pub fn decrypt_note(keys: &Keys, rollup_id: &Fe, commitment: &Fe, ciphertext: &[
         .decrypt(
             XNonce::from_slice(nonce),
             Payload { msg: &ciphertext[KEM_CT_LEN + NONCE_LEN..], aad: &aad(rollup_id, commitment) },
+        )
+        .ok()?;
+    let p = NotePlaintext::decode(&opened)?;
+    (p.note().commitment(rollup_id) == *commitment).then_some(p)
+}
+
+fn self_nonce(commitment: &Fe) -> [u8; NONCE_LEN] {
+    sha256(&commitment.0)[..NONCE_LEN].try_into().expect("24 bytes")
+}
+
+/// Encrypts a note to the sending wallet itself (see the module docs).
+pub fn encrypt_self(outgoing_key: &[u8; 32], rollup_id: &Fe, plaintext: &NotePlaintext) -> Vec<u8> {
+    let commitment = plaintext.note().commitment(rollup_id);
+    let sealed = XChaCha20Poly1305::new(chacha20poly1305::Key::from_slice(outgoing_key))
+        .encrypt(
+            XNonce::from_slice(&self_nonce(&commitment)),
+            Payload { msg: &plaintext.encode(), aad: &aad(rollup_id, &commitment) },
+        )
+        .expect("encryption");
+    debug_assert_eq!(sealed.len(), SELF_CIPHERTEXT_LEN);
+    sealed
+}
+
+/// Trial-decrypts any output: a self ciphertext under `keys.outgoing_key`, otherwise an ML-KEM one.
+pub fn decrypt_any(keys: &Keys, rollup_id: &Fe, commitment: &Fe, ciphertext: &[u8]) -> Option<NotePlaintext> {
+    if ciphertext.len() != SELF_CIPHERTEXT_LEN {
+        return decrypt_note(keys, rollup_id, commitment, ciphertext);
+    }
+    let opened = XChaCha20Poly1305::new(chacha20poly1305::Key::from_slice(&keys.outgoing_key))
+        .decrypt(
+            XNonce::from_slice(&self_nonce(commitment)),
+            Payload { msg: ciphertext, aad: &aad(rollup_id, commitment) },
         )
         .ok()?;
     let p = NotePlaintext::decode(&opened)?;

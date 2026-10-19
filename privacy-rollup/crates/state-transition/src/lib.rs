@@ -5,15 +5,20 @@
 //! (anchor window, commitment frontier, nullifier insertion paths) and the settlement transaction,
 //! checks every protocol rule that is not inside a join-split proof, and returns the new state, the
 //! canonical annex and the 196-byte [`BatchJournal`] the covenant rebuilds from `OP_TX`.
-use pr_bitcoin_adapter::SettlementTx;
+pub mod escrow;
+
+use pr_bitcoin_adapter::{PlainTx, SettlementTx, TxInput};
 use pr_commitment_tree::Frontier;
-use pr_indexed_nullifier_tree::{verify_insertion, InsertionWitness, NullifierError};
+use pr_indexed_nullifier_tree::{verify_batch_insertion, BatchInsertionWitness, NullifierError};
 use pr_protocol_types::hash::sha256;
+use pr_protocol_types::state_root_script;
 use pr_protocol_types::{
-    next_data_history, AnchorEntry, AnchorHistory, Annex, BatchBody, BatchJournal, Canonical, ExternalData, Fe,
-    JoinSplitPublic, NoteOutput, Outpoint, RollupDescriptor, RollupState, SettlementLayout, TxOut, ANCHOR_WINDOW,
-    DUST_LIMIT, MAX_BATCH_TRANSACTIONS, MAX_FUNDING_INPUTS, MAX_MONEY, MAX_SCRIPT_PUBKEY_LEN, NOTE_CIPHERTEXT_LEN,
-    PROTOCOL_VERSION, ROLLUP_INPUT_SEQUENCE, TX_VERSION,
+    anchor_leaf, anchor_root_from_path, ciphertext_kind, next_data_history, AnchorEntry, AnchorHistory, AnchorProof,
+    Annex, BatchBody, BatchJournal, Canonical, ExternalData, Fe, JoinSplitPublic, NoteOutput, Outpoint,
+    RollupDescriptor, RollupState, SettlementLayout, TxOut, DUST_LIMIT, ESCROW_INPUT_SEQUENCE, FUNDING_INPUT_SEQUENCE,
+    MAX_BATCH_ESCROWS, MAX_BATCH_TRANSACTIONS, MAX_FUNDING_INPUTS, MAX_MONEY, MAX_SCRIPT_PUBKEY_LEN,
+    MAX_WITHDRAWALS_PER_TX, MAX_WITHDRAWAL_LEAF_LEN, PROTOCOL_VERSION, ROLLUP_INPUT_SEQUENCE, TX_VERSION,
+    WITHDRAWAL_LEAF_PREFIX, WITHDRAWAL_LEAF_VERSION,
 };
 use serde::{Deserialize, Serialize};
 
@@ -23,29 +28,64 @@ use serde::{Deserialize, Serialize};
 pub struct BatchTransaction {
     pub public: JoinSplitPublic,
     pub external: ExternalData,
+    /// The leaf behind each withdrawal output, in order.
+    pub withdrawal_leaves: Vec<Vec<u8>>,
 }
 
 /// Everything the transition needs besides proofs.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct BatchWitness {
     pub old_state: RollupState,
-    pub anchors: AnchorHistory,
+    /// Siblings of the next (empty) anchor slot, leaf `old_state.batch_number + 1`.
+    pub anchor_slot: Vec<[u8; 32]>,
+    /// Membership of each transaction's anchor, in transaction order.
+    pub anchor_proofs: Vec<AnchorProof>,
     /// Canonical frontier of the old commitment tree; required iff the batch appends commitments.
     pub frontier: Option<Frontier>,
     pub transactions: Vec<BatchTransaction>,
-    /// One insertion witness per nullifier, in ascending nullifier order.
-    pub nullifier_witnesses: Vec<InsertionWitness>,
+    /// Insertion witness for the batch's nullifiers, inserted together in ascending order.
+    pub nullifier_witness: BatchInsertionWitness,
     pub settlement: SettlementTx,
+    /// The transaction that created the rollup coin spent by input 0 (the previous settlement, or
+    /// the genesis transaction), without witnesses. Its txid must be input 0's prevout txid.
+    pub predecessor_tx: PlainTx,
+    /// Openings of the escrow inputs, which follow the funding inputs in order.
+    pub escrows: Vec<escrow::EscrowDeposit>,
+    /// The rollup's descriptor; its `rollup_id()` must be `old_state.rollup_id`.
+    pub descriptor: RollupDescriptor,
+    /// What rebuilds the journal of `predecessor_tx`: required iff `old_state` is not genesis.
+    pub predecessor: Option<PredecessorSettlement>,
+}
+
+/// The private data that, with `predecessor_tx`, rebuilds the journal the predecessor settlement
+/// committed to.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct PredecessorSettlement {
+    /// The output each input of `predecessor_tx` spent, in input order.
+    pub spent: Vec<TxOut>,
+    pub old_state_root: [u8; 32],
+    /// SHA-256 of the predecessor's input-0 annex.
+    pub annex_digest: [u8; 32],
+}
+
+/// The statement the guest still has to prove for `old_state` to be genuine: `journal` is the
+/// journal of a valid `apply_batch` receipt under `image_id`. Absent when `old_state` is genesis.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct LineageClaim {
+    pub image_id: [u8; 32],
+    pub journal: BatchJournal,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct BatchEffects {
     pub new_state: RollupState,
-    pub anchors: AnchorHistory,
+    /// The anchor this batch appends to the history.
+    pub anchor: AnchorEntry,
     pub frontier: Option<Frontier>,
     pub annex: Annex,
     pub annex_bytes: Vec<u8>,
     pub journal: BatchJournal,
+    pub lineage: Option<LineageClaim>,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -60,9 +100,10 @@ pub enum TransitionError {
     BadCiphertext,
     DepositMismatch,
     WithdrawalMismatch,
+    /// A withdrawal output is not `P2TR(NUMS, {leaf})` for its CSV-prefixed leaf.
+    WithdrawalLock,
     DuplicateNullifier,
     ZeroNullifier,
-    NullifierWitnessCount,
     Nullifier(NullifierError),
     DuplicateCommitment,
     FrontierMissing,
@@ -78,9 +119,18 @@ pub enum TransitionError {
     WithdrawalOutput,
     ChangeOutput,
     RolloverOutput,
+    /// Output 0 does not pay the rollup input's own script.
+    RollupScript,
+    /// Output 1 is not `OP_RETURN <new_state_root>` with value 0.
+    RootOutput,
     Dust,
     FeeShortfall,
     Overflow,
+    /// The rollup input is not output 0 of a transaction whose input 0 spent `old_state.parent`,
+    /// or `old_state` is neither the descriptor's genesis nor backed by a predecessor journal.
+    Lineage,
+    /// An escrow input does not open to the declared deposit, or there are too many.
+    Escrow,
 }
 
 fn add(a: u64, b: u64) -> Result<u64, TransitionError> {
@@ -102,19 +152,82 @@ pub fn genesis(descriptor: &RollupDescriptor) -> (RollupState, AnchorHistory, Fr
         batch_number: 0,
         commitment_root: frontier.root(),
         commitment_count: 0,
+        commitment_frontier: frontier.digest(),
         nullifier_root: pr_indexed_nullifier_tree::IndexedTree::new().root(),
         nullifier_next_index: 1,
         anchor_history_commitment: anchors.commitment(),
         data_history_commitment: [0; 32],
         backing_sats: descriptor.seed_sats,
+        parent: descriptor.genesis_nonce,
     };
     (state, anchors, frontier)
 }
 
-/// Per-transaction rules that only need the old state and the anchor window (also run by mempools).
+/// Lineage: the coin holding `old` is output 0 of `predecessor_tx`, whose input 0 spent
+/// `old.parent`; `rollup_in`'s txid is committed by the journal's input digest, so the private
+/// `predecessor_tx` is bound to the transaction the covenant actually spends.
+///
+/// That local check alone does not authenticate `old`: `old.parent` is witness data. So unless `old`
+/// is exactly the descriptor's genesis state, this returns the predecessor's journal, rebuilt from
+/// `predecessor_tx` and [`PredecessorSettlement`] with `new_state_root = old.root()`, and the guest
+/// must verify an `apply_batch` receipt for it. By induction from genesis, every accepted state was
+/// produced by a chain of valid settlements of this rollup, each spending the previous one's coin.
+pub fn check_lineage(w: &BatchWitness, rollup_in: &Outpoint) -> Result<Option<LineageClaim>, TransitionError> {
+    let old = &w.old_state;
+    let pred = &w.predecessor_tx;
+    if w.descriptor.rollup_id() != old.rollup_id
+        || rollup_in.vout != 0
+        || pred.txid() != rollup_in.txid
+        || pred.inputs.first().map(|i| i.prevout) != Some(old.parent)
+    {
+        return Err(TransitionError::Lineage);
+    }
+    if old.batch_number == 0 {
+        if w.predecessor.is_some() || *old != genesis(&w.descriptor).0 {
+            return Err(TransitionError::Lineage);
+        }
+        return Ok(None);
+    }
+    let p = w.predecessor.as_ref().ok_or(TransitionError::Lineage)?;
+    if pred.outputs.get(1) != Some(&root_output(&old.root())) || p.spent.len() != pred.inputs.len() {
+        return Err(TransitionError::Lineage);
+    }
+    let tx = SettlementTx {
+        version: pred.version,
+        lock_time: pred.lock_time,
+        inputs: pred
+            .inputs
+            .iter()
+            .zip(&p.spent)
+            .map(|(i, o)| TxInput {
+                prevout: i.prevout,
+                amount: o.value,
+                script_pubkey: o.script_pubkey.clone(),
+                script_sig: i.script_sig.clone(),
+                sequence: i.sequence,
+            })
+            .collect(),
+        outputs: pred.outputs.clone(),
+    };
+    Ok(Some(LineageClaim {
+        image_id: w.descriptor.image_id,
+        journal: BatchJournal {
+            protocol_version: old.protocol_version,
+            rollup_id: old.rollup_id,
+            old_state_root: p.old_state_root,
+            new_state_root: old.root(),
+            transaction_inputs_digest: tx.inputs_digest(),
+            transaction_outputs_digest: tx.outputs_digest(),
+            annex_digest: p.annex_digest,
+        },
+    }))
+}
+
+/// Per-transaction rules that only need the old state and the transaction's authenticated anchor
+/// (also run by mempools).
 pub fn check_transaction(
     old: &RollupState,
-    anchors: &AnchorHistory,
+    anchor: Option<&AnchorEntry>,
     next: u64,
     t: &BatchTransaction,
 ) -> Result<(), TransitionError> {
@@ -128,35 +241,42 @@ pub fn check_transaction(
     if p.expiry_batch_number < next {
         return Err(TransitionError::Expired);
     }
-    match anchors.find(p.anchor_batch_number) {
+    match anchor.filter(|e| e.batch_number == p.anchor_batch_number) {
         Some(e) if e.commitment_root == p.anchor_root && e.commitment_count == p.anchor_commitment_count => {}
         _ => return Err(TransitionError::UnknownAnchor),
     }
     if t.external.commitment() != p.external_data_commitment {
         return Err(TransitionError::ExternalDataMismatch);
     }
-    if t.external.ciphertexts.iter().any(|c| c.len() != NOTE_CIPHERTEXT_LEN) {
+    if t.external.ciphertexts.iter().any(|c| ciphertext_kind(c).is_none()) {
         return Err(TransitionError::BadCiphertext);
     }
     match &t.external.deposit {
         None if p.deposit_sats == 0 => {}
         Some(d) if p.deposit_sats > 0 && !d.funding.is_empty() && d.funding.len() <= MAX_FUNDING_INPUTS => {
-            if let Some(c) = &d.change {
-                if c.value < DUST_LIMIT || c.script_pubkey.len() > MAX_SCRIPT_PUBKEY_LEN {
-                    return Err(TransitionError::Dust);
-                }
+            if d.change.is_some() {
+                return Err(TransitionError::ChangeOutput);
             }
         }
         _ => return Err(TransitionError::DepositMismatch),
     }
-    match &t.external.withdrawal_script {
-        None if p.withdrawal_sats == 0 => {}
-        Some(s) if p.withdrawal_sats > 0 && s.len() <= MAX_SCRIPT_PUBKEY_LEN => {
-            if p.withdrawal_sats < DUST_LIMIT {
-                return Err(TransitionError::Dust);
-            }
-        }
-        _ => return Err(TransitionError::WithdrawalMismatch),
+    let ws = &t.external.withdrawals;
+    if ws.len() > MAX_WITHDRAWALS_PER_TX
+        || ws.iter().any(|o| o.script_pubkey.len() > MAX_SCRIPT_PUBKEY_LEN)
+        || ws.iter().try_fold(0u64, |a, o| a.checked_add(o.value)) != Some(p.withdrawal_sats)
+    {
+        return Err(TransitionError::WithdrawalMismatch);
+    }
+    if ws.iter().any(|o| o.value < DUST_LIMIT) {
+        return Err(TransitionError::Dust);
+    }
+    if t.withdrawal_leaves.len() != ws.len()
+        || ws
+            .iter()
+            .zip(&t.withdrawal_leaves)
+            .any(|(o, l)| withdrawal_script_pubkey(l).as_ref() != Some(&o.script_pubkey))
+    {
+        return Err(TransitionError::WithdrawalLock);
     }
     if p.nullifiers.iter().any(Fe::is_zero) {
         return Err(TransitionError::ZeroNullifier);
@@ -164,25 +284,53 @@ pub fn check_transaction(
     Ok(())
 }
 
+/// `P2TR(NUMS, {leaf})` for a withdrawal leaf, if the leaf starts with [`WITHDRAWAL_LEAF_PREFIX`]: every spend
+/// path then waits one confirmation, so a withdrawal output can't be spent while its settlement is unconfirmed.
+pub fn withdrawal_script_pubkey(leaf: &[u8]) -> Option<Vec<u8>> {
+    if !leaf.starts_with(&WITHDRAWAL_LEAF_PREFIX) || leaf.len() > MAX_WITHDRAWAL_LEAF_LEN {
+        return None;
+    }
+    let key = escrow::output_key(&escrow::tapleaf_hash(WITHDRAWAL_LEAF_VERSION, leaf))?;
+    Some([&[0x51, 0x20][..], &key].concat())
+}
+
 /// Applies one batch. Proof verification is the caller's job; everything else is checked here.
+fn root_output(root: &[u8; 32]) -> TxOut {
+    TxOut { value: 0, script_pubkey: state_root_script(root) }
+}
+
+/// The full transition, including that output 1 publishes the new state root.
 pub fn apply_batch(w: &BatchWitness) -> Result<BatchEffects, TransitionError> {
+    let e = transition(w)?;
+    if w.settlement.outputs[1] != root_output(&e.new_state.root()) {
+        return Err(TransitionError::RootOutput);
+    }
+    Ok(e)
+}
+
+/// The state root `w` settles to. It does not depend on output 1, so builders call this with a placeholder
+/// root output and then publish the returned root there.
+pub fn successor_root(w: &BatchWitness) -> Result<[u8; 32], TransitionError> {
+    transition(w).map(|e| e.new_state.root())
+}
+
+fn transition(w: &BatchWitness) -> Result<BatchEffects, TransitionError> {
     let old = &w.old_state;
     if old.protocol_version != PROTOCOL_VERSION {
         return Err(TransitionError::UnsupportedVersion);
-    }
-    if w.anchors.0.is_empty()
-        || w.anchors.0.len() > ANCHOR_WINDOW
-        || w.anchors.commitment() != old.anchor_history_commitment
-    {
-        return Err(TransitionError::AnchorHistoryMismatch);
     }
     let txs = &w.transactions;
     if txs.len() > MAX_BATCH_TRANSACTIONS {
         return Err(TransitionError::TooManyTransactions);
     }
     let next = old.batch_number.checked_add(1).ok_or(TransitionError::Overflow)?;
-    for t in txs {
-        check_transaction(old, &w.anchors, next, t)?;
+    if anchor_root_from_path(&[0; 32], next, &w.anchor_slot) != Some(old.anchor_history_commitment)
+        || w.anchor_proofs.len() != txs.len()
+    {
+        return Err(TransitionError::AnchorHistoryMismatch);
+    }
+    for (t, a) in txs.iter().zip(&w.anchor_proofs) {
+        check_transaction(old, a.verify(&old.anchor_history_commitment), next, t)?;
     }
 
     // Nullifiers: globally sorted, distinct, each inserted with an authenticated witness.
@@ -191,16 +339,10 @@ pub fn apply_batch(w: &BatchWitness) -> Result<BatchEffects, TransitionError> {
     if nullifiers.windows(2).any(|p| p[0] == p[1]) {
         return Err(TransitionError::DuplicateNullifier);
     }
-    if w.nullifier_witnesses.len() != nullifiers.len() {
-        return Err(TransitionError::NullifierWitnessCount);
-    }
-    let mut nullifier_root = old.nullifier_root;
-    let mut nullifier_next_index = old.nullifier_next_index;
-    for (nf, iw) in nullifiers.iter().zip(&w.nullifier_witnesses) {
-        nullifier_root =
-            verify_insertion(&nullifier_root, nullifier_next_index, nf, iw).map_err(TransitionError::Nullifier)?;
-        nullifier_next_index += 1;
-    }
+    let nullifier_root =
+        verify_batch_insertion(&old.nullifier_root, old.nullifier_next_index, &nullifiers, &w.nullifier_witness)
+            .map_err(TransitionError::Nullifier)?;
+    let nullifier_next_index = old.nullifier_next_index + nullifiers.len() as u64;
 
     // Output notes: globally sorted by commitment, distinct, appended in that order.
     let mut outputs: Vec<NoteOutput> = txs
@@ -212,6 +354,33 @@ pub fn apply_batch(w: &BatchWitness) -> Result<BatchEffects, TransitionError> {
             })
         })
         .collect();
+    let s = &w.settlement;
+    let escrow_start = s.inputs.len().checked_sub(w.escrows.len()).ok_or(TransitionError::InputCount)?;
+    if w.escrows.len() > MAX_BATCH_ESCROWS {
+        return Err(TransitionError::Escrow);
+    }
+    let mut escrowed = 0u64;
+    let mut escrow_fees = 0u64;
+    for (e, input) in w.escrows.iter().zip(&s.inputs[escrow_start..]) {
+        if ciphertext_kind(&e.ciphertext).is_none() {
+            return Err(TransitionError::BadCiphertext);
+        }
+        if !input.script_sig.is_empty()
+            || input.sequence != ESCROW_INPUT_SEQUENCE
+            || !escrow::check_escrow(&old.rollup_id, e, &input.script_pubkey)
+        {
+            return Err(TransitionError::Escrow);
+        }
+        if e.value < DUST_LIMIT || e.value > MAX_MONEY {
+            return Err(TransitionError::Dust);
+        }
+        if add(e.value, e.fee_sats)? != input.amount {
+            return Err(TransitionError::Escrow);
+        }
+        escrowed = add(escrowed, input.amount)?;
+        escrow_fees = add(escrow_fees, e.fee_sats)?;
+        outputs.push(e.note(&old.rollup_id));
+    }
     outputs.sort_by_key(|a| a.commitment);
     if outputs.windows(2).any(|p| p[0].commitment == p[1].commitment) {
         return Err(TransitionError::DuplicateCommitment);
@@ -220,19 +389,18 @@ pub fn apply_batch(w: &BatchWitness) -> Result<BatchEffects, TransitionError> {
         None
     } else {
         let mut f = w.frontier.clone().ok_or(TransitionError::FrontierMissing)?;
-        f.authenticate(&old.commitment_root, old.commitment_count).map_err(|_| TransitionError::Frontier)?;
+        f.authenticate_digest(&old.commitment_frontier, old.commitment_count).map_err(|_| TransitionError::Frontier)?;
         for o in &outputs {
             f.append(o.commitment).map_err(|_| TransitionError::Frontier)?;
         }
         Some(f)
     };
-    let (commitment_root, commitment_count) = match &frontier {
-        Some(f) => (f.root(), f.count),
-        None => (old.commitment_root, old.commitment_count),
+    let (commitment_root, commitment_count, commitment_frontier) = match &frontier {
+        Some(f) => (f.root(), f.count, f.digest()),
+        None => (old.commitment_root, old.commitment_count, old.commitment_frontier),
     };
 
-    // Bitcoin layout: inputs [rollup, funding..], outputs [rollup, withdrawals.., changes.., reward?].
-    let s = &w.settlement;
+    // Bitcoin layout: inputs [rollup, funding.., escrows..], outputs [rollup, withdrawals..].
     if s.version != TX_VERSION {
         return Err(TransitionError::TxVersion);
     }
@@ -244,7 +412,7 @@ pub fn apply_batch(w: &BatchWitness) -> Result<BatchEffects, TransitionError> {
         .enumerate()
         .flat_map(|(i, t)| t.external.deposit.iter().flat_map(move |d| d.funding.iter().map(move |o| (i, o))))
         .collect();
-    if s.inputs.len() != 1 + funding.len() {
+    if s.inputs.len() != 1 + funding.len() + w.escrows.len() {
         return Err(TransitionError::InputCount);
     }
     let rollup_in = &s.inputs[0];
@@ -254,16 +422,17 @@ pub fn apply_batch(w: &BatchWitness) -> Result<BatchEffects, TransitionError> {
     if rollup_in.amount != old.backing_sats {
         return Err(TransitionError::PredecessorAmount);
     }
+    let lineage = check_lineage(w, &rollup_in.prevout)?;
     let mut funded = vec![0u64; txs.len()];
     for ((i, o), input) in funding.iter().zip(&s.inputs[1..]) {
-        if input.prevout != **o {
+        if input.prevout != **o || input.sequence != FUNDING_INPUT_SEQUENCE {
             return Err(TransitionError::FundingInput);
         }
         funded[*i] = add(funded[*i], input.amount)?;
     }
-    let mut deposits = 0u64;
+    let mut deposits = escrowed;
     let mut withdrawals_total = 0u64;
-    let mut fees = 0u64;
+    let mut fees = escrow_fees;
     let mut withdrawal_outs: Vec<TxOut> = Vec::new();
     let mut change_outs: Vec<TxOut> = Vec::new();
     for (i, t) in txs.iter().enumerate() {
@@ -278,9 +447,7 @@ pub fn apply_batch(w: &BatchWitness) -> Result<BatchEffects, TransitionError> {
             }
             change_outs.extend(d.change.clone());
         }
-        if let Some(script) = &t.external.withdrawal_script {
-            withdrawal_outs.push(TxOut { value: p.withdrawal_sats, script_pubkey: script.clone() });
-        }
+        withdrawal_outs.extend(t.external.withdrawals.iter().cloned());
     }
     let gross_in = add(old.backing_sats, deposits)?;
     let gross_out = add(withdrawals_total, fees)?;
@@ -289,25 +456,26 @@ pub fn apply_batch(w: &BatchWitness) -> Result<BatchEffects, TransitionError> {
         return Err(TransitionError::Dust);
     }
 
-    let fixed = 1 + withdrawal_outs.len() + change_outs.len();
-    if s.outputs.len() != fixed && s.outputs.len() != fixed + 1 {
+    // No change and no reward output: besides the `1 CSV` successor at the rollup's fixed address and the
+    // state-root OP_RETURN (checked by `apply_batch`), outputs are CSV-locked withdrawals.
+    let fixed = 2 + withdrawal_outs.len() + change_outs.len();
+    if s.outputs.len() != fixed {
         return Err(TransitionError::OutputCount);
     }
     if s.outputs[0].value != backing_sats {
         return Err(TransitionError::RolloverOutput);
     }
-    if s.outputs[1..1 + withdrawal_outs.len()] != withdrawal_outs[..] {
+    if s.outputs[0].script_pubkey != rollup_in.script_pubkey {
+        return Err(TransitionError::RollupScript);
+    }
+    if s.outputs[2..2 + withdrawal_outs.len()] != withdrawal_outs[..] {
         return Err(TransitionError::WithdrawalOutput);
     }
-    if s.outputs[1 + withdrawal_outs.len()..fixed] != change_outs[..] {
+    if s.outputs[2 + withdrawal_outs.len()..fixed] != change_outs[..] {
         return Err(TransitionError::ChangeOutput);
     }
-    // F = R + M: the optional reward output takes R, the miner keeps M = F - R >= 0.
-    let reward = s.outputs.get(fixed).map_or(0, |o| o.value);
-    if s.outputs.get(fixed).is_some_and(|o| o.value < DUST_LIMIT || o.script_pubkey.len() > MAX_SCRIPT_PUBKEY_LEN) {
-        return Err(TransitionError::Dust);
-    }
-    let miner_fee = fees.checked_sub(reward).ok_or(TransitionError::FeeShortfall)?;
+    // Every committed fee goes to the miner.
+    let miner_fee = fees;
     let sum_in = s.inputs.iter().try_fold(0u64, |a, i| add(a, i.amount))?;
     let sum_out = s.outputs.iter().try_fold(0u64, |a, o| add(a, o.value))?;
     if sum_in.checked_sub(sum_out) != Some(miner_fee) {
@@ -319,7 +487,8 @@ pub fn apply_batch(w: &BatchWitness) -> Result<BatchEffects, TransitionError> {
         funding_inputs: funding.len() as u8,
         withdrawals: withdrawal_outs.len() as u8,
         changes: change_outs.len() as u8,
-        reward: s.outputs.len() == fixed + 1,
+        reward: false,
+        escrows: w.escrows.len() as u8,
     };
     let body = BatchBody {
         rollup_id: old.rollup_id,
@@ -329,19 +498,22 @@ pub fn apply_batch(w: &BatchWitness) -> Result<BatchEffects, TransitionError> {
         nullifiers,
         outputs,
     };
-    let mut anchors = w.anchors.clone();
-    anchors.push(AnchorEntry { batch_number: next, commitment_root, commitment_count });
+    let anchor = AnchorEntry { batch_number: next, commitment_root, commitment_count };
+    let anchor_history_commitment = anchor_root_from_path(&anchor_leaf(&anchor), next, &w.anchor_slot)
+        .ok_or(TransitionError::AnchorHistoryMismatch)?;
     let new_state = RollupState {
         rollup_id: old.rollup_id,
         protocol_version: old.protocol_version,
         batch_number: next,
         commitment_root,
         commitment_count,
+        commitment_frontier,
         nullifier_root,
         nullifier_next_index,
-        anchor_history_commitment: anchors.commitment(),
+        anchor_history_commitment,
         data_history_commitment: next_data_history(&old.data_history_commitment, next, &body.digest()),
         backing_sats,
+        parent: rollup_in.prevout,
     };
     let annex = Annex { old_state_root: old.root(), new_state_root: new_state.root(), body };
     let annex_bytes = annex.encode();
@@ -354,5 +526,22 @@ pub fn apply_batch(w: &BatchWitness) -> Result<BatchEffects, TransitionError> {
         transaction_outputs_digest: s.outputs_digest(),
         annex_digest: sha256(&annex_bytes),
     };
-    Ok(BatchEffects { new_state, anchors, frontier, annex, annex_bytes, journal })
+    Ok(BatchEffects { new_state, anchor, frontier, annex, annex_bytes, journal, lineage })
+}
+
+#[cfg(test)]
+mod withdrawal_tests {
+    use super::*;
+
+    /// Known answer from Bitcoin Core's `taproot_construct(NUMS, [OP_1 OP_CSV OP_DROP <[9; 32]> OP_CHECKSIG])`.
+    #[test]
+    fn withdrawal_script_pubkey_matches_bitcoin_core() {
+        let leaf = [&WITHDRAWAL_LEAF_PREFIX[..], &[0x20], &[9; 32], &[0xac]].concat();
+        assert_eq!(
+            hex::encode(withdrawal_script_pubkey(&leaf).unwrap()),
+            "5120c7ee13e21d5552077e7a0b06cc6aec21f6aecf832afcb02867304aa7f5bdc017"
+        );
+        assert!(withdrawal_script_pubkey(&leaf[3..]).is_none());
+        assert!(withdrawal_script_pubkey(&[&leaf[..], &[0; MAX_WITHDRAWAL_LEAF_LEN]].concat()).is_none());
+    }
 }

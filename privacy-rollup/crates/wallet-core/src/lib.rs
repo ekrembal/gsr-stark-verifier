@@ -3,8 +3,10 @@ pub mod encryption;
 pub mod joinsplit;
 pub mod keys;
 
-pub use encryption::{decrypt_note, encrypt_note, NotePlaintext};
-pub use joinsplit::{BuiltJoinSplit, JoinSplitBuilder, JoinSplitWitness, OutputSpec, ProverToml, SpendInput};
+pub use encryption::{decrypt_any, decrypt_note, encrypt_note, encrypt_self, NotePlaintext};
+pub use joinsplit::{
+    key_tail, withdrawal, BuiltJoinSplit, JoinSplitBuilder, JoinSplitWitness, OutputSpec, ProverToml, SpendInput,
+};
 pub use keys::{Address, Keys};
 
 use pr_protocol_types::Fe;
@@ -45,7 +47,7 @@ pub fn scan_outputs(
         .iter()
         .enumerate()
         .filter_map(|(k, o)| {
-            let pt = decrypt_note(keys, rollup_id, &o.commitment, &o.ciphertext)?;
+            let pt = decrypt_any(keys, rollup_id, &o.commitment, &o.ciphertext)?;
             let note = pt.note();
             if note.authority != keys.spend_authority || note.commitment(rollup_id) != o.commitment {
                 return None;
@@ -55,4 +57,36 @@ pub fn scan_outputs(
             Some(OwnedNote { note, leaf_index, commitment: o.commitment, nullifier })
         })
         .collect()
+}
+
+/// A non-interactive deposit to `recipient`: the escrow opening (without its sweep leaf yet) and the
+/// minted note's plaintext. The caller derives the address with
+/// [`pr_state_transition::escrow::sweep_leaf`] and pays `value + fee_sats` to it.
+pub fn escrow_deposit<R: rand_core::RngCore + rand_core::CryptoRng>(
+    rng: &mut R,
+    rollup_id: &Fe,
+    recipient: &Address,
+    value: u64,
+    fee_sats: u64,
+    sweep_body: &[u8],
+    sibling: [u8; 32],
+) -> (pr_state_transition::escrow::EscrowDeposit, NotePlaintext) {
+    let pt = NotePlaintext {
+        value,
+        randomness: joinsplit::random_fe(rng),
+        authority: recipient.spend_authority,
+        memo: [0; 32],
+    };
+    let ciphertext = encrypt_note(rng, &recipient.encapsulation_key, rollup_id, &pt);
+    let mut e = pr_state_transition::escrow::EscrowDeposit {
+        authority: pt.authority,
+        randomness: pt.randomness,
+        value,
+        fee_sats,
+        sweep_leaf: Vec::new(),
+        sibling,
+        ciphertext,
+    };
+    e.sweep_leaf = pr_state_transition::escrow::sweep_leaf(&e.digest(rollup_id), sweep_body);
+    (e, pt)
 }

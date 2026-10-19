@@ -17,7 +17,8 @@ fn main() {
             DepositDeclaration { funding: vec![Outpoint { txid: [7; 32], vout: 0 }], change: None },
             100_000,
         )),
-        withdrawal: None,
+        withdrawals: Vec::new(),
+        withdrawal_leaves: Vec::new(),
         fee_sats: 500,
     };
     let built = b
@@ -25,8 +26,8 @@ fn main() {
             &mut rng,
             [SpendInput::Dummy, SpendInput::Dummy],
             [
-                OutputSpec { value: 99_500, recipient: alice.address(), memo: [0; 32] },
-                OutputSpec { value: 0, recipient: alice.address(), memo: [0; 32] },
+                OutputSpec { value: 99_500, recipient: alice.address(), memo: [0; 32], self_key: None },
+                OutputSpec { value: 0, recipient: alice.address(), memo: [0; 32], self_key: None },
             ],
         )
         .unwrap();

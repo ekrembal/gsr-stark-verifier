@@ -10,6 +10,8 @@ pr-commitment-tree.workspace = true
 pr-indexed-nullifier-tree.workspace = true
 pr-bitcoin-adapter.workspace = true
 serde.workspace = true
+pr-crypto.workspace = true
+k256 = { version = "0.13", default-features = false, features = ["arithmetic"] }
 
 [dev-dependencies]
-pr-crypto.workspace = true
+hex.workspace = true

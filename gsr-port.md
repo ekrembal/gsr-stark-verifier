@@ -20,7 +20,7 @@ The OP_TX selector format (six bytes, versioned) is unchanged.
 | RISC Zero verifier script, fixed statement | 158,572 B | 160,600 B | 101,393 B |
 | Covenant spend with the committed receipt | 388,641 WU | 390,661 WU | **331,097 WU** |
 | Rollup settlement leaf | 159,265 B | 161,252 B | 101,688 B |
-| Rollup settlement, one join-split | 392,001 WU | ≈ 394,000 WU (est.) | ≈ 334,400 WU (est.) |
+| Rollup settlement, one ZK deposit join-split | 392,001 WU | ≈ 394,000 WU (est.) | **334,460 WU** (measured) |
 
 - **Port (+2 kB).** Expanding `OP_MULTI` costs about 2 kB (mostly `<6> OP_MULTI OP_ADD` at 514 sites); macro
   declarations and calls are slightly smaller than `OP_DEFINE`/`OP_INVOKE`. The uncompressed verifier is
@@ -44,8 +44,11 @@ The OP_TX selector format (six bytes, versioned) is unchanged.
   replaced by a journal-digest comparison) and rejects a wrong journal digest, a redirected successor, a successor
   for another root and `nSequence = 0`. A compressed leaf spliced for a new root equals a freshly generated one.
 
-The settlement estimates take the measured gsr-full settlement and swap in the new leaf; the rest of the witness is
-unchanged. A full batch of 8 join-splits (≈ 410k WU before, estimated) should fit under 400k WU compressed.
+The `gsr` uncompressed settlement is an estimate (the measured gsr-full settlement with the new leaf swapped in).
+The compressed one-join-split settlement is measured: `privacy-rollup/tools/batcher_e2e.py` on this node with
+`-vbparams=tapleaf_0xc2:0:3999999999` proved a real zero-knowledge deposit receipt, aggregated it with `resolve_zk`
+and mined the settlement (`privacy-rollup/reports/p0-gsr-settlement.md`). A full batch of 8 join-splits
+(≈ 410k WU before, estimated) should fit under 400k WU compressed (estimate: 334,460 + 7 × ≈2.6k ≈ 353k WU).
 
 ## Reproduce
 

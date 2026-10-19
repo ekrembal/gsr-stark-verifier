@@ -104,45 +104,100 @@ impl Canonical for AnchorEntry {
     }
 }
 
-/// The last `ANCHOR_WINDOW` accepted commitment roots, oldest first.
+/// Leaf of the anchor history tree.
+pub fn anchor_leaf(e: &AnchorEntry) -> [u8; 32] {
+    tagged(tags::ANCHORS, &[&e.encode()])
+}
+
+fn anchor_node(l: &[u8; 32], r: &[u8; 32]) -> [u8; 32] {
+    tagged(tags::ANCHOR_NODE, &[l, r])
+}
+
+/// Root of the anchor history tree given `leaf` at `index` and its `ANCHOR_TREE_DEPTH` siblings,
+/// bottom-up. Unused leaves are all-zero.
+pub fn anchor_root_from_path(leaf: &[u8; 32], index: u64, path: &[[u8; 32]]) -> Option<[u8; 32]> {
+    if path.len() != ANCHOR_TREE_DEPTH || index >> ANCHOR_TREE_DEPTH != 0 {
+        return None;
+    }
+    let mut h = *leaf;
+    for (level, sib) in path.iter().enumerate() {
+        h = if (index >> level) & 1 == 0 { anchor_node(&h, sib) } else { anchor_node(sib, &h) };
+    }
+    Some(h)
+}
+
+/// Membership of one anchor in the history tree.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct AnchorProof {
+    pub entry: AnchorEntry,
+    pub path: Vec<[u8; 32]>,
+}
+
+impl AnchorProof {
+    /// The entry, if it is leaf `entry.batch_number` of the tree with root `root`.
+    pub fn verify(&self, root: &[u8; 32]) -> Option<&AnchorEntry> {
+        (anchor_root_from_path(&anchor_leaf(&self.entry), self.entry.batch_number, &self.path).as_ref() == Some(root))
+            .then_some(&self.entry)
+    }
+}
+
+/// Every accepted commitment root, oldest first: entry `i` is the anchor after batch `i` and leaf
+/// `i` of an append-only SHA-256 Merkle tree of depth `ANCHOR_TREE_DEPTH`, whose root the state
+/// holds. Anchors never leave the history; a statement's own expiry bounds its lifetime.
 #[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct AnchorHistory(pub Vec<AnchorEntry>);
 
 impl AnchorHistory {
     pub fn commitment(&self) -> [u8; 32] {
-        tagged(tags::ANCHORS, &[&self.encode()])
+        self.root_and_path(None).0
     }
     pub fn find(&self, batch_number: u64) -> Option<&AnchorEntry> {
-        self.0.iter().find(|e| e.batch_number == batch_number)
+        usize::try_from(batch_number).ok().and_then(|i| self.0.get(i)).filter(|e| e.batch_number == batch_number)
     }
     pub fn push(&mut self, e: AnchorEntry) {
         self.0.push(e);
-        if self.0.len() > ANCHOR_WINDOW {
-            self.0.remove(0);
+    }
+    /// Siblings of leaf `index` (which may be the next, still empty, slot).
+    pub fn path(&self, index: u64) -> Vec<[u8; 32]> {
+        self.root_and_path(Some(index)).1
+    }
+    fn root_and_path(&self, index: Option<u64>) -> ([u8; 32], Vec<[u8; 32]>) {
+        let mut layer: Vec<[u8; 32]> = self.0.iter().map(anchor_leaf).collect();
+        let mut empty = [0u8; 32];
+        let mut path = Vec::new();
+        let mut at = index;
+        for _ in 0..ANCHOR_TREE_DEPTH {
+            if let Some(i) = at {
+                path.push(layer.get((i ^ 1) as usize).copied().unwrap_or(empty));
+                at = Some(i >> 1);
+            }
+            if layer.len() % 2 == 1 {
+                layer.push(empty);
+            }
+            layer = layer.chunks(2).map(|c| anchor_node(&c[0], &c[1])).collect();
+            empty = anchor_node(&empty, &empty);
         }
+        (layer.first().copied().unwrap_or(empty), path)
     }
 }
 
 impl Canonical for AnchorHistory {
     fn encode_to(&self, w: &mut Writer) {
-        w.u8(self.0.len() as u8);
+        w.u32(self.0.len() as u32);
         for e in &self.0 {
             e.encode_to(w);
         }
     }
     fn decode_from(r: &mut Reader<'_>) -> Result<Self, DecodeError> {
-        let n = r.u8()? as usize;
-        if n == 0 || n > ANCHOR_WINDOW {
+        let n = r.u32()? as usize;
+        if n == 0 {
             return Err(DecodeError::LengthOutOfRange);
         }
-        let mut v = Vec::with_capacity(n);
-        for _ in 0..n {
+        let mut v = Vec::new();
+        for i in 0..n {
             let e = AnchorEntry::decode_from(r)?;
-            if let Some(prev) = v.last() {
-                let prev: &AnchorEntry = prev;
-                if e.batch_number != prev.batch_number + 1 {
-                    return Err(DecodeError::BadOrder);
-                }
+            if e.batch_number != i as u64 {
+                return Err(DecodeError::BadOrder);
             }
             v.push(e);
         }
@@ -157,11 +212,19 @@ pub struct RollupState {
     pub batch_number: u64,
     pub commitment_root: Fe,
     pub commitment_count: u64,
+    /// Digest of the canonical commitment frontier for `(commitment_root, commitment_count)`
+    /// (`Frontier::digest`): the batch guest authenticates the frontier by this SHA-256 digest
+    /// instead of recomputing the 32-level root.
+    pub commitment_frontier: [u8; 32],
     pub nullifier_root: [u8; 32],
     pub nullifier_next_index: u64,
     pub anchor_history_commitment: [u8; 32],
     pub data_history_commitment: [u8; 32],
     pub backing_sats: u64,
+    /// Outpoint spent by input 0 of the transaction that created the coin holding this state: the
+    /// previous rollup output, or `genesis_nonce` for the genesis state. Lineage is checked by
+    /// induction from it, so only the coin descending from `genesis_nonce` can settle.
+    pub parent: Outpoint,
 }
 
 impl RollupState {
@@ -176,11 +239,13 @@ impl Canonical for RollupState {
         w.u32(self.protocol_version).u64(self.batch_number);
         self.commitment_root.encode_to(w);
         w.u64(self.commitment_count)
+            .bytes(&self.commitment_frontier)
             .bytes(&self.nullifier_root)
             .u64(self.nullifier_next_index)
             .bytes(&self.anchor_history_commitment)
             .bytes(&self.data_history_commitment)
             .u64(self.backing_sats);
+        self.parent.encode_to(w);
     }
     fn decode_from(r: &mut Reader<'_>) -> Result<Self, DecodeError> {
         Ok(RollupState {
@@ -189,11 +254,13 @@ impl Canonical for RollupState {
             batch_number: r.u64()?,
             commitment_root: Fe::decode_from(r)?,
             commitment_count: r.u64()?,
+            commitment_frontier: r.array()?,
             nullifier_root: r.array()?,
             nullifier_next_index: r.u64()?,
             anchor_history_commitment: r.array()?,
             data_history_commitment: r.array()?,
             backing_sats: r.amount()?,
+            parent: Outpoint::decode_from(r)?,
         })
     }
 }
@@ -226,7 +293,8 @@ impl RollupDescriptor {
 pub struct DepositDeclaration {
     /// Funding outpoints, consumed as consecutive settlement inputs in this order.
     pub funding: Vec<Outpoint>,
-    /// Optional change returned to the depositor; placed in the change section of the outputs.
+    /// Change returned to the depositor. The transition rejects it: an output spendable before the settlement
+    /// confirms could pin it.
     pub change: Option<TxOut>,
 }
 
@@ -234,7 +302,8 @@ pub struct DepositDeclaration {
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ExternalData {
     pub deposit: Option<DepositDeclaration>,
-    pub withdrawal_script: Option<Vec<u8>>,
+    /// Withdrawal outputs (at most `MAX_WITHDRAWALS_PER_TX`); their values sum to `withdrawal_sats`.
+    pub withdrawals: Vec<TxOut>,
     pub ciphertexts: [Vec<u8>; 2],
 }
 
@@ -266,16 +335,12 @@ impl Canonical for ExternalData {
                 }
             }
         }
-        match &self.withdrawal_script {
-            None => {
-                w.u8(0);
-            }
-            Some(s) => {
-                w.u8(1).var_bytes(s);
-            }
+        w.u8(self.withdrawals.len() as u8);
+        for o in &self.withdrawals {
+            o.encode_to(w);
         }
         for c in &self.ciphertexts {
-            w.bytes(c);
+            encode_ciphertext(w, c);
         }
     }
     fn decode_from(r: &mut Reader<'_>) -> Result<Self, DecodeError> {
@@ -293,10 +358,40 @@ impl Canonical for ExternalData {
         } else {
             None
         };
-        let withdrawal_script = if r.bool()? { Some(r.var_bytes(MAX_SCRIPT_PUBKEY_LEN)?.to_vec()) } else { None };
-        let ciphertexts = [r.take(NOTE_CIPHERTEXT_LEN)?.to_vec(), r.take(NOTE_CIPHERTEXT_LEN)?.to_vec()];
-        Ok(ExternalData { deposit, withdrawal_script, ciphertexts })
+        let n = r.u8()? as usize;
+        if n > MAX_WITHDRAWALS_PER_TX {
+            return Err(DecodeError::LengthOutOfRange);
+        }
+        let mut withdrawals = Vec::with_capacity(n);
+        for _ in 0..n {
+            withdrawals.push(TxOut::decode_from(r)?);
+        }
+        let ciphertexts = [decode_ciphertext(r)?, decode_ciphertext(r)?];
+        Ok(ExternalData { deposit, withdrawals, ciphertexts })
     }
+}
+
+/// A note ciphertext with its kind byte: 0 for an ML-KEM ciphertext (`NOTE_CIPHERTEXT_LEN`), 1 for a
+/// self ciphertext (`SELF_CIPHERTEXT_LEN`). Any other length is not encodable.
+pub fn ciphertext_kind(c: &[u8]) -> Option<u8> {
+    match c.len() {
+        NOTE_CIPHERTEXT_LEN => Some(0),
+        SELF_CIPHERTEXT_LEN => Some(1),
+        _ => None,
+    }
+}
+
+fn encode_ciphertext(w: &mut Writer, c: &[u8]) {
+    w.u8(ciphertext_kind(c).unwrap_or(0xff)).bytes(c);
+}
+
+fn decode_ciphertext(r: &mut Reader<'_>) -> Result<Vec<u8>, DecodeError> {
+    let len = match r.u8()? {
+        0 => NOTE_CIPHERTEXT_LEN,
+        1 => SELF_CIPHERTEXT_LEN,
+        _ => return Err(DecodeError::LengthOutOfRange),
+    };
+    Ok(r.take(len)?.to_vec())
 }
 
 /// Public statement of one 2-input/2-output join-split proof.
@@ -385,6 +480,8 @@ pub struct RollupTransaction {
     pub external: ExternalData,
     /// `postcard(SuccinctReceipt<ReceiptClaim>)` produced by `joinsplit prove` (`identity_zk` seal).
     pub receipt: Vec<u8>,
+    /// The tapscript leaf behind each withdrawal output, in order (see `WITHDRAWAL_LEAF_PREFIX`).
+    pub withdrawal_leaves: Vec<Vec<u8>>,
 }
 
 impl Canonical for RollupTransaction {
@@ -392,12 +489,23 @@ impl Canonical for RollupTransaction {
         self.public.encode_to(w);
         self.external.encode_to(w);
         w.var_bytes(&self.receipt);
+        w.u8(self.withdrawal_leaves.len() as u8);
+        for l in &self.withdrawal_leaves {
+            w.var_bytes(l);
+        }
     }
     fn decode_from(r: &mut Reader<'_>) -> Result<Self, DecodeError> {
         Ok(RollupTransaction {
             public: JoinSplitPublic::decode_from(r)?,
             external: ExternalData::decode_from(r)?,
             receipt: r.var_bytes(MAX_RECEIPT_BYTES)?.to_vec(),
+            withdrawal_leaves: {
+                let n = r.u8()? as usize;
+                if n > MAX_WITHDRAWALS_PER_TX {
+                    return Err(DecodeError::LengthOutOfRange);
+                }
+                (0..n).map(|_| r.var_bytes(MAX_WITHDRAWAL_LEAF_LEN).map(<[u8]>::to_vec)).collect::<Result<_, _>>()?
+            },
         })
     }
 }
@@ -408,8 +516,9 @@ pub struct NoteOutput {
     pub ciphertext: Vec<u8>,
 }
 
-/// Settlement layout counts; inputs are `[rollup, funding..]` and outputs are
-/// `[rollup, withdrawals.., changes.., reward?]`. Version one admits no other inputs or outputs.
+/// Settlement layout counts; inputs are `[rollup, funding.., escrows..]` and outputs are
+/// `[rollup, OP_RETURN <new_root>, withdrawals.., changes.., reward?]` (`changes` and `reward` must be 0). Each escrow input mints one note. No other inputs or
+/// outputs are admitted.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct SettlementLayout {
     pub transactions: u8,
@@ -417,14 +526,16 @@ pub struct SettlementLayout {
     pub withdrawals: u8,
     pub changes: u8,
     pub reward: bool,
+    pub escrows: u8,
 }
 
 impl SettlementLayout {
     pub fn input_count(&self) -> usize {
-        1 + self.funding_inputs as usize
+        1 + self.funding_inputs as usize + self.escrows as usize
     }
+    /// Rollup output, state-root `OP_RETURN`, then withdrawals (changes and reward are always 0).
     pub fn output_count(&self) -> usize {
-        1 + self.withdrawals as usize + self.changes as usize + self.reward as usize
+        2 + self.withdrawals as usize + self.changes as usize + self.reward as usize
     }
 }
 
@@ -451,13 +562,13 @@ impl Canonical for BatchBody {
         w.u64(self.batch_number);
         self.predecessor.encode_to(w);
         let l = &self.layout;
-        w.u8(l.transactions).u8(l.funding_inputs).u8(l.withdrawals).u8(l.changes).u8(l.reward as u8);
+        w.u8(l.transactions).u8(l.funding_inputs).u8(l.withdrawals).u8(l.changes).u8(l.reward as u8).u8(l.escrows);
         for n in &self.nullifiers {
             n.encode_to(w);
         }
         for o in &self.outputs {
             o.commitment.encode_to(w);
-            w.bytes(&o.ciphertext);
+            encode_ciphertext(w, &o.ciphertext);
         }
     }
     fn decode_from(r: &mut Reader<'_>) -> Result<Self, DecodeError> {
@@ -470,12 +581,14 @@ impl Canonical for BatchBody {
             withdrawals: r.u8()?,
             changes: r.u8()?,
             reward: r.bool()?,
+            escrows: r.u8()?,
         };
         let n = layout.transactions as usize;
         if n > MAX_BATCH_TRANSACTIONS
             || layout.funding_inputs as usize > n * MAX_FUNDING_INPUTS
-            || layout.withdrawals as usize > n
+            || layout.withdrawals as usize > n * MAX_WITHDRAWALS_PER_TX
             || layout.changes as usize > n
+            || layout.escrows as usize > MAX_BATCH_ESCROWS
         {
             return Err(DecodeError::LengthOutOfRange);
         }
@@ -487,19 +600,20 @@ impl Canonical for BatchBody {
             }
             nullifiers.push(f);
         }
-        let mut outputs: Vec<NoteOutput> = Vec::with_capacity(2 * n);
-        for _ in 0..2 * n {
+        let notes = 2 * n + layout.escrows as usize;
+        let mut outputs: Vec<NoteOutput> = Vec::with_capacity(notes);
+        for _ in 0..notes {
             let commitment = Fe::decode_from(r)?;
             if outputs.last().is_some_and(|p| p.commitment >= commitment) {
                 return Err(DecodeError::BadOrder);
             }
-            outputs.push(NoteOutput { commitment, ciphertext: r.take(NOTE_CIPHERTEXT_LEN)?.to_vec() });
+            outputs.push(NoteOutput { commitment, ciphertext: decode_ciphertext(r)? });
         }
         Ok(BatchBody { rollup_id, batch_number, predecessor, layout, nullifiers, outputs })
     }
 }
 
-/// The input-zero annex: `0x50 || "GSRP" || version || old_state_root || new_state_root || body`.
+/// The input-zero annex: `0x50 || 0x00 || "GSRP" || version || old_state_root || new_state_root || body`.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Annex {
     pub old_state_root: [u8; 32],
@@ -509,12 +623,16 @@ pub struct Annex {
 
 impl Canonical for Annex {
     fn encode_to(&self, w: &mut Writer) {
-        w.u8(ANNEX_TAG).bytes(&ANNEX_MAGIC).u8(ANNEX_ENCODING_VERSION);
+        w.u8(ANNEX_TAG).u8(ANNEX_UNSTRUCTURED).bytes(&ANNEX_MAGIC).u8(ANNEX_ENCODING_VERSION);
         w.bytes(&self.old_state_root).bytes(&self.new_state_root);
         self.body.encode_to(w);
     }
     fn decode_from(r: &mut Reader<'_>) -> Result<Self, DecodeError> {
-        if r.u8()? != ANNEX_TAG || r.array::<4>()? != ANNEX_MAGIC || r.u8()? != ANNEX_ENCODING_VERSION {
+        if r.u8()? != ANNEX_TAG
+            || r.u8()? != ANNEX_UNSTRUCTURED
+            || r.array::<4>()? != ANNEX_MAGIC
+            || r.u8()? != ANNEX_ENCODING_VERSION
+        {
             return Err(DecodeError::BadMagic);
         }
         Ok(Annex { old_state_root: r.array()?, new_state_root: r.array()?, body: BatchBody::decode_from(r)? })

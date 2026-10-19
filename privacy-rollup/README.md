@@ -1,7 +1,10 @@
-# Privacy rollup on GSR
+# gsr-privacy-pool: privacy rollup on GSR
+
+Short explainer: [docs/explainer.md](docs/explainer.md). Whitepaper-style specification: [docs/whitepaper.md](docs/whitepaper.md).
 
 A two-input/two-output private join-split rollup whose state is a single Taproot UTXO. Each settlement
-spends the current rollup UTXO and creates its successor; the only spending condition is a RISC Zero
+spends the current rollup UTXO, pays the same fixed rollup address again and publishes the new state root
+as `OP_RETURN <root>` in output 1; the only spending condition is a RISC Zero
 succinct receipt of the `apply_batch` guest, verified in Script by the [`risc0-succinct`](../risc0-succinct/README.md)
 verifier and bound to the spending transaction with `OP_TX`.
 
@@ -10,8 +13,9 @@ user: joinsplit guest (private witness) -> zero-knowledge receipt (`identity_zk`
   -> operator: ExecutorEnv::add_assumption; apply_batch guest calls env::verify per transaction,
      applies the batch, commits a 196-byte journal
   -> resolve_zk per transaction, then the succinct receipt re-proven under the padded SHA-256 suite
-  -> rollup leaf: PUSH32 <state_root> 1 CSV DROP || fixed verifier suffix
-  -> settlement transaction: input 0 = rollup UTXO (+ deposit funding), output 0 = successor, annex = batch data
+  -> rollup leaf (one fixed address): 1 CSV DROP || fixed verifier suffix
+  -> settlement transaction: input 0 = rollup UTXO (+ deposits), output 0 = same address,
+     output 1 = OP_RETURN <new_root>, annex = batch data
 ```
 
 > Research code, not audited. See [spec/security-model.md](spec/security-model.md) for assumptions and
@@ -28,9 +32,15 @@ user: joinsplit guest (private witness) -> zero-knowledge receipt (`identity_zk`
 | `apply_batch` guest | Implemented; `env::verify` per transaction; journal equals the native transition byte for byte |
 | `resolve_zk.zkr` | Built with patched Zirgen and added to the allowed control root (`5edc9538…5b01`) |
 | Batches containing join-splits | **Proven and settled on regtest** (image `00eb5e47…e50f`): a real deposit join-split, 15 segments, 24.8 min to the padded receipt; mined, altered spends rejected. See [reports/zk-joinsplit.md](reports/zk-joinsplit.md) |
+| P3: anchors, ciphertexts, batches | Append-only anchor tree (no anchor expiry), 120-byte self/change ciphertexts, up to 4 withdrawal outputs per join-split, 16-transaction weight-bounded batches; four-deposit and transfer + 4-output-withdrawal batches proven and mined on `gsr` (333,850 / 335,724 WU). See [reports/p3-anchors-ciphertexts.md](reports/p3-anchors-ciphertexts.md) |
+| P4: fees, CPFP, conflicts | Fee quotes (`GET /v1/fees`), admission floors, shortfall refusal before proving, auto-settle policy, operator reward output as CPFP anchor (`POST /v1/bump`), direct-to-miner submission, funding-conflict abandonment and adoption of competing settlements; run end to end on `gsr` (conflicted 4-deposit proof abandoned, 3-deposit re-proof mined with its CPFP child, 333,485 WU). See [reports/p4-fees.md](reports/p4-fees.md) |
+| P5: faster settlement proving | BigInt2 Poseidon2 in the guest (since replaced by SHA-256 notes), static zero hashes, SHA-256-authenticated commitment frontier in the state, batched indexed-nullifier insertion, cached tagged-hash midstates, optional parallel segment / lift / join proving (`PR_PROVE_WORKERS`); 4-deposit settlement 18 -> 5 segments and 2,148 -> 508 s segment + lift/join, rerun of the P4 flow on `gsr` mined at the same 333,485 WU. See [reports/p5-proving.md](reports/p5-proving.md) |
+| P6: adversarial tests, review package | real-receipt tampering, covenant-copy spend, crash-after-broadcast resume and replay on `gsr` (`tools/p6_adversarial.py`, [reports/p6-adversarial.json](reports/p6-adversarial.json)); competing-settler, replay and malformed-annex tests (`tests/tests/adversarial.rs`); external review scope, threat model, coverage and open questions in [review/README.md](review/README.md). No external review has taken place |
 | Empty batches | **Proven** and settled consecutively on activated regtest |
-| Covenant (`OP_TX` binding, successor leaf, `1 CSV`) | Implemented, metered, mined on regtest; altered spends rejected |
-| Relay | Consensus-valid; **nonstandard** under the pinned node's policy (annex) |
+| Covenant (`OP_TX` binding, output 0 = own address, `1 CSV`) | Implemented, metered, mined on regtest; altered spends rejected |
+| Relay | Consensus-valid; **nonstandard** under the pinned node's policy (annex); relays under bitcoin/bitcoin#36466 (open, not merged), see [reports/relay-pinning.md](reports/relay-pinning.md) |
+| No pinning handles | CSV-locked withdrawal leaves, no change/reward/P2A outputs, BIP 68 sequences on funding (1) and escrow (2) inputs; fees all to the miner, bumped by re-proving + RBF ([reports/no-pin-handles.json](reports/no-pin-handles.json)) |
+| Rust SDK, batcher, WASM client | `pr-sdk` (wallet, witnesses, local ZK proving, HTTP client), `pr-batcher` (HTTP admission, aggregation, settlement proving, Bitcoin Core RPC), `pr-sdk-wasm` (WASI build of the client) with a browser benchmark page. SDK -> batcher -> mined settlement measured on regtest; see [reports/sdk-batcher-wasm.md](reports/sdk-batcher-wasm.md) |
 
 ## Measurements
 
@@ -73,7 +83,9 @@ Earlier ProveKit pipeline (kept for reference):
 | Seal | 222,668 bytes |
 
 Settlement weight does not depend on batch contents beyond the annex (one nullifier is 32 bytes, one output
-32 bytes plus a 1,232-byte ciphertext), because the receipt is constant-size.
+33 bytes plus a 1,232-byte recipient ciphertext or a 120-byte self/change ciphertext) and the funding,
+escrow and withdrawal inputs/outputs, because the receipt is constant-size. Batch selection keeps each
+settlement under 400,000 WU (`MAX_SETTLEMENT_WEIGHT`, budgeted from the measured 331,699 WU empty settlement).
 
 ## Layout
 
@@ -83,13 +95,17 @@ Settlement weight does not depend on batch contents beyond the annex (one nullif
 | `crates/crypto` | tagged SHA-256 commitments, nullifiers, key derivation and commitment-tree nodes |
 | `crates/commitment-tree`, `crates/indexed-nullifier-tree` | depth-32 incremental and indexed trees with insertion/absence witnesses |
 | `crates/state-transition` | `apply_batch`: shared by the native node, the operator and the guest |
-| `crates/bitcoin-adapter` | settlement transaction, `OP_TX` preimages, successor leaf |
+| `crates/bitcoin-adapter` | settlement transaction, `OP_TX` preimages, rollup leaf |
 | `crates/joinsplit` | join-split witness and constraint check, shared by the wallet and the guest |
 | `crates/provekit-adapter` | ProveKit proving/verification (reference path); `joinsplit-batch`, `provekit-export` |
 | `crates/wallet-core`, `crates/scanner`, `crates/mempool`, `operator` | wallet, replay/rollback, admission, `pr-operator` CLI |
 | `circuits/joinsplit-2x2` | Noir circuit (Poseidon2, stale reference) |
 | `methods/guest`, `prover` | `joinsplit` and `apply_batch` guests; `joinsplit prove|verify|id` and `settle prove|exec <witness> <dir> <receipts…>` hosts |
 | `tools/rollup_covenant.py`, `tools/regtest_demo.py`, `tools/operator_joinsplit.py` | covenant generator, regtest demo, real-proof operator check |
+| `prover/sdk` | `pr-sdk`: wallet, deposit/transfer witnesses, `prove` (local ZK receipt), canonical transaction codec, batcher HTTP client; `examples/wallet.rs` |
+| `prover/batcher` | `pr-batcher init|genesis|serve`: HTTP API, pool, settlement proving with `resolve_zk`, settlement witness, `sendrawtransaction`/`generateblock` |
+| `prover/sdk-wasm`, `prover/web` | WASI build of the client (`build.sh`) and the benchmark page (worker + `@bjorn3/browser_wasi_shim` 0.4.2) |
+| `tools/batcher_e2e.py`, `tools/covenant_cli.py` | SDK -> batcher -> regtest check; covenant witness helper used by the batcher |
 | `tests` | scenario and differential tests |
 | `spec/` | [protocol](spec/protocol.md), [encoding](spec/encoding.md), [join-split](spec/joinsplit.md), [Bitcoin binding](spec/bitcoin-binding.md), [security model](spec/security-model.md), [zero knowledge](spec/zero-knowledge.md) |
 | `patches/`, `vendor/` | RISC Zero ZK mode and Zirgen `resolve_zk` patches; ProveKit patch (zkVM build, transpose-free verifier row); spongefish/ark-ff copies with target-independent hashing and the BN254 accelerator |
@@ -118,6 +134,9 @@ Dependencies are path dependencies on two sibling checkouts of the repository di
   [`patches/zirgen-zk.patch`](patches/zirgen-zk.patch)
   (`bazel build -c opt //zirgen/circuit/predicates:resolve_zk.zkr`) and combined with
   `tools/assemble_zk_recursion_zip.py <upstream zip> <resolve_zk.zkr> <out zip>`.
+* WASM client build (`prover/sdk-wasm/build.sh`): after the zero-knowledge patch apply
+  [`patches/risc0-wasm.patch`](patches/risc0-wasm.patch) (sequential C++ kernels and executor on
+  `wasm32`, no NVTX, Unix-only actor code gated). Native builds are unchanged.
 * WHIR remains version 0.2.0; the vendored published source has the local
   [`patches/whir-blinding.patch`](patches/whir-blinding.patch) algorithmic optimization. Its original
   archive checksum and necessary same-version lockfile source deviation are documented in the review report.
@@ -135,4 +154,8 @@ cargo build --release -p pr-operator -p pr-provekit-adapter
 ../../provekit/target/release/provekit-cli prepare circuits/joinsplit-2x2 -p js.pkp -v js.pkv   # fixtures pin the exported verifier-key bytes
 python3 tools/operator_joinsplit.py                      # real ZK user receipt through the operator and add_assumption (copy in reports/operator-joinsplit.json)
 python3 tools/regtest_demo.py --batches 2                # proven deposit join-split + empty batch settled on regtest -> build/privacy-rollup-regtest.json (copy in reports/regtest.json)
+(cd prover && cargo test --release -p pr-sdk -p pr-batcher)  # SDK and HTTP API tests
+python3 tools/batcher_e2e.py                             # SDK proof -> batcher HTTP -> settlement mined on regtest -> build/batcher-e2e.json (copy in reports/batcher-e2e.json)
+(cd prover && bash sdk-wasm/build.sh)                    # WASI SDK 25 -> prover/web/pr-sdk-wasm.wasm
+target/release/pr-batcher serve <dir> --web prover/web   # serves the API and the benchmark page
 ```

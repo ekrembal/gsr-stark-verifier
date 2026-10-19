@@ -35,8 +35,10 @@ SETTLE = PR / "prover/target/release/settle"
 # pr_tests::descriptor(), its genesis outpoint and ROLLUP_SPK.
 DESCRIPTOR = {"protocol_version": 1, "genesis_nonce": {"txid": [7] * 32, "vout": 0}, "image_id": [9] * 32,
               "internal_key": [2] * 32, "seed_sats": 10_000}
-GENESIS = ("01" * 32, 0)
 ROLLUP_SPK = "5120" + "aa" * 32
+# pr_tests::genesis_tx(): version 2, spends the genesis nonce, 10_000 sats to ROLLUP_SPK at output 0.
+GENESIS_TX = ("02000000" + "01" + "07" * 32 + "00000000" + "00" + "ffffffff"
+              + "01" + (10_000).to_bytes(8, "little").hex() + "22" + ROLLUP_SPK + "00000000")
 FUNDING_SPK = "0020" + "bb" * 32
 # Host prover switches of patches/risc0-cpu-*.patch: they change proving speed, not the proofs.
 PROVER_ENV = {"GSR_BATCH_CPU": "1", "GSR_PERIODIC_CPU": "1", "GSR_BATCH_EVAL_CPU": "1", "GSR_HASH_LANES": "16",
@@ -80,7 +82,7 @@ def main() -> None:
     report = {}
     (WORK / "descriptor.json").write_text(json.dumps(DESCRIPTOR))
     run(OPERATOR, "init", state, WORK / "descriptor.json")
-    run(OPERATOR, "genesis", state, *GENESIS)
+    run(OPERATOR, "genesis", state, GENESIS_TX)
     status = WORK / "status.json"
     status.write_text(run(OPERATOR, "status", state).stdout)
     if not args.reuse:
@@ -108,7 +110,7 @@ def main() -> None:
     report["reject_missing_funding"] = rejected(OPERATOR, "submit", state, js / "tx.json")
 
     req = WORK / "request.json"
-    req.write_text(json.dumps({"rollup_script_pubkey": ROLLUP_SPK, "successor_script_pubkey": ROLLUP_SPK}))
+    req.write_text(json.dumps({"rollup_script_pubkey": ROLLUP_SPK}))
     run(OPERATOR, "build", state, req, out)
     batch = json.loads((out / "batch.json").read_text())
     assert batch["transactions"] == 1 and batch["assumption_receipts"] == ["receipt0.bin"]
@@ -125,7 +127,7 @@ def main() -> None:
         SETTLE, "exec", out / "witness.json", out / "exec-bad", other / "receipt.bin")
 
     before = json.loads(run(OPERATOR, "status", state).stdout)
-    after = json.loads(run(OPERATOR, "accept", state, batch["annex"], batch["backing_sats"], "02" * 32, 0).stdout)
+    after = json.loads(run(OPERATOR, "accept", state, batch["annex"], batch["settlement_tx"]).stdout)
     assert after["batch_number"] == 1 and after["pending"] == 0 and after["state_root"] == batch["new_state_root"]
     report["reject_after_settlement"] = rejected(OPERATOR, "submit", state, js / "tx.json", funding)
     restored = json.loads(run(OPERATOR, "rollback", state).stdout)

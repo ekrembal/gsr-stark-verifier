@@ -10,7 +10,7 @@ fn external(change: Option<TxOut>, withdrawal: Option<Vec<u8>>) -> ExternalData 
             funding: vec![Outpoint { txid: [3; 32], vout: 1 }, Outpoint { txid: [4; 32], vout: 0 }],
             change,
         }),
-        withdrawal_script: withdrawal,
+        withdrawals: withdrawal.into_iter().map(|s| TxOut { value: 1_000, script_pubkey: s }).collect(),
         ciphertexts: [vec![5; NOTE_CIPHERTEXT_LEN], vec![6; NOTE_CIPHERTEXT_LEN]],
     }
 }
@@ -23,7 +23,14 @@ fn annex() -> Annex {
             rollup_id: fe(9),
             batch_number: 7,
             predecessor: Outpoint { txid: [8; 32], vout: 0 },
-            layout: SettlementLayout { transactions: 1, funding_inputs: 1, withdrawals: 1, changes: 0, reward: true },
+            layout: SettlementLayout {
+                transactions: 1,
+                funding_inputs: 1,
+                withdrawals: 1,
+                changes: 0,
+                reward: true,
+                escrows: 0,
+            },
             nullifiers: vec![fe(1), fe(2)],
             outputs: vec![
                 NoteOutput { commitment: fe(3), ciphertext: vec![7; NOTE_CIPHERTEXT_LEN] },
@@ -105,13 +112,13 @@ fn rejects_out_of_range_values() {
 #[test]
 fn annex_rejects_bad_magic_order_and_layout() {
     let good = annex().encode();
-    for (at, val) in [(0, 0x51u8), (1, b'X'), (5, 2)] {
+    for (at, val) in [(0, 0x51u8), (1, 0x01), (2, b'X'), (6, 2)] {
         let mut b = good.clone();
         b[at] = val;
         assert_eq!(Annex::decode(&b), Err(DecodeError::BadMagic));
     }
-    let body_at = 1 + 4 + 1 + 64;
-    let nullifiers_at = body_at + 32 + 8 + 36 + 5;
+    let body_at = 2 + 4 + 1 + 64;
+    let nullifiers_at = body_at + 32 + 8 + 36 + 6;
 
     let mut a = annex();
     a.body.nullifiers.swap(0, 1);
@@ -132,6 +139,9 @@ fn annex_rejects_bad_magic_order_and_layout() {
     let mut b = good.clone();
     b[body_at + 32 + 8 + 36 + 4] = 2;
     assert_eq!(Annex::decode(&b), Err(DecodeError::NonCanonicalBool));
+    let mut b = good.clone();
+    b[body_at + 32 + 8 + 36 + 5] = (MAX_BATCH_ESCROWS + 1) as u8;
+    assert_eq!(Annex::decode(&b), Err(DecodeError::LengthOutOfRange));
     assert_eq!(&good[nullifiers_at..nullifiers_at + 32], &fe(1).0);
 }
 

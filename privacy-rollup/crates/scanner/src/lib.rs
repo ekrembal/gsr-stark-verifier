@@ -1,14 +1,19 @@
 //! Full rollup replica: rebuilds every tree from genesis plus the annexes of the settlement chain,
 //! checks each published state root, serves witnesses to the operator and paths to wallets, and
 //! rolls back on reorgs.
-use pr_bitcoin_adapter::SettlementTx;
+use pr_bitcoin_adapter::{PlainTx, SettlementTx};
 use pr_commitment_tree::Tree;
 use pr_indexed_nullifier_tree::IndexedTree;
+use pr_protocol_types::state_root_script;
 use pr_protocol_types::{
-    next_data_history, AnchorEntry, AnchorHistory, Annex, Canonical, Fe, Outpoint, RollupDescriptor, RollupState,
-    DUST_LIMIT,
+    hash::sha256, next_data_history, AnchorEntry, AnchorHistory, AnchorProof, Annex, Canonical, Fe, Outpoint,
+    RollupDescriptor, RollupState, TxOut, DUST_LIMIT,
 };
-use pr_state_transition::{apply_batch, genesis, BatchEffects, BatchTransaction, BatchWitness, TransitionError};
+use pr_state_transition::escrow::EscrowDeposit;
+use pr_state_transition::successor_root;
+use pr_state_transition::{
+    apply_batch, genesis, BatchEffects, BatchTransaction, BatchWitness, PredecessorSettlement, TransitionError,
+};
 use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -23,6 +28,7 @@ pub enum ScanError {
     CommitmentRejected,
     Transition(TransitionError),
     NothingToRollBack,
+    BadGenesis,
 }
 
 /// One accepted settlement as the replica remembers it.
@@ -30,8 +36,16 @@ pub enum ScanError {
 pub struct Checkpoint {
     pub state: RollupState,
     pub anchors: AnchorHistory,
-    /// Outpoint of the rollup output holding `state`.
+    /// Outpoint of the rollup output holding `state`: output 0 of `creating_tx`.
     pub utxo: Outpoint,
+    /// The genesis transaction or the settlement that created `utxo`, without witnesses.
+    pub creating_tx: PlainTx,
+    /// The outputs `creating_tx` spent, in input order (empty for genesis or when not yet known).
+    #[serde(default)]
+    pub creating_spent: Vec<TxOut>,
+    /// SHA-256 of `creating_tx`'s input-0 annex (zero for genesis).
+    #[serde(default)]
+    pub creating_annex_digest: [u8; 32],
 }
 
 #[derive(Clone, Debug)]
@@ -44,14 +58,29 @@ pub struct Replica {
 }
 
 impl Replica {
-    pub fn new(descriptor: RollupDescriptor, genesis_utxo: Outpoint) -> Replica {
+    /// A replica at genesis. `genesis_tx` must spend `genesis_nonce` as input 0 and hold the rollup
+    /// at output 0, otherwise no settlement can ever pass the lineage check.
+    pub fn new(descriptor: RollupDescriptor, genesis_tx: PlainTx) -> Result<Replica, ScanError> {
         let (state, anchors, _) = genesis(&descriptor);
-        Replica {
+        if genesis_tx.inputs.first().map(|i| i.prevout) != Some(descriptor.genesis_nonce)
+            || genesis_tx.outputs.first().map(|o| o.value) != Some(descriptor.seed_sats)
+        {
+            return Err(ScanError::BadGenesis);
+        }
+        let utxo = Outpoint { txid: genesis_tx.txid(), vout: 0 };
+        Ok(Replica {
             descriptor,
             commitments: Tree::new(),
             nullifiers: IndexedTree::new(),
-            history: vec![Checkpoint { state, anchors, utxo: genesis_utxo }],
-        }
+            history: vec![Checkpoint {
+                state,
+                anchors,
+                utxo,
+                creating_tx: genesis_tx,
+                creating_spent: Vec::new(),
+                creating_annex_digest: [0; 32],
+            }],
+        })
     }
 
     pub fn tip(&self) -> &Checkpoint {
@@ -64,32 +93,91 @@ impl Replica {
 
     /// Builds the transition witness for `transactions` settled by `settlement` on top of the tip.
     pub fn witness(&self, transactions: Vec<BatchTransaction>, settlement: SettlementTx) -> BatchWitness {
+        self.witness_with_escrows(transactions, Vec::new(), settlement)
+    }
+
+    /// [`Self::witness`] for a batch that also sweeps escrow deposits (inputs after the funding inputs).
+    /// Output 1 is overwritten with `OP_RETURN <new_state_root>` when the batch applies, so builders may pass
+    /// any placeholder there.
+    pub fn witness_with_escrows(
+        &self,
+        transactions: Vec<BatchTransaction>,
+        escrows: Vec<EscrowDeposit>,
+        settlement: SettlementTx,
+    ) -> BatchWitness {
+        let mut w = self.unpublished_witness(transactions, escrows, settlement);
+        if let (Ok(root), Some(o)) = (successor_root(&w), w.settlement.outputs.get_mut(1)) {
+            o.script_pubkey = state_root_script(&root);
+        }
+        w
+    }
+
+    fn unpublished_witness(
+        &self,
+        transactions: Vec<BatchTransaction>,
+        escrows: Vec<EscrowDeposit>,
+        settlement: SettlementTx,
+    ) -> BatchWitness {
         let mut nullifiers: Vec<Fe> = transactions.iter().flat_map(|t| t.public.nullifiers).collect();
         nullifiers.sort();
         let mut scratch = self.nullifiers.clone();
-        let nullifier_witnesses = nullifiers.iter().filter_map(|n| scratch.insert(*n).ok()).collect();
+        let nullifier_witness = scratch.insert_batch(&nullifiers).unwrap_or_default();
         let tip = self.tip();
         BatchWitness {
             old_state: tip.state,
-            anchors: tip.anchors.clone(),
-            frontier: if transactions.is_empty() { None } else { Some(self.commitments.frontier()) },
+            anchor_slot: tip.anchors.path(tip.state.batch_number + 1),
+            anchor_proofs: transactions
+                .iter()
+                .map(|t| {
+                    let b = t.public.anchor_batch_number;
+                    let entry = tip.anchors.find(b).copied().unwrap_or(AnchorEntry {
+                        batch_number: b,
+                        commitment_root: t.public.anchor_root,
+                        commitment_count: t.public.anchor_commitment_count,
+                    });
+                    AnchorProof { entry, path: tip.anchors.path(b) }
+                })
+                .collect(),
+            frontier: if transactions.is_empty() && escrows.is_empty() {
+                None
+            } else {
+                Some(self.commitments.frontier())
+            },
             transactions,
-            nullifier_witnesses,
+            nullifier_witness,
             settlement,
+            predecessor_tx: tip.creating_tx.clone(),
+            escrows,
+            descriptor: self.descriptor.clone(),
+            predecessor: self.predecessor(),
         }
     }
 
+    /// The data rebuilding the tip's creating settlement's journal; `None` at genesis.
+    pub fn predecessor(&self) -> Option<PredecessorSettlement> {
+        let [.., prev, tip] = self.history.as_slice() else { return None };
+        Some(PredecessorSettlement {
+            spent: tip.creating_spent.clone(),
+            old_state_root: prev.state.root(),
+            annex_digest: tip.creating_annex_digest,
+        })
+    }
+
     /// Operator path: checks a batch with the full transition and commits it.
-    pub fn apply_witness(&mut self, w: &BatchWitness, utxo: Outpoint) -> Result<BatchEffects, ScanError> {
+    pub fn apply_witness(&mut self, w: &BatchWitness) -> Result<BatchEffects, ScanError> {
         let effects = apply_batch(w).map_err(ScanError::Transition)?;
-        self.accept_annex(&effects.annex, effects.new_state.backing_sats, utxo)?;
+        let spent =
+            w.settlement.inputs.iter().map(|i| TxOut { value: i.amount, script_pubkey: i.script_pubkey.clone() });
+        self.accept_settlement(&effects.annex_bytes, &w.settlement.plain(), spent.collect())?;
         Ok(effects)
     }
 
-    /// Scanner path: replays a published annex. `rollup_value` is output zero's value and `utxo` its
-    /// outpoint; the replica recomputes the successor state and requires the published root.
-    pub fn accept_annex(&mut self, annex: &Annex, rollup_value: u64, utxo: Outpoint) -> Result<(), ScanError> {
+    /// Scanner path: replays the annex published by settlement `tx` (witnesses stripped). The replica
+    /// recomputes the successor state from it and output 0 and requires the published root.
+    pub fn accept_annex(&mut self, annex: &Annex, tx: &PlainTx) -> Result<(), ScanError> {
         let tip = self.tip().clone();
+        let rollup_value = tx.outputs.first().map_or(0, |o| o.value);
+        let utxo = Outpoint { txid: tx.txid(), vout: 0 };
         let body = &annex.body;
         if body.rollup_id != tip.state.rollup_id {
             return Err(ScanError::WrongRollup);
@@ -97,7 +185,7 @@ impl Replica {
         if body.batch_number != tip.state.batch_number + 1 {
             return Err(ScanError::WrongBatchNumber);
         }
-        if body.predecessor != tip.utxo {
+        if body.predecessor != tip.utxo || tx.inputs.first().map(|i| i.prevout) != Some(tip.utxo) {
             return Err(ScanError::WrongPredecessor);
         }
         if annex.old_state_root != tip.state.root() {
@@ -126,6 +214,7 @@ impl Replica {
             batch_number: body.batch_number,
             commitment_root: commitments.root(),
             commitment_count: commitments.count(),
+            commitment_frontier: commitments.frontier().digest(),
             nullifier_root: nullifiers.root(),
             nullifier_next_index: nullifiers.next_index(),
             anchor_history_commitment: anchors.commitment(),
@@ -135,20 +224,45 @@ impl Replica {
                 &body.digest(),
             ),
             backing_sats: rollup_value,
+            parent: tip.utxo,
         };
-        if state.root() != annex.new_state_root {
+        let published = TxOut { value: 0, script_pubkey: state_root_script(&annex.new_state_root) };
+        if state.root() != annex.new_state_root || tx.outputs.get(1) != Some(&published) {
             return Err(ScanError::NewRootMismatch);
+        }
+        if tx.outputs.first().map(|o| &o.script_pubkey) != tip.creating_tx.outputs.first().map(|o| &o.script_pubkey) {
+            return Err(ScanError::WrongRollup);
         }
         self.commitments = commitments;
         self.nullifiers = nullifiers;
-        self.history.push(Checkpoint { state, anchors, utxo });
+        self.history.push(Checkpoint {
+            state,
+            anchors,
+            utxo,
+            creating_tx: tx.clone(),
+            creating_spent: Vec::new(),
+            creating_annex_digest: sha256(&annex.encode()),
+        });
         Ok(())
     }
 
     /// Replays raw annex bytes (as read from input zero's witness).
-    pub fn accept_annex_bytes(&mut self, annex: &[u8], rollup_value: u64, utxo: Outpoint) -> Result<(), ScanError> {
+    pub fn accept_annex_bytes(&mut self, annex: &[u8], tx: &PlainTx) -> Result<(), ScanError> {
         let annex = Annex::decode(annex).map_err(|_| ScanError::BadAnnex)?;
-        self.accept_annex(&annex, rollup_value, utxo)
+        self.accept_annex(&annex, tx)
+    }
+
+    /// [`Self::accept_annex_bytes`], also recording the outputs `tx` spent (in input order), which
+    /// the next settlement needs to rebuild this one's journal for the lineage proof.
+    pub fn accept_settlement(&mut self, annex: &[u8], tx: &PlainTx, spent: Vec<TxOut>) -> Result<(), ScanError> {
+        if spent.len() != tx.inputs.len() {
+            return Err(ScanError::WrongPredecessor);
+        }
+        self.accept_annex_bytes(annex, tx)?;
+        if let Some(tip) = self.history.last_mut() {
+            tip.creating_spent = spent;
+        }
+        Ok(())
     }
 
     /// Reorg: forget the most recent settlement and restore the trees.

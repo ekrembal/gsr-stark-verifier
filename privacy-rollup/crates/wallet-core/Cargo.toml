@@ -9,6 +9,7 @@ pr-protocol-types.workspace = true
 pr-crypto.workspace = true
 pr-commitment-tree.workspace = true
 pr-joinsplit.workspace = true
+pr-state-transition.workspace = true
 serde.workspace = true
 ml-kem = { version = "=0.2.1", features = ["deterministic"] }
 kem = "=0.3.0-pre.0"

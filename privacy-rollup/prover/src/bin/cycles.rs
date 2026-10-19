@@ -3,7 +3,9 @@
 //!
 //! Every user join-split runs through the `joinsplit` guest. Every batch runs through `apply_batch`,
 //! with each transaction's join-split claim added as an unresolved assumption, so no proof is made.
-//! Both journals must equal the native evaluation.
+//! Every non-genesis batch also gets its predecessor settlement's claim as an unresolved assumption
+//! (recursive lineage), so `--prove` yields receipts conditional on that claim. Both journals must
+//! equal the native evaluation.
 //!
 //! With `--prove`, it also times succinct proofs of the transfer join-split and of its one-transaction
 //! settlement (segments, lift, join, and `resolve` of the join-split receipt), and of the empty batch.
@@ -13,13 +15,11 @@ use std::time::Instant;
 
 use anyhow::{ensure, Result};
 use pr_joinsplit::JoinSplitWitness;
-use pr_protocol_types::{Canonical, TxOut};
+use pr_protocol_types::Canonical;
 use pr_state_transition::{apply_batch, BatchWitness};
 use pr_tests::{coin, Harness, Wallet};
-use pr_wallet_core::SpendInput;
+use pr_wallet_core::{key_tail, withdrawal, SpendInput};
 use risc0_zkvm::{default_prover, ExecutorEnv, ExecutorImpl, ProverOpts, Receipt, ReceiptClaim};
-
-const WITHDRAW_SPK: [u8; 22] = [0x00, 0x14, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20];
 
 fn run(env: ExecutorEnv, elf: &[u8]) -> Result<(serde_json::Value, Vec<u8>)> {
     let t = Instant::now();
@@ -43,10 +43,20 @@ fn joinsplit(w: &JoinSplitWitness) -> Result<serde_json::Value> {
     Ok(stats)
 }
 
-fn batch(w: &BatchWitness) -> Result<serde_json::Value> {
-    let expected = apply_batch(w).map_err(|e| anyhow::anyhow!("native transition: {e:?}"))?.journal.encode();
+/// The batch guest's input frames and its predecessor claim (an unresolved assumption unless genesis).
+fn batch_env<'a>(w: &BatchWitness) -> Result<(risc0_zkvm::ExecutorEnvBuilder<'a>, Vec<u8>)> {
+    let effects = apply_batch(w).map_err(|e| anyhow::anyhow!("native transition: {e:?}"))?;
     let mut env = ExecutorEnv::builder();
     env.write_frame(&postcard::to_allocvec(w)?);
+    env.write_frame(&[]);
+    if let Some(l) = &effects.lineage {
+        env.add_assumption(ReceiptClaim::ok(l.image_id, l.journal.encode()));
+    }
+    Ok((env, effects.journal.encode()))
+}
+
+fn batch(w: &BatchWitness) -> Result<serde_json::Value> {
+    let (mut env, expected) = batch_env(w)?;
     for t in &w.transactions {
         env.add_assumption(ReceiptClaim::ok(pr_methods::JOINSPLIT_ID, t.public.encode()));
     }
@@ -75,9 +85,7 @@ fn prove_joinsplit(w: &JoinSplitWitness) -> Result<(serde_json::Value, Receipt)>
 }
 
 fn prove_batch(w: &BatchWitness, receipts: &[Receipt]) -> Result<serde_json::Value> {
-    let expected = apply_batch(w).map_err(|e| anyhow::anyhow!("native transition: {e:?}"))?.journal.encode();
-    let mut env = ExecutorEnv::builder();
-    env.write_frame(&postcard::to_allocvec(w)?);
+    let (mut env, expected) = batch_env(w)?;
     for r in receipts {
         env.add_assumption(r.clone());
     }
@@ -92,13 +100,12 @@ fn main() -> Result<()> {
     let (mut alice, mut bob) = (Wallet::new(1), Wallet::new(2));
     let mut report = serde_json::Map::new();
 
-    let funding = vec![coin(0x31, 60_000)];
-    let change = TxOut { value: 10_000, script_pubkey: vec![0x51, 0x20, 0x31] };
-    let b = h.deposit_builder(1_000, &funding, 50_000, Some(change));
+    let funding = vec![coin(0x31, 50_000)];
+    let b = h.deposit_builder(1_000, &funding, 50_000, None);
     let js = h.build(&b, [SpendInput::Dummy, SpendInput::Dummy], [alice.pay(49_000), alice.pay(0)]);
     report.insert("joinsplit_deposit".into(), joinsplit(&js.witness)?);
     h.submit(&js, funding).unwrap();
-    let e = h.settle(Some(TxOut { value: 600, script_pubkey: vec![0x51, 0x20, 0x99] })).unwrap();
+    let e = h.settle().unwrap();
     report.insert("batch_deposit".into(), batch(h.last_witness.as_ref().unwrap())?);
     alice.scan(&h.replica, &e);
 
@@ -114,26 +121,26 @@ fn main() -> Result<()> {
         None
     };
     h.submit(&js, vec![]).unwrap();
-    let e = h.settle(None).unwrap();
+    let e = h.settle().unwrap();
     report.insert("batch_transfer".into(), batch(h.last_witness.as_ref().unwrap())?);
     if let Some(r) = js_receipt {
         report.insert("prove_batch_transfer".into(), prove_batch(h.last_witness.as_ref().unwrap(), &[r])?);
     }
     bob.scan(&h.replica, &e);
 
-    h.settle(None).unwrap();
+    h.settle().unwrap();
     report.insert("batch_empty".into(), batch(h.last_witness.as_ref().unwrap())?);
     if proving {
         report.insert("prove_batch_empty".into(), prove_batch(h.last_witness.as_ref().unwrap(), &[])?);
     }
 
     let mut b = h.builder(1_000);
-    b.withdrawal = Some((WITHDRAW_SPK.to_vec(), 29_000));
+    b.set_withdrawals(vec![withdrawal(29_000, &key_tail(&[9; 32])).expect("withdrawal")]);
     let note = bob.notes[0].clone();
     let js = h.build(&b, [bob.spend(&h.replica, &note), SpendInput::Dummy], [bob.pay(0), bob.pay(0)]);
     report.insert("joinsplit_withdraw".into(), joinsplit(&js.witness)?);
     h.submit(&js, vec![]).unwrap();
-    h.settle(None).unwrap();
+    h.settle().unwrap();
     report.insert("batch_withdraw".into(), batch(h.last_witness.as_ref().unwrap())?);
 
     let out = serde_json::to_string_pretty(&report)?;

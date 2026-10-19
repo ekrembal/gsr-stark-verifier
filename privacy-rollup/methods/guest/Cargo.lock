@@ -2551,7 +2551,6 @@ name = "pr-crypto"
 version = "0.1.0"
 dependencies = [
  "pr-protocol-types",
- "risc0-bigint2",
 ]
 
 [[package]]

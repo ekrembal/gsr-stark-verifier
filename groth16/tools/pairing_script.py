@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import sys
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "risc0-succinct/tools"))
@@ -56,6 +56,7 @@ class Witness:
     stack: list[bytes]
     layout: dict
     slopes: tuple[tuple[int, int], ...]
+    stage_ranges: dict[str, tuple[int, int]] = field(default_factory=dict)
 
 
 def build_witness(fixture: dict, claim_mode: str | None = None) -> Witness:
@@ -517,13 +518,18 @@ def build_pairing_script(fixture: dict, claim_mode: str | None = None):
     asm = Asm(variables)
     fc = FieldCode(asm)
     vk = fixture["verifying_key"]
+    input_start = len(asm.s.code)
     if claim_mode is not None:
         _input_checks(fc, values)
+    input_end = len(asm.s.code)
+    msm_start = input_end
+    if claim_mode is not None:
         from msm import append_claim_msm
 
         claim_output = append_claim_msm(fc, values, witness.layout, fixture, claim_mode)
     else:
         claim_output = None
+    msm_end = len(asm.s.code)
 
     for name in ("L", "C", "A"):
         x, y = values[name]
@@ -586,6 +592,7 @@ def build_pairing_script(fixture: dict, claim_mode: str | None = None):
     accumulator = fc.copy(values["c_inv"])
     slope_index = 0
     digits = tuple(reversed(ATE_LOOP_COUNT[:-1]))
+    miller_start = len(asm.s.code)
     for step_index, digit in enumerate(digits):
         accumulator = fc.fp12_square(accumulator)
         if digit == 1:
@@ -619,6 +626,7 @@ def build_pairing_script(fixture: dict, claim_mode: str | None = None):
             accumulator, t = _add_dynamic(
                 fc, accumulator, t, q, slope, *values["evals"]["A"]
             )
+    miller_end = len(asm.s.code)
 
     for power, residue_value in ((1, values["c_inv"]), (2, values["c"]), (3, values["c_inv"])):
         frobenius = fc.frobenius(residue_value, power)
@@ -667,4 +675,11 @@ def build_pairing_script(fixture: dict, claim_mode: str | None = None):
         asm.op("FROMALTSTACK", 0, claim_output)
     else:
         asm.push(1)
+    witness.stage_ranges = {
+        "input_checks": (input_start, input_end),
+        "claim_msm": (msm_start, msm_end),
+        "pairing_preamble": (msm_end, miller_start),
+        "miller_loop": (miller_start, miller_end),
+        "finalization": (miller_end, len(asm.s.code)),
+    }
     return asm.s, witness

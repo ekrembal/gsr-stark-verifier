@@ -43,6 +43,9 @@ def generate(claim_mode: str, compress: bool) -> dict:
             "witness_items": len(witness.stack),
             "witness_bytes": sum(map(len, witness.stack)),
             "compression": compression,
+            "stage_ranges": {
+                name: list(bounds) for name, bounds in witness.stage_ranges.items()
+            },
         },
     }
 

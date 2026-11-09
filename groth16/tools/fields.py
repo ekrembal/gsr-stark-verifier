@@ -157,7 +157,12 @@ class Field:
 
     def _copy(self, script: Script, original_depth: int, index: int) -> None:
         depth = original_depth - index - 1
-        script.int(depth).op("PICK")
+        if depth == 0:
+            script.op("DUP")
+        elif depth == 1:
+            script.op("OVER")
+        else:
+            script.int(depth).op("PICK")
 
     def _clear_inputs_and_restore(self, script: Script, input_count: int, output_count: int) -> None:
         while input_count >= 2:

@@ -5,6 +5,7 @@ Reuses recursive-stwo's deterministic transaction builder and its instrumented `
 the transaction weight and the varops budget from the serialized transaction and the spent output.
 """
 import json
+import os
 import subprocess
 import sys
 from pathlib import Path
@@ -18,7 +19,9 @@ from transaction import build, meter_request  # noqa: E402
 
 from gsr import op_success_offsets  # noqa: E402
 
-METER = ROOT.parent / "recursive-stwo/build/harness/gsr-meter"
+METER = Path(
+    os.environ.get("GSR_METER", str(ROOT.parent / "recursive-stwo/build/harness/gsr-meter"))
+)
 
 
 def meter(bundle: dict, tx=None, spent_value: int = 5_000_000_000) -> dict:
@@ -26,7 +29,8 @@ def meter(bundle: dict, tx=None, spent_value: int = 5_000_000_000) -> dict:
     if tx is None:
         tx, _, _ = build(bundle)
     request = meter_request(bundle, tx, spent_value)
-    request["budget"] = tx.get_weight() * 10000
+    if "GSR_METER" not in os.environ:
+        request["budget"] = tx.get_weight() * 10000
     path = ROOT / "build/measurement-input.json"
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(request))

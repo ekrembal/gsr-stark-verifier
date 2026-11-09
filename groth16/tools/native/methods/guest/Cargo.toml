@@ -1,0 +1,11 @@
+[package]
+name = "guest"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+risc0-zkvm = { version = "=3.0.6", default-features = false, features = ["std"] }
+
+[[bin]]
+name = "groth16-guest"
+path = "src/main.rs"

@@ -195,23 +195,40 @@ class Field:
                     for out_index, factor in row[right_basis]:
                         if out_index == output and factor:
                             terms.append((left, right_pos, factor))
-            if not terms:
-                script.int(0).op("TOALTSTACK")
-                continue
-            for left, right_pos, factor in terms:
+            if terms and all(factor > 0 for _, _, factor in terms):
+                left, right_pos, factor = terms[0]
                 self._copy(script, input_count, left)
                 self._copy(script, input_count + 1, n + right_pos)
+                script.op("MUL")
+                if factor != 1:
+                    script.int(factor).op("MUL")
+                for left, right_pos, factor in terms[1:]:
+                    self._copy(script, input_count + 1, left)
+                    self._copy(script, input_count + 2, n + right_pos)
+                    script.op("MUL")
+                    if factor != 1:
+                        script.int(factor).op("MUL")
+                    script.op("ADD")
+                script.int(P).op("MOD", "TOALTSTACK")
+                continue
+            offset = sum(
+                P ** 2 * abs(factor)
+                for _, _, factor in terms
+                if factor < 0
+            )
+            script.int(offset)
+            for left, right_pos, factor in terms:
+                self._copy(script, input_count + 1, left)
+                self._copy(script, input_count + 2, n + right_pos)
                 script.op("MUL")
                 magnitude = abs(factor)
                 if magnitude != 1:
                     script.int(magnitude).op("MUL")
-                script.int(P).op("MOD")
                 if factor < 0:
-                    script.int(P).op("SWAP", "SUB").int(P).op("MOD")
-                script.op("TOALTSTACK")
-            script.op("FROMALTSTACK")
-            for _ in range(len(terms) - 1):
-                script.op("FROMALTSTACK", "ADD").int(P).op("MOD")
+                    script.op("SUB")
+                else:
+                    script.op("ADD")
+            script.int(P).op("MOD")
             script.op("TOALTSTACK")
         self._clear_inputs_and_restore(script, input_count, n)
         return script

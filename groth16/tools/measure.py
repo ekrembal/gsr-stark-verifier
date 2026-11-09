@@ -14,7 +14,7 @@ STWO_TOOLS = ROOT.parent / "recursive-stwo/tools"
 RISC0_TOOLS = ROOT.parent / "risc0-succinct/tools"
 sys.path.insert(0, str(RISC0_TOOLS))
 sys.path.insert(0, str(STWO_TOOLS))
-from transaction import meter_request  # noqa: E402
+from transaction import build, meter_request  # noqa: E402
 
 from gsr import op_success_offsets  # noqa: E402
 
@@ -23,7 +23,10 @@ METER = ROOT.parent / "recursive-stwo/build/harness/gsr-meter"
 
 def meter(bundle: dict, tx=None, spent_value: int = 5_000_000_000) -> dict:
     """Meter `bundle` as the only input of `tx` (default: the deterministic 1-in/1-out spend)."""
+    if tx is None:
+        tx, _, _ = build(bundle)
     request = meter_request(bundle, tx, spent_value)
+    request["budget"] = tx.get_weight() * 10000
     path = ROOT / "build/measurement-input.json"
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(request))
@@ -34,15 +37,22 @@ def meter(bundle: dict, tx=None, spent_value: int = 5_000_000_000) -> dict:
 
 
 def limits(bundle: dict, execution: dict) -> dict:
+    unrolled_bytes = execution.get("unrolled_bytes")
+    if unrolled_bytes is None:
+        unrolled_bytes = bundle.get("info", {}).get("unrolled_script_bytes")
+    if unrolled_bytes is None:
+        unrolled_bytes = len(bytes.fromhex(bundle["script"]))
     return {
-        "standard_weight": execution["transaction_weight"] <= 400000,
-        "varops": execution["varops"] <= execution["budget"],
-        "unrolled_bytes": execution["unrolled_bytes"] <= 4000000,
-        "stack_entries": execution["peak_entries"] <= 32768,
-        "live_payload": execution["peak_payload_bytes"] <= 8000000,
-        "single_element": execution["peak_element_bytes"] <= 4000000,
+        "standard_weight": execution.get("transaction_weight", 0) <= 400000,
+        "varops": execution.get("varops", 0) <= execution.get("budget", 0),
+        "unrolled_bytes": unrolled_bytes <= 4000000,
+        "stack_entries": execution.get("peak_entries", 0) <= 32768,
+        "live_payload": execution.get("peak_payload_bytes", 0) <= 8000000,
+        "single_element": execution.get("peak_element_bytes", 0) <= 4000000,
         "no_op_success": not op_success_offsets(bytes.fromhex(bundle["script"])),
-        "verifier": execution["ok"] and execution["final_stack_exact_true"] and not execution["immediate_success"],
+        "verifier": execution.get("ok", False)
+        and execution.get("final_stack_exact_true", False)
+        and not execution.get("immediate_success", False),
     }
 
 

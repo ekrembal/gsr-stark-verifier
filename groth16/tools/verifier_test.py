@@ -7,6 +7,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "risc0-succinct/tools"))
 from bn254 import P
 from gsr import BITCOIN_UTIL, EVAL_BUDGET, Script, num
+import gsr_tooling
 from msm import claim_scalars
 from pairing_ref import G2_SUBGROUP_SCALAR, PSI_X, PSI_Y
 from pairing_script import build_pairing_script
@@ -39,6 +40,18 @@ def rejected(script, witness, index, value):
         response = json.loads(result.stdout)
         if not response.get("error"):
             raise AssertionError(f"tampered witness item {index} was accepted")
+
+
+def compressed_script(script):
+    original = bytes(script.code)
+    compressed, _ = gsr_tooling.compress(original)
+    anchored, _ = gsr_tooling.rewrite("anchor", "--protect", "0", script=original)
+    unrolled = gsr_tooling.run("unroll", script=compressed)
+    if unrolled.returncode or bytes.fromhex(unrolled.stdout.strip()) != anchored:
+        raise AssertionError("compressed verifier does not unroll to the anchored Script")
+    result = Script()
+    result.code = bytearray(compressed)
+    return result
 
 
 def sqrt_mod(value):
@@ -117,6 +130,10 @@ def main():
     if response.get("error"):
         raise RuntimeError(response["error"])
     fixed_varops = EVAL_BUDGET - response["varops-budget-remaining"]
+    compressed_fixed = compressed_script(script)
+    compressed_result = evaluate(compressed_fixed, witness.stack)
+    if compressed_result.returncode or json.loads(compressed_result.stdout).get("error"):
+        raise AssertionError("compressed fixed-claim verifier failed")
 
     for name in ("A", "B", "C"):
         for coordinate in witness.layout[name]:
@@ -172,10 +189,17 @@ def main():
     response = json.loads(result.stdout)
     if response.get("error"):
         raise RuntimeError(response["error"])
+    compressed_witness = compressed_script(witness_script)
+    compressed_result = evaluate(compressed_witness, witness_mode.stack)
+    if compressed_result.returncode or json.loads(compressed_result.stdout).get("error"):
+        raise AssertionError("compressed witness-claim verifier failed")
     print(json.dumps({
         "status": "PASS",
         "claim_fixed": "PASS",
         "claim_witness": "PASS",
+        "compressed_fixed": "PASS",
+        "compressed_witness": "PASS",
+        "compression_equivalence": "PASS",
         "claim_witness_digest_bytes": fixture["claim_digest"],
         "tampered_A_B_C": "REJECTED",
         "out_of_subgroup_B": "REJECTED",

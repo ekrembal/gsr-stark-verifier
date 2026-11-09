@@ -33,6 +33,7 @@ PSI_Y = FQ2(
     ]
 )
 LINE_INDICES = (0, 1, 6, 7, 8, 9)
+G2_SUBGROUP_SCALAR = 17887900258952609094 + (8020209761171036667 << 64)
 
 
 @dataclass(frozen=True)
@@ -109,6 +110,20 @@ def prepare_g2(q) -> G2Trace:
         ]
     )
     return G2Trace(tuple(steps), (line1, line2), tuple(slopes))
+
+
+def g2_scalar_trace(q, scalar: int):
+    """Affine double/add slope hints for a fixed-scalar subgroup check."""
+    digits = bin(scalar)[2:]
+    t = q
+    slopes = []
+    for digit in digits[1:]:
+        t, line = _double(t)
+        slopes.append((int(line.slope.coeffs[0]), int(line.slope.coeffs[1])))
+        if digit == "1":
+            t, line = _add(t, q)
+            slopes.append((int(line.slope.coeffs[0]), int(line.slope.coeffs[1])))
+    return t, tuple(slopes)
 
 
 def _fq12_from_tower(coefficients: tuple[int, ...]) -> FQ12:

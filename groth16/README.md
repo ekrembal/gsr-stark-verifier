@@ -4,8 +4,8 @@ This directory contains a real RISC Zero Groth16 receipt, a pure-Python BN254
 reference, Script field emitters, and a dynamic-witness affine Miller-loop
 verifier. `tools/native` verifies the fixture with `Receipt::verify`. See
 `fixtures/README.md` for seal layout and the five public-input order. The
-pairing-stage Script takes A, B, C and L from the witness; Stage 3 will bind L
-to the public claim and add canonical, curve, twist and subgroup checks.
+pairing-stage Script takes A, B, C and L from the witness; claim-mode Scripts
+bind L to the public claim and add canonical, curve, twist and subgroup checks.
 
 ## Stage 1 field-emitter microbenchmarks
 
@@ -57,11 +57,38 @@ checks the signed-loop raw product against final exponentiation on the fixture.
 The Script uses the same c-inverse folding across loop squarings and the
 Frobenius powers, and checks wi against `{1, W, W²}`.
 
+## Stage 3 statement and input checks
+
+`build_pairing_script(..., claim_mode=...)` adds these checks before the
+pairing equation:
+
+- Proof coordinates, evaluation hints, residue witnesses and slopes are
+  canonical coefficients in Fp (`0 <= v < p`).
+- A, C and L are on `y² = x³ + 3`; B is on the Arkworks BN254 twist. B's
+  subgroup check uses Arkworks' `psi(B) = [6X²]B` criterion from
+  `ark-bn254-0.5.0/src/curves/g2.rs`; the affine double/add slopes are witness
+  values checked by multiplication.
+- Fixed `a0`, `a1` and `id` are folded into
+  `IC0 + a0·IC1 + a1·IC2 + id·IC5`. Two 4-bit, 32-window tables compute
+  `c0·IC3 + c1·IC4` in Script. Script range-checks each digit, re-composes
+  both 128-bit scalars, and checks the result against witness L. Deterministic
+  per-window offset points make every table entry finite, including digit
+  zero; Script rejects zero affine denominators.
+- `fixed` mode compares c0/c1 to the fixture claim. `witness` mode leaves the
+  reconstructed 32-byte digest in RISC Zero byte order below the final true
+  stack item.
+
+`tools/verifier_test.py` exercises both modes and rejects coordinate
+mutations of A/B/C, an off-curve A, a noncanonical A coordinate, an on-twist B
+outside G2, a wrong fixed claim, corrupted c/c-inverse/wi, a corrupted B
+slope, and a wrong window digit. A second valid receipt for a different claim
+was not generated; fixed-mode claim binding is tested by mutating c0.
+
 ## Reproduction
 
 Install Python dependencies with `python3 -m pip install -r requirements.txt`.
 Run `tools/test.sh` from this directory. The GSR compression wrapper is copied
 unchanged from PR #20's `risc0-succinct/tools/gsr_tooling.py`; it uses GSR
 tooling revision `bf31cc4ac70e440e49f9a3695a6fd05f7b2866d4`. Full transaction
-measurement, compressed execution, the statement MSM, input/subgroup checks,
-and optimization deltas are reported after the remaining stages.
+measurement, compressed execution, and optimization deltas are reported after
+the final stage.

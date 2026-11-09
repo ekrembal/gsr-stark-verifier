@@ -7,17 +7,19 @@ from dataclasses import dataclass
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "risc0-succinct/tools"))
-from gsr import Asm, V, num
+from gsr import Asm, Script, V, num
 
 from bn254 import FQ, FQ12, P, W, compute_c_wi, g1, g2, linear_combination
 from fields import FP, FP2, FP12
 from pairing_ref import (
     ATE_LOOP_COUNT,
+    G2_SUBGROUP_SCALAR,
     LINE_INDICES,
     PSI_X,
     PSI_Y,
     _fq12_from_tower,
     fixture_pairing,
+    g2_scalar_trace,
     prepare_g2,
 )
 
@@ -56,7 +58,9 @@ class Witness:
     slopes: tuple[tuple[int, int], ...]
 
 
-def build_witness(fixture: dict) -> Witness:
+def build_witness(fixture: dict, claim_mode: str | None = None) -> Witness:
+    if claim_mode not in (None, "fixed", "witness"):
+        raise ValueError(claim_mode)
     proof, vk = fixture["seal"], fixture["verifying_key"]
     public_inputs = list(map(int, fixture["public_inputs"]))
     linear = linear_combination([g1(point) for point in vk["ic"]], [1, *public_inputs])
@@ -87,7 +91,27 @@ def build_witness(fixture: dict) -> Witness:
     layout["c"] = add("c", tower_from_fq12(residue))
     layout["c_inv"] = add("c_inv", tower_from_fq12(residue_inverse))
     layout["wi"] = add("wi", tower_from_fq12(wi))
-    return Witness([num(x) for x in values], layout, b_trace.slope_witnesses)
+    if claim_mode is not None:
+        from msm import build_msm_data, claim_scalars
+
+        c0, c1 = claim_scalars(fixture)
+        msm_data = build_msm_data(fixture, c0, c1)
+        layout["claim"] = (add("c0", [c0]), add("c1", [c1]))
+        digits = [(c0 >> (4 * i)) & 15 for i in range(32)]
+        digits += [(c1 >> (4 * i)) & 15 for i in range(32)]
+        layout["digits"] = [add("digit", [digit]) for digit in digits]
+        layout["msm_slopes"] = [add("msm_slope", [slope]) for slope in msm_data["slopes"]]
+        subgroup_point, subgroup_slopes = g2_scalar_trace(b, G2_SUBGROUP_SCALAR)
+        psi_x = b[0] ** P * PSI_X
+        psi_y = b[1] ** P * PSI_Y
+        if subgroup_point != (psi_x, psi_y):
+            raise ValueError("fixture B point is outside the BN254 G2 subgroup")
+        layout["subgroup_slopes"] = [add("subgroup_slope", slope) for slope in subgroup_slopes]
+    stack = [num(x) for x in values]
+    if claim_mode == "witness":
+        layout["claim_digest"] = len(stack)
+        stack.append(bytes.fromhex(fixture["claim_digest"]))
+    return Witness(stack, layout, b_trace.slope_witnesses)
 
 
 class FieldCode:
@@ -241,7 +265,7 @@ class FieldCode:
 
 
 def _layout_vars(layout: dict):
-    count = max(max(indices) for indices in (
+    index_groups = [
         layout["L"][0] + layout["L"][1],
         layout["C"][0] + layout["C"][1],
         layout["A"][0] + layout["A"][1],
@@ -253,13 +277,21 @@ def _layout_vars(layout: dict):
         layout["c"],
         layout["c_inv"],
         layout["wi"],
-    )) + 1
+    ]
+    if "claim" in layout:
+        index_groups.extend(layout["claim"])
+        index_groups.extend(layout["digits"])
+        index_groups.extend(layout["msm_slopes"])
+        index_groups.extend(layout["subgroup_slopes"])
+    if "claim_digest" in layout:
+        index_groups.append([layout["claim_digest"]])
+    count = max(max(indices) for indices in index_groups) + 1
     variables = [V(f"w{i}") for i in range(count)]
 
     def vector(indices):
         return tuple(variables[index] for index in indices)
 
-    return variables, {
+    result = {
         "L": tuple(vector(part) for part in layout["L"]),
         "C": tuple(vector(part) for part in layout["C"]),
         "A": tuple(vector(part) for part in layout["A"]),
@@ -273,6 +305,16 @@ def _layout_vars(layout: dict):
         "c_inv": vector(layout["c_inv"]),
         "wi": vector(layout["wi"]),
     }
+    if "claim" in layout:
+        result.update({
+            "claim": tuple(vector(part) for part in layout["claim"]),
+            "digits": [vector(part) for part in layout["digits"]],
+            "msm_slopes": [vector(part) for part in layout["msm_slopes"]],
+            "subgroup_slopes": [vector(part) for part in layout["subgroup_slopes"]],
+        })
+    if "claim_digest" in layout:
+        result["claim_digest"] = variables[layout["claim_digest"]]
+    return variables, result
 
 
 def _double_dynamic(fc: FieldCode, accumulator, t, slope, eval_x, eval_y):
@@ -283,6 +325,7 @@ def _double_dynamic(fc: FieldCode, accumulator, t, slope, eval_x, eval_y):
     twice_x_squared = fc.fp2_add(x_squared, x_squared)
     tangent_rhs = fc.fp2_add(twice_x_squared, x_squared)
     fc.equal(tangent_lhs, tangent_rhs)
+    _check_fp2_nonzero(fc, twice_y)
 
     slope_squared = fc.fp2_square(slope)
     twice_x = fc.fp2_add(tx, tx)
@@ -305,6 +348,7 @@ def _add_dynamic(fc: FieldCode, accumulator, t, q, slope, eval_x, eval_y):
     qx, qy = q
     x_difference = fc.fp2_sub(tx, qx)
     y_difference = fc.fp2_sub(ty, qy)
+    _check_fp2_nonzero(fc, x_difference)
     slope_times_dx = fc.fp2_mul(slope, x_difference)
     fc.equal(slope_times_dx, y_difference)
 
@@ -333,13 +377,153 @@ def _negate_fp2(fc: FieldCode, point):
     return fc.op(FP2, "sub", zero, point, consume=(True, False))
 
 
-def build_pairing_script(fixture: dict):
+def _check_canonical(fc: FieldCode, values):
+    for value in values:
+        for coefficient in value:
+            fc.asm.fetch(coefficient, consume=False)
+            fc.asm.push(P)
+            smaller = V("canonical-field")
+            fc.asm.op("LESSTHAN", 2, smaller)
+            fc.asm.op("VERIFY", 1)
+
+
+def _g1_curve_check(fc: FieldCode, point):
+    x, y = point
+    y_squared = fc.op(FP, "square", y)
+    x_squared = fc.op(FP, "square", x)
+    x_cubed = fc.multiply(x_squared, x)
+    rhs = fc.op(FP, "add", x_cubed, fc.push((3,), "g1-b"))
+    fc.equal(y_squared, rhs)
+    fc.drop(y_squared, x_squared, x_cubed, rhs)
+
+
+def _check_fp2_nonzero(fc: FieldCode, value):
+    matches = []
+    for coefficient in value:
+        fc.asm.fetch(coefficient, consume=False)
+        fc.asm.push(0)
+        equal = V("zero-coordinate")
+        fc.asm.op("NUMEQUAL", 2, equal)
+        matches.append(equal)
+    fc.asm.fetch(matches[0], consume=True)
+    fc.asm.fetch(matches[1], consume=True)
+    is_zero = V("zero-fp2")
+    fc.asm.op("AND", 2, is_zero)
+    fc.asm.push(1)
+    fc.asm.raw(Script().op("SWAP", "SUB"), 2, V("nonzero-fp2"))
+    fc.asm.op("VERIFY", 1)
+
+
+def _g2_double_point(fc: FieldCode, point, slope):
+    x, y = point
+    two_y = fc.fp2_add(y, y)
+    lhs = fc.fp2_mul(slope, two_y)
+    x_squared = fc.fp2_square(x)
+    rhs = fc.fp2_add(x_squared, x_squared)
+    rhs = fc.fp2_add(rhs, x_squared, consume_left=True)
+    fc.equal(lhs, rhs)
+    _check_fp2_nonzero(fc, two_y)
+
+    slope_squared = fc.fp2_square(slope)
+    twice_x = fc.fp2_add(x, x)
+    next_x = fc.fp2_sub(slope_squared, twice_x)
+    x_difference = fc.fp2_sub(x, next_x)
+    slope_difference = fc.fp2_mul(slope, x_difference)
+    next_y = fc.fp2_sub(slope_difference, y)
+    fc.drop(two_y, lhs, x_squared, rhs, slope_squared, twice_x)
+    fc.drop(x_difference, slope_difference, slope, point[0], point[1])
+    return next_x, next_y
+
+
+def _g2_add_point(fc: FieldCode, point, other, slope):
+    x, y = point
+    qx, qy = other
+    dx = fc.fp2_sub(x, qx)
+    dy = fc.fp2_sub(y, qy)
+    _check_fp2_nonzero(fc, dx)
+    lhs = fc.fp2_mul(slope, dx)
+    fc.equal(lhs, dy)
+    slope_squared = fc.fp2_square(slope)
+    next_x = fc.fp2_sub(slope_squared, x)
+    next_x = fc.fp2_sub(next_x, qx, consume_left=True)
+    x_difference = fc.fp2_sub(x, next_x)
+    slope_difference = fc.fp2_mul(slope, x_difference)
+    next_y = fc.fp2_sub(slope_difference, y)
+    fc.drop(dx, dy, lhs, slope_squared, x_difference, slope_difference, slope)
+    fc.drop(point[0], point[1])
+    return next_x, next_y
+
+
+def _g2_subgroup_check(fc: FieldCode, values):
+    point = _copy_point(fc, values["B"])
+    slope_index = 0
+    for digit in bin(G2_SUBGROUP_SCALAR)[3:]:
+        point = _g2_double_point(fc, point, values["subgroup_slopes"][slope_index])
+        slope_index += 1
+        if digit == "1":
+            point = _g2_add_point(
+                fc, point, values["B"], values["subgroup_slopes"][slope_index]
+            )
+            slope_index += 1
+
+    psi_x = fc.fp2_mul(
+        fc.frobenius_fp2(values["B"][0]),
+        fc.push_fp2(PSI_X),
+        consume_left=True,
+        consume_right=True,
+    )
+    psi_y = fc.fp2_mul(
+        fc.frobenius_fp2(values["B"][1]),
+        fc.push_fp2(PSI_Y),
+        consume_left=True,
+        consume_right=True,
+    )
+    if slope_index != len(values["subgroup_slopes"]):
+        raise AssertionError("incorrect G2 subgroup slope count")
+    fc.equal(point[0], psi_x)
+    fc.equal(point[1], psi_y)
+    fc.drop(point[0], point[1], psi_x, psi_y)
+
+
+def _input_checks(fc: FieldCode, values):
+    fields = [
+        *values["L"], *values["C"], *values["A"], *values["B"],
+        *values["evals"]["L"], *values["evals"]["C"], *values["evals"]["A"],
+        *values["slopes"], values["c"], values["c_inv"], values["wi"],
+        *values["msm_slopes"], *values["subgroup_slopes"],
+    ]
+    _check_canonical(fc, fields)
+    for name in ("A", "C", "L"):
+        _g1_curve_check(fc, values[name])
+
+    b_x, b_y = values["B"]
+    y_squared = fc.fp2_square(b_y)
+    x_squared = fc.fp2_square(b_x)
+    x_cubed = fc.fp2_mul(x_squared, b_x)
+    twist_b = fc.push((
+        19485874751759354771024239261021720505790618469301721065564631296452457478373,
+        266929791119991161246907387137283842545076965332900288569378510910307636690,
+    ), "Fp2")
+    curve_rhs = fc.fp2_add(x_cubed, twist_b)
+    fc.equal(y_squared, curve_rhs)
+    fc.drop(y_squared, x_squared, x_cubed, twist_b, curve_rhs)
+    _g2_subgroup_check(fc, values)
+
+
+def build_pairing_script(fixture: dict, claim_mode: str | None = None):
     """Return a proof-agnostic script and its witness layout for one fixed VK."""
-    witness = build_witness(fixture)
+    witness = build_witness(fixture, claim_mode)
     variables, values = _layout_vars(witness.layout)
     asm = Asm(variables)
     fc = FieldCode(asm)
     vk = fixture["verifying_key"]
+    if claim_mode is not None:
+        _input_checks(fc, values)
+        from msm import append_claim_msm
+
+        claim_output = append_claim_msm(fc, values, witness.layout, fixture, claim_mode)
+    else:
+        claim_output = None
 
     for name in ("L", "C", "A"):
         x, y = values[name]
@@ -349,7 +533,8 @@ def build_pairing_script(fixture: dict):
         x_inverse = fc.multiply(x, eval_y)
         x_inverse = fc.op(FP, "add", x_inverse, eval_x, consume=(True, False))
         fc.equal_constant(x_inverse, (0,), consume=True)
-        fc.drop(x, y)
+        if name != "L" or claim_mode is None:
+            fc.drop(x, y)
 
     c_product = fc.fp12_multiply(values["c"], values["c_inv"], False, False)
     fc.equal_constant(c_product, (1,) + (0,) * 11, consume=True)
@@ -478,5 +663,7 @@ def build_pairing_script(fixture: dict):
         *fixed_evals[2],
     )
     asm.drop_top(len(asm.st))
+    if claim_output is not None:
+        asm.op("FROMALTSTACK", 0, claim_output)
     asm.push(1)
     return asm.s, witness

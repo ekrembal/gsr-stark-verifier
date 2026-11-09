@@ -7,4 +7,5 @@ python_bin="${PYTHON:-python3}"
 
 "$python_bin" "$tools_dir/reference_test.py"
 "$python_bin" "$tools_dir/field_test.py"
+"$python_bin" "$tools_dir/pairing_test.py"
 cargo run --release --locked --manifest-path "$tools_dir/native/Cargo.toml" -- verify "$root/fixtures"

@@ -10,6 +10,7 @@ from gsr import BITCOIN_UTIL, EVAL_BUDGET, Script, num
 
 from bn254 import FQ2, FQ12, Fp6, P
 from fields import FP, FP2, FP6, FP12
+from pairing_ref import LINE_INDICES
 
 FIELDS = (FP, FP2, FP6, FP12)
 
@@ -95,6 +96,11 @@ def check_script(field, operation, left, right=None, sparse_indices=None):
         expected = field.mul_sparse(left, sparse, sparse_indices)
         script = field.emit("sparse_mul", sparse_indices)
         witness = [*left, *sparse]
+    elif operation == "line_mul":
+        sparse = [right[i] for i in sparse_indices]
+        expected = field.mul_line(left, sparse, sparse_indices)
+        script = field.emit_line_mul(sparse_indices)
+        witness = [*left, *sparse]
     elif operation == "frobenius":
         expected = field.frobenius(left, 1)
         script = field.emit_frobenius(1)
@@ -134,6 +140,7 @@ def main() -> None:
         elif field is FP12:
             assert py_ecc_equal(field, as_py_ecc(field, field.mul(a, b)),
                                 as_py_ecc(field, a) * as_py_ecc(field, b))
+            checks["line_mul"] = check_script(field, "line_mul", a, b, LINE_INDICES)
         if field is FP:
             assert field.add(a, b) == ((a[0] + b[0]) % P,)
             assert field.sub(a, b) == ((a[0] - b[0]) % P,)

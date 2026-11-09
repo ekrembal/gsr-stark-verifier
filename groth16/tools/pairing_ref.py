@@ -32,7 +32,7 @@ PSI_Y = FQ2(
         3505843767911556378687030309984248845540243509899259641013678093033130930403,
     ]
 )
-LINE_INDICES = (0, 1, 6, 7, 8, 9)
+LINE_INDICES = (6, 7, 8, 9)
 G2_SUBGROUP_SCALAR = 17887900258952609094 + (8020209761171036667 << 64)
 
 
@@ -144,11 +144,10 @@ def _line_mul(f: tuple[int, ...], line: Line, p):
     c3 = line.slope * xx
     c4 = line.minus_bias * yy
     rhs = (
-        1, 0,
         int(c3.coeffs[0]), int(c3.coeffs[1]),
         int(c4.coeffs[0]), int(c4.coeffs[1]),
     )
-    return FP12.mul_sparse(f, rhs, LINE_INDICES)
+    return FP12.mul_line(f, rhs, LINE_INDICES)
 
 
 def miller_product_naf(pairs):

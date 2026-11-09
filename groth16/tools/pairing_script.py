@@ -232,13 +232,12 @@ class FieldCode:
     def line_rhs(self, accumulator, slope, minus_bias, eval_x, eval_y):
         slope_x = self.fp2_scale(slope, eval_x)
         bias_y = self.fp2_scale(minus_bias, eval_y)
-        rhs = self.push((1, 0), "line")
-        rhs += slope_x + bias_y
+        rhs = slope_x + bias_y
         output = tuple(V("Fp12") for _ in range(FP12.degree))
         for value in (*accumulator, *rhs):
             self.asm.fetch(value, consume=True)
         self.asm.raw(
-            FP12.emit("sparse_mul", LINE_INDICES),
+            FP12.emit_line_mul(LINE_INDICES),
             FP12.degree + len(LINE_INDICES),
             *output,
         )

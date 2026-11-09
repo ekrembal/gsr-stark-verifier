@@ -101,8 +101,19 @@ class Field:
         for i, row in enumerate(self.tensor):
             for right, basis_index in enumerate(rhs_indices):
                 for k, factor in row[basis_index]:
-                    out[k] += a[i] * (int(b[right]) % P) * factor
+                        out[k] += a[i] * (int(b[right]) % P) * factor
         return tuple(x % P for x in out)
+
+    def mul_line(self, a, b, rhs_indices: tuple[int, ...]) -> tuple[int, ...]:
+        a = self.normalize(a)
+        if len(b) != len(rhs_indices) or any(i < 0 or i >= self.degree for i in rhs_indices):
+            raise ValueError("line multiplier does not match its coefficient indices")
+        out = list(a)
+        for left, row in enumerate(self.tensor):
+            for right, basis_index in enumerate(rhs_indices):
+                for output, factor in row[basis_index]:
+                    out[output] += a[left] * (int(b[right]) % P) * factor
+        return tuple(value % P for value in out)
 
     def mul(self, a, b) -> tuple[int, ...]:
         a, b = self.normalize(a), self.normalize(b)
@@ -235,6 +246,53 @@ class Field:
                     script.op("ADD")
             script.int(P).op("MOD")
             script.op("TOALTSTACK")
+        self._clear_inputs_and_restore(script, input_count, n)
+        return script
+
+    def emit_line_mul(self, rhs_indices: tuple[int, ...]) -> Script:
+        n = self.degree
+        if any(index < 0 or index >= n for index in rhs_indices):
+            raise ValueError("line coefficient index out of range")
+        input_count = n + len(rhs_indices)
+        script = Script()
+        for output in reversed(range(n)):
+            terms = []
+            for left, row in enumerate(self.tensor):
+                for right_pos, right_basis in enumerate(rhs_indices):
+                    for out_index, factor in row[right_basis]:
+                        if out_index == output and factor:
+                            terms.append((left, right_pos, factor))
+            if not terms:
+                self._copy(script, input_count, output)
+                script.op("TOALTSTACK")
+                continue
+            if all(factor > 0 for _, _, factor in terms):
+                self._copy(script, input_count, output)
+                for left, right_pos, factor in terms:
+                    self._copy(script, input_count + 1, left)
+                    self._copy(script, input_count + 2, n + right_pos)
+                    script.op("MUL")
+                    if factor != 1:
+                        script.int(factor).op("MUL")
+                    script.op("ADD")
+            else:
+                offset = sum(
+                    P ** 2 * abs(factor)
+                    for _, _, factor in terms
+                    if factor < 0
+                )
+                script.int(offset)
+                self._copy(script, input_count + 1, output)
+                script.op("ADD")
+                for left, right_pos, factor in terms:
+                    self._copy(script, input_count + 1, left)
+                    self._copy(script, input_count + 2, n + right_pos)
+                    script.op("MUL")
+                    magnitude = abs(factor)
+                    if magnitude != 1:
+                        script.int(magnitude).op("MUL")
+                    script.op("SUB" if factor < 0 else "ADD")
+            script.int(P).op("MOD", "TOALTSTACK")
         self._clear_inputs_and_restore(script, input_count, n)
         return script
 

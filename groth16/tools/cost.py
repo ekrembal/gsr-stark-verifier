@@ -14,7 +14,7 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "tools"))
 
 import gsr_tooling
-from measure import meter
+from measure import limits, meter
 from pairing_script import build_pairing_script
 
 CORE_BASE = 300
@@ -370,7 +370,7 @@ class CostModel:
                         raise ValueError(f"1SUB underflow at byte {ins.start}")
                     push_num(value - 1, write=False)
                 elif op == 0x8D:
-                    push_num(value * 2, write=False)
+                    push_num(value * 2)
                 else:
                     push_num(value // 2, write=False)
             elif op in (0x93, 0x94, 0x95, 0x96, 0x97, 0x98, 0x99, 0x9C, 0x9D, 0x9F):
@@ -488,6 +488,22 @@ def meter_opcode_counts(opcodes: dict) -> Counter:
     return Counter({int(key.rsplit("_", 1)[-1]): value for key, value in opcodes.items()})
 
 
+def opcode_name(op: int) -> str:
+    if op == 0:
+        return "OP_0"
+    if 1 <= op <= 75:
+        return f"OP_PUSHBYTES_{op}"
+    if op == 0x4C:
+        return "OP_PUSHDATA1"
+    if op == 0x4D:
+        return "OP_PUSHDATA2"
+    if op == 0x4E:
+        return "OP_PUSHDATA4"
+    if 0x51 <= op <= 0x60:
+        return f"OP_{op - 0x50}"
+    return f"OP_{OPS.get(op, f'UNKNOWN_{op:02X}')}"
+
+
 def main() -> None:
     path = Path(sys.argv[1]) if len(sys.argv) > 1 else ROOT / "build/v1-fixed-current.json"
     bundle = json.loads(path.read_text())
@@ -530,6 +546,19 @@ def main() -> None:
         "meter_varops": execution["varops"],
         "difference": model.total - execution["varops"],
         "runtime_varops": model.total - unroll_charge - final_check,
+        "measurement": {
+            "ok": execution["ok"],
+            "transaction_weight": execution["transaction_weight"],
+            "budget": execution["budget"],
+            "committed_script_bytes": len(compressed),
+            "unrolled_script_bytes": execution["unrolled_bytes"],
+            "witness_items": len(bundle["witness"]),
+            "witness_bytes": sum(len(bytes.fromhex(item)) for item in bundle["witness"]),
+            "peak_stack_entries": execution["peak_entries"],
+            "peak_stack_payload_bytes": execution["peak_payload_bytes"],
+            "largest_stack_element_bytes": execution["peak_element_bytes"],
+            "limits": limits(bundle, execution),
+        },
         "macro_precharge": {
             "declarations": declarations,
             "expanded_bytes": stats.length,
@@ -540,7 +569,7 @@ def main() -> None:
         },
         "opcode_counts_match": counts_match,
         "opcodes": {
-            f"0x{op:02x}": {
+            f"0x{op:02x} {opcode_name(op)}": {
                 "count": model.opcode_counts[op],
                 "varops": model.by_opcode[op],
             }

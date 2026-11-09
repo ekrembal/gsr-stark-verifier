@@ -180,7 +180,7 @@ def main():
     rejected(script, witness, digit_index, (digit + 1) % 16)
 
     witness_script, witness_mode = build_pairing_script(fixture, "witness")
-    output_check = Script().op("DROP").data(bytes.fromhex(fixture["claim_digest"]))
+    output_check = Script().data(bytes.fromhex(fixture["claim_digest"]))
     output_check.op("EQUALVERIFY").int(1)
     witness_script.extend(output_check)
     result = evaluate(witness_script, witness_mode.stack)

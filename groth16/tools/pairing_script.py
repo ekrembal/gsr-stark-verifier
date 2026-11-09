@@ -665,5 +665,6 @@ def build_pairing_script(fixture: dict, claim_mode: str | None = None):
     asm.drop_top(len(asm.st))
     if claim_output is not None:
         asm.op("FROMALTSTACK", 0, claim_output)
-    asm.push(1)
+    else:
+        asm.push(1)
     return asm.s, witness

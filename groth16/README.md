@@ -1,141 +1,133 @@
 # RISC Zero Groth16 verifier
 
-This directory contains a real RISC Zero Groth16 receipt, a pure-Python BN254
-reference, Script field emitters, and a dynamic-witness affine Miller-loop
-verifier. `tools/native` verifies the fixture with `Receipt::verify`. See
-`fixtures/README.md` for seal layout and the five public-input order. The
-pairing-stage Script takes A, B, C and L from the witness; claim-mode Scripts
-bind L to the public claim and add canonical, curve, twist and subgroup checks.
+Direct measurements below use the compressed transaction and the GSR meter
+built against Bitcoin Core `ad6c16ff0214014023ff2a81504048a8850a1c1c` (PR #20's
+Core pin). Both claim modes pass without witness or annex padding.
 
-## Stage 1 field-emitter microbenchmarks
+## Final measurements
 
-`tools/fields.py` emits canonical Fp, Fp2, Fp6 and Fp12 addition, subtraction,
-multiplication, squaring, sparse multiplication and Frobenius maps. Its Python
-twins are tested against `bn254.py` and py-ecc. The following varops are
-**measured** by the pinned standalone `bitcoin-util evalscript` interpreter,
-with one random canonical input per operation. They are opcode execution costs,
-not full-transaction WU or the final verifier cost.
+| Metric | Fixed claim | Witness claim |
+|---|---:|---:|
+| Committed compressed Script | 117,868 B | 118,023 B |
+| Unrolled Script | 1,562,773 B | 1,563,258 B |
+| Witness items / payload | 746 / 21,460 B | 747 / 21,492 B |
+| Transaction weight | 140,494 WU | 140,682 WU |
+| Varops budget | 1,404,440,000 | 1,406,320,000 |
+| Varops, compressed execution | 1,233,221,358 | 1,232,871,788 |
+| GSR macro references | 166,534 | 163,015 |
+| Peak stack entries | 779 | 780 |
+| Peak stack payload | 22,423 B | 22,455 B |
+| Largest stack element | 65 B | 65 B |
+| Interpreter result | Pass (`ok=true`) | Pass (`ok=true`) |
+| Final stack contract | Exactly `true` | One truthy 32-byte claim digest |
 
-| Field | Add | Sub | Mul | Square | Frobenius p | Sparse mul |
-|---|---:|---:|---:|---:|---:|---:|
-| Fp | 18,744 | 24,032 | 28,978 | 31,574 | 17,078 | 28,978 |
-| Fp2 | 34,988 | 45,564 | 125,222 | 130,446 | 41,040 | 125,222 |
-| Fp6 | 99,964 | 131,692 | 1,671,196 | 1,686,880 | 254,294 | 631,510 |
-| Fp12 | 197,440 | 260,896 | 7,241,479 | 7,273,177 | 574,208 | 1,257,951 |
+The witness-claim output is the original claim digest in RISC Zero byte order.
+The test suite compares those output bytes with the fixture digest. Its final
+stack is intentionally not the single-byte value `true`.
 
-Sparse multiplication in this table uses three nonzero right-hand
-coefficients. These are standalone operation costs, not per-operation
-amortized transaction measurements.
-
-## Stage 2 affine Miller-loop verifier
-
-`tools/pairing_script.py` emits one dynamic B loop and fixed line schedules for
-the RISC Zero gamma, delta and beta G2 points. A, B, C and L are witness values;
-the Script checks the G1 evaluation inverses, each B tangent/chord slope,
-`c*c_inv == 1`, the allowed `wi` coset, and the residue-witness final equality.
-The B slopes, c, c-inverse and wi are not embedded in the Script. The real
-fixture passes and mutations of c, wi and a slope are rejected.
-
-The following **measured** values are for the pairing-stage script executed by
-the pinned standalone interpreter, before transaction compression. They are
-not the complete Stage 3/4 verifier cost:
-
-| Metric | Measured |
-|---|---:|
-| Uncompressed Script bytes | 5,182,058 |
-| Witness items | 226 |
-| Varops | 1,818,911,457 |
-
-The NAF line schedule, affine slope checks, and D-twist sparse line placement
-follow BitVM at commit `c620dbfaacebdf778e765a6681985350389973b1`:
-`bitvm/src/bn254/ell_coeffs.rs::G2Prepared::from_affine`,
-`bitvm/src/bn254/pairing.rs::hinted_quad_miller_loop_with_c_wi`, and
-`bitvm/src/groth16/offchain_checker.rs::compute_c_wi`. The BN254 loop digits
-and Frobenius-twist constants are taken from Arkworks'
-`ark-bn254-0.5.0/src/curves/mod.rs`. `tools/pairing_ref.py` differentially
-checks the signed-loop raw product against final exponentiation on the fixture.
-The Script uses the same c-inverse folding across loop squarings and the
-Frobenius powers, and checks wi against `{1, W, W²}`.
-
-## Stage 3 statement and input checks
-
-`build_pairing_script(..., claim_mode=...)` adds these checks before the
-pairing equation:
-
-- Proof coordinates, evaluation hints, residue witnesses and slopes are
-  canonical coefficients in Fp (`0 <= v < p`).
-- A, C and L are on `y² = x³ + 3`; B is on the Arkworks BN254 twist. B's
-  subgroup check uses Arkworks' `psi(B) = [6X²]B` criterion from
-  `ark-bn254-0.5.0/src/curves/g2.rs`; the affine double/add slopes are witness
-  values checked by multiplication.
-- Fixed `a0`, `a1` and `id` are folded into
-  `IC0 + a0·IC1 + a1·IC2 + id·IC5`. Two 4-bit, 32-window tables compute
-  `c0·IC3 + c1·IC4` in Script. Script range-checks each digit, re-composes
-  both 128-bit scalars, and checks the result against witness L. Deterministic
-  per-window offset points make every table entry finite, including digit
-  zero; Script rejects zero affine denominators.
-- `fixed` mode compares c0/c1 to the fixture claim. `witness` mode takes the
-  raw 32-byte digest as a witness item, checks its little-endian halves against
-  c0/c1 byte-by-byte, and leaves the original digest in RISC Zero byte order
-  below the final true stack item.
-
-`tools/verifier_test.py` exercises both modes and rejects coordinate
-mutations of A/B/C, an off-curve A, a noncanonical A coordinate, an on-twist B
-outside G2, a wrong fixed claim, corrupted c/c-inverse/wi, a corrupted B
-slope, and a wrong window digit. A second valid receipt for a different claim
-was not generated; fixed-mode claim binding is tested by mutating c0.
-
-## Reproduction
-
-Install Python dependencies with `python3 -m pip install -r requirements.txt`.
-Run `tools/test.sh` from this directory. `tools/generate.py` emits both claim
-modes and can compress the bundle. The GSR compression wrapper is copied
-unchanged from PR #20's `risc0-succinct/tools/gsr_tooling.py`; it uses GSR
-tooling revision `bf31cc4ac70e440e49f9a3695a6fd05f7b2866d4`.
-
-The real fixture was generated with RISC Zero 3.0.6 and `ProverOpts::groth16()`;
-`tools/native` calls `Receipt::verify` before exporting it. The fixture can be
-recreated with `tools/native` and the guest in `tools/guest`. Groth16/BN254 is
-not post-quantum: an attacker able to solve the BN254 discrete-log problem can
-forge proofs and steal covenant funds. Verification relies on RISC Zero's
-Groth16 trusted setup. The Script checks canonical field encodings, G1 curve
-membership, G2 twist membership and the G2 subgroup criterion.
-
-## Direct compressed-transaction measurement
-
-These are measurements of the actual compressed fixed-claim transaction,
-including GSR macro execution. The meter is from Core revision
-`ad6c16ff0214014023ff2a81504048a8850a1c1c`, the PR #20 pin. Select it with
-`GSR_METER=/path/to/gsr-meter` when running `tools/measure.py`.
-
-| Metric | Measured |
-|---|---:|
-| Committed verifier Script | 117,868 bytes |
-| Unrolled verifier Script | 1,562,773 bytes |
-| Witness | 746 items / 21,460 bytes |
-| Transaction weight | 140,494 WU |
-| Varops budget | 1,404,440,000 |
-| Varops | 1,233,221,358 |
-| GSR macro references | 166,534 |
-| Peak stack | 779 entries / 22,423 payload bytes |
-| Largest stack element | 65 bytes |
-| Final stack is exactly true | Pass |
-
-| Limit | Result | Measured value |
-|---|---|---:|
-| Standard transaction weight, 400,000 WU | Pass | 140,494 WU |
-| Varops budget | Pass | 1,233,221,358 / 1,404,440,000 |
-| Unrolled Script, 4,000,000 bytes | Pass | 1,562,773 bytes |
-| Stack entries | Pass | 779 |
-| Stack payload | Pass | 22,423 bytes |
-| Largest stack element | Pass | 65 bytes |
-| No OP_SUCCESS | Pass | None present |
-| Exact true final stack | Pass | Interpreter result |
+| Limit | Fixed claim | Witness claim | Limit |
+|---|---:|---:|---:|
+| Standard transaction weight | Pass | Pass | 400,000 WU |
+| Varops budget | Pass | Pass | 1,404,440,000 / 1,406,320,000 |
+| Unrolled Script size | Pass | Pass | 4,000,000 B |
+| Peak stack entries | Pass | Pass | 32,768 |
+| Peak live stack payload | Pass | Pass | 8,000,000 B |
+| Largest stack element | Pass | Pass | 4,000,000 B |
+| `OP_SUCCESS` absent | Pass | Pass | Required |
+| Script evaluation | Pass | Pass | `ok=true`, one truthy result |
 
 | Comparison | Weight | Varops | Committed verifier | Witness |
 |---|---:|---:|---:|---:|
-| This Groth16 verifier | 140,494 WU | 1,233,221,358 | 117,868 B | 21,460 B |
-| PR #20 STARK verifier | 272,064 WU | 2.32B | 48,776 B | 221,068 B |
+| This Groth16 verifier, fixed claim | 140,494 WU | 1,233,221,358 | 117,868 B | 21,460 B |
+| This Groth16 verifier, witness claim | 140,682 WU | 1,232,871,788 | 118,023 B | 21,492 B |
+| [PR #20 STARK verifier](https://github.com/zkpinbtc/gsr-stark-verifier/pull/20) | 272,064 WU | 2.32B | 48,776 B | 221,068 B |
 
-PR #20 values are from
-<https://github.com/zkpinbtc/gsr-stark-verifier/pull/20>.
+These are the generated transactions' direct compressed-execution results;
+the budget is derived from each transaction's weight by the pinned Core meter.
+The fixed-claim margin is 171,218,642 varops; the witness-claim margin is
+173,448,212 varops. No padding was needed.
+
+## How it works
+
+The fixture is a real RISC Zero 3.0.6 Groth16 receipt produced with
+`ProverOpts::groth16()` and verified natively with `Receipt::verify`. The
+verifier is dynamic: proof points, slopes, residue witnesses, and (in witness
+mode) the claim digest are witness data, not compiled proof constants.
+
+The pairing relation is
+`e(A, B) · e(−L, γ) · e(−C, δ) = e(α, β)`. Script checks canonical field
+encodings, G1 curve membership for A/C/L, B's BN254 twist membership and G2
+subgroup criterion, affine slope hints, and the final residue-witness
+relation. Fixed `a0`, `a1`, and `bn254_control_id` are folded into the
+constant part of L; two 4-bit, 32-window tables compute the variable
+`c0·IC3 + c1·IC4` term. Fixed mode binds the two claim scalars to the fixture.
+Witness mode checks the supplied digest bytes against those scalars and
+returns the digest for covenant composition.
+
+The Miller loop uses the signed NAF schedule for BN254's optimal-ate loop,
+D-twist line placement, fixed gamma/delta/beta line schedules, and the final
+Frobenius-twisted additions. The B-line slopes are checked by multiplication,
+without inversions. The residue witness checks `c·c⁻¹ = 1`, folds the inverse
+Miller factor into the loop, applies the Frobenius powers, and checks the
+result against `wi`. The formulas follow BitVM commit
+`c620dbfaacebdf778e765a6681985350389973b1`: `bitvm/src/bn254/ell_coeffs.rs`,
+`bitvm/src/bn254/pairing.rs`, and
+`bitvm/src/groth16/offchain_checker.rs::compute_c_wi`.
+
+Standalone field-operation microbenchmarks use one random canonical input per
+operation. These are per-operation varops, not full-transaction measurements:
+
+| Field | Add | Sub | Mul | Square | Frobenius p | Sparse mul (3 terms) |
+|---|---:|---:|---:|---:|---:|---:|
+| Fp | 18,744 | 24,032 | 26,478 | 29,074 | 17,078 | 26,478 |
+| Fp2 | 34,988 | 45,564 | 80,928 | 86,152 | 41,040 | 80,928 |
+| Fp6 | 99,964 | 131,692 | 808,620 | 824,304 | 254,294 | 358,266 |
+| Fp12 | 197,440 | 260,896 | 3,316,878 | 3,348,576 | 574,208 | 711,463 |
+
+### Reproduction
+
+Install dependencies with `python3 -m pip install -r requirements.txt`. The
+compression wrapper is copied unchanged from PR #20's
+`risc0-succinct/tools/gsr_tooling.py`; it uses GSR tooling revision
+`bf31cc4ac70e440e49f9a3695a6fd05f7b2866d4`. Install that revision with:
+
+```sh
+cargo install --locked --git https://github.com/bitcoin-gsr/gsr-tooling --rev bf31cc4ac70e440e49f9a3695a6fd05f7b2866d4
+```
+
+or set `GSR` to the binary path. Generate both compressed bundles and meter
+them directly:
+
+```sh
+python tools/generate.py --claim fixed --compress --out build/fixed.json
+python tools/generate.py --claim witness --compress --out build/witness.json
+GSR_METER=/path/to/ad6c16ff-gsr-meter python tools/measure.py build/fixed.json
+GSR_METER=/path/to/ad6c16ff-gsr-meter python tools/measure.py build/witness.json
+```
+
+Run `PYTHON=/path/to/python bash tools/test.sh` for the Python reference,
+field and pairing differential tests, tamper checks, compression equivalence,
+and native fixture verification.
+
+### Security notes
+
+BN254 is not post-quantum: an attacker able to solve its discrete-log problem
+can forge proofs and steal covenant funds. The verifier relies on RISC Zero's
+Groth16 trusted setup. It checks canonical encodings, G1 curve membership,
+the G2 twist and subgroup, and the claim binding described above. The fixture
+is an example proof, not a trusted setup contribution.
+
+## Optimization history
+
+Standalone rows are per-operation probes. Transaction-level WU and varops
+appear only where the compressed transaction itself was metered.
+
+| Change or probe | Before | After | Scope / outcome |
+|---|---:|---:|---|
+| Lazy reduction, Fp2 multiply | 125,222 varops | 80,928 varops | Standalone field operation |
+| Lazy reduction, Fp6 multiply | 1,671,196 varops | 808,620 varops | Standalone field operation |
+| Lazy reduction, Fp12 multiply | 7,241,479 varops | 3,316,878 varops | Standalone field operation |
+| Sparse Fp12 line multiply | 7,241,479 varops | 711,463 varops | Standalone dense/sparse operation comparison |
+| Bottom-anchored macro compression | 1,562,773 B unrolled | 117,868 B committed | Fixed-claim script; 13.26× size reduction |
+| Hinted-quotient probe | 23,372 varops (`MUL; MOD`) | 26,246 varops | Single Fp probe; not adopted |
+| Kronecker-packed Fp2 probe | 80,928 varops | 185,218 varops | Standalone probe; not adopted |

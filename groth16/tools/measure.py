@@ -46,6 +46,10 @@ def limits(bundle: dict, execution: dict) -> dict:
         unrolled_bytes = bundle.get("info", {}).get("unrolled_script_bytes")
     if unrolled_bytes is None:
         unrolled_bytes = len(bytes.fromhex(bundle["script"]))
+    if bundle.get("info", {}).get("claim_mode") == "witness":
+        verified_output = execution.get("final_stack_entries") == 1
+    else:
+        verified_output = execution.get("final_stack_exact_true", False)
     return {
         "standard_weight": execution.get("transaction_weight", 0) <= 400000,
         "varops": execution.get("varops", 0) <= execution.get("budget", 0),
@@ -55,7 +59,7 @@ def limits(bundle: dict, execution: dict) -> dict:
         "single_element": execution.get("peak_element_bytes", 0) <= 4000000,
         "no_op_success": not op_success_offsets(bytes.fromhex(bundle["script"])),
         "verifier": execution.get("ok", False)
-        and execution.get("final_stack_exact_true", False)
+        and verified_output
         and not execution.get("immediate_success", False),
     }
 
@@ -64,8 +68,12 @@ def main() -> None:
     bundle = json.loads(Path(sys.argv[1] if len(sys.argv) > 1 else ROOT / "build/bundle.json").read_text())
     execution = meter(bundle)
     checks = limits(bundle, execution)
-    keys = ("ok", "error", "transaction_weight", "budget", "varops", "sha256_calls", "sha256_input_bytes",
-            "macro_references", "unrolled_bytes", "peak_entries", "peak_payload_bytes", "peak_element_bytes")
+    keys = (
+        "ok", "error", "transaction_weight", "budget", "varops", "sha256_calls",
+        "sha256_input_bytes", "macro_references", "unrolled_bytes", "peak_entries",
+        "peak_payload_bytes", "peak_element_bytes", "final_stack_entries",
+        "final_stack_exact_true",
+    )
     report = {"script_bytes": len(bytes.fromhex(bundle["script"])),
               "witness_items": len(bundle["witness"]),
               "witness_payload_bytes": sum(len(bytes.fromhex(w)) for w in bundle["witness"]),

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import sys
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -22,6 +23,13 @@ from pairing_ref import (
     g2_scalar_trace,
     prepare_g2,
 )
+
+LINE_HASH_DOMAIN = b"risc0-groth16-fixed-miller-lines-v1"
+
+
+def _line_hash_item(value: int) -> bytes:
+    encoded = num(value)
+    return bytes((len(encoded) + 1,)) + encoded
 
 
 def tower_from_fq12(value) -> tuple[int, ...]:
@@ -57,6 +65,7 @@ class Witness:
     layout: dict
     slopes: tuple[tuple[int, int], ...]
     stage_ranges: dict[str, tuple[int, int]] = field(default_factory=dict)
+    miller_step_ranges: list[tuple[int, int]] = field(default_factory=list)
 
 
 def build_witness(fixture: dict, claim_mode: str | None = None) -> Witness:
@@ -88,7 +97,6 @@ def build_witness(fixture: dict, claim_mode: str | None = None) -> Witness:
     }
     layout["B"] = (add("Bx", _fq2(b[0])), add("By", _fq2(b[1])))
     b_trace = traces[3]
-    layout["slopes"] = [add("slope", slope) for slope in b_trace.slope_witnesses]
     layout["c"] = add("c", tower_from_fq12(residue))
     layout["c_inv"] = add("c_inv", tower_from_fq12(residue_inverse))
     layout["wi"] = add("wi", tower_from_fq12(wi))
@@ -108,10 +116,116 @@ def build_witness(fixture: dict, claim_mode: str | None = None) -> Witness:
         if subgroup_point != (psi_x, psi_y):
             raise ValueError("fixture B point is outside the BN254 G2 subgroup")
         layout["subgroup_slopes"] = [add("subgroup_slope", slope) for slope in subgroup_slopes]
+
+    def line_values(line):
+        return [
+            int(value) % P
+            for value in (*line.slope.coeffs, *line.minus_bias.coeffs)
+        ]
+
+    digits = tuple(reversed(ATE_LOOP_COUNT[:-1]))
+    fixed_traces = traces[:3]
+    step_data = []
+    slope_index = 0
+    line_hash = hashlib.sha256(LINE_HASH_DOMAIN).digest()
+    for step_index, digit in enumerate(digits):
+        double_slope = b_trace.slope_witnesses[slope_index]
+        slope_index += 1
+        has_add = bool(digit)
+        if digit:
+            add_slope = b_trace.slope_witnesses[slope_index]
+            slope_index += 1
+        else:
+            add_slope = (0, 0)
+        double_lines = [
+            trace.steps[step_index].double for trace in fixed_traces
+        ]
+        hash_add_lines = [
+            trace.steps[step_index].add for trace in fixed_traces
+        ] if digit else []
+        add_lines = hash_add_lines or [[0] * 4 for _ in fixed_traces]
+        constant_lines = (*double_lines, *hash_add_lines)
+        double_line_values = [line_values(line) for line in double_lines]
+        add_line_values = (
+            [line_values(line) for line in hash_add_lines]
+            if hash_add_lines
+            else add_lines
+        )
+        constants = [
+            value
+            for line in constant_lines
+            for value in line_values(line)
+        ]
+        line_hash = hashlib.sha256(
+            line_hash + b"".join(_line_hash_item(value) for value in constants)
+        ).digest()
+        step_data.append({
+            "double_slope": double_slope,
+            "add_slope": add_slope,
+            "has_add": has_add,
+            "double_lines": double_line_values,
+            "add_lines": add_line_values,
+            "constants": constants,
+        })
+    final_slopes = b_trace.slope_witnesses[slope_index:]
+    if len(final_slopes) != 2:
+        raise AssertionError("incorrect Miller-loop slope count")
+
     stack = [num(x) for x in values]
     if claim_mode == "witness":
         layout["claim_digest"] = len(stack)
         stack.append(bytes.fromhex(fixture["claim_digest"]))
+
+    def append_stack_values(sequence):
+        start = len(stack)
+        stack.extend(num(int(value) % P) for value in sequence)
+        return list(range(start, len(stack)))
+
+    layout["final_slopes"] = [
+        append_stack_values(slope) for slope in final_slopes
+    ]
+    miller_steps = [None] * len(step_data)
+    for step_index in reversed(range(len(step_data))):
+        step = step_data[step_index]
+        step_layout = {
+            "double_slope": append_stack_values(step["double_slope"]),
+            "double_lines": [
+                append_stack_values(line) for line in step["double_lines"]
+            ],
+            "add_slope": append_stack_values(step["add_slope"]),
+            "add_lines": [
+                append_stack_values(line) for line in step["add_lines"]
+            ],
+            "has_add": step["has_add"],
+        }
+        step_layout["constants"] = [
+            index
+            for line in (
+                *step_layout["double_lines"],
+                *(
+                    step_layout["add_lines"]
+                    if step_layout["has_add"]
+                    else ()
+                ),
+            )
+            for index in line
+        ]
+        miller_steps[step_index] = step_layout
+    layout["miller_steps"] = miller_steps
+    layout["slopes"] = [
+        group
+        for step in miller_steps
+        for group in (step["double_slope"], step["add_slope"])
+    ] + layout["final_slopes"]
+    layout["line_constants"] = [
+        line
+        for step in miller_steps
+        for line in (
+            *step["double_lines"],
+            *(step["add_lines"] if step["has_add"] else ()),
+        )
+    ]
+    layout["line_hash"] = line_hash
     return Witness(stack, layout, b_trace.slope_witnesses)
 
 
@@ -168,12 +282,37 @@ class FieldCode:
                 if self.asm.has(item):
                     self.asm.drop(item)
 
+    def hash_chain_step(self, current, values):
+        self.asm.fetch(current, consume=True)
+        for value in values:
+            item = self.asm.fetch(value, consume=False)
+            size = V("miller-line-size")
+            self.asm.op("SIZE", 1, item, size)
+            length = V("miller-line-length")
+            self.asm.op("1ADD", 1, length)
+            self.asm.op("SWAP", 2, length, item)
+            prefixed = V("miller-line-item")
+            self.asm.op("CAT", 2, prefixed)
+            preimage = V("miller-line-preimage")
+            self.asm.op("CAT", 2, preimage)
+        following = V("miller-line-hash")
+        self.asm.op("SHA256", 1, following)
+        return following
+
     def multiply(self, left, right, consume_left: bool = False, consume_right: bool = False):
         return self.op(FP, "mul", left, right, consume=(consume_left, consume_right))
 
-    def fp2_scale(self, value, scalar, consume: bool = False):
+    def fp2_scale(
+        self, value, scalar, consume_value: bool = False, consume_scalar: bool = False
+    ):
         return tuple(
-            self.op(FP, "mul", (coefficient,), scalar, consume=consume)[0]
+            self.op(
+                FP,
+                "mul",
+                (coefficient,),
+                scalar,
+                consume=(consume_value, consume_scalar),
+            )[0]
             for coefficient in value
         )
 
@@ -229,9 +368,16 @@ class FieldCode:
         self.asm.fetch(match, consume=True)
         self.asm.op("VERIFY", 1)
 
-    def line_rhs(self, accumulator, slope, minus_bias, eval_x, eval_y):
-        slope_x = self.fp2_scale(slope, eval_x)
-        bias_y = self.fp2_scale(minus_bias, eval_y)
+    def line_rhs(
+        self, accumulator, slope, minus_bias, eval_x, eval_y,
+        consume_coefficients: bool = False,
+    ):
+        slope_x = self.fp2_scale(
+            slope, eval_x, consume_value=consume_coefficients
+        )
+        bias_y = self.fp2_scale(
+            minus_bias, eval_y, consume_value=consume_coefficients
+        )
         rhs = slope_x + bias_y
         output = tuple(V("Fp12") for _ in range(FP12.degree))
         for value in (*accumulator, *rhs):
@@ -243,6 +389,16 @@ class FieldCode:
         )
         self.drop(slope_x, bias_y)
         return output
+
+    def line_rhs_values(self, accumulator, slope, minus_bias, eval_x, eval_y):
+        return self.line_rhs(
+            accumulator,
+            slope,
+            minus_bias,
+            eval_x,
+            eval_y,
+            consume_coefficients=True,
+        )
 
     def line_rhs_constant(self, accumulator, line, eval_x, eval_y):
         slope = self.push_fp2(line.slope)
@@ -274,10 +430,16 @@ def _layout_vars(layout: dict):
         layout["evals"]["A"][0] + layout["evals"]["A"][1],
         layout["B"][0] + layout["B"][1],
         *layout["slopes"],
+        *layout["line_constants"],
         layout["c"],
         layout["c_inv"],
         layout["wi"],
     ]
+    index_groups.extend(
+        line
+        for step in layout["miller_steps"]
+        for line in step["add_lines"]
+    )
     if "claim" in layout:
         index_groups.extend(layout["claim"])
         index_groups.extend(layout["digits"])
@@ -301,6 +463,22 @@ def _layout_vars(layout: dict):
         },
         "B": tuple(vector(part) for part in layout["B"]),
         "slopes": [vector(part) for part in layout["slopes"]],
+        "line_constants": [vector(part) for part in layout["line_constants"]],
+        "miller_steps": [
+            {
+                "double_slope": vector(step["double_slope"]),
+                "double_lines": [vector(line) for line in step["double_lines"]],
+                "add_slope": (
+                    vector(step["add_slope"])
+                    if step["add_slope"] is not None
+                    else None
+                ),
+                "add_lines": [vector(line) for line in step["add_lines"]],
+                "constants": tuple(variables[index] for index in step["constants"]),
+            }
+            for step in layout["miller_steps"]
+        ],
+        "final_slopes": [vector(part) for part in layout["final_slopes"]],
         "c": vector(layout["c"]),
         "c_inv": vector(layout["c_inv"]),
         "wi": vector(layout["wi"]),
@@ -489,7 +667,8 @@ def _input_checks(fc: FieldCode, values):
     fields = [
         *values["L"], *values["C"], *values["A"], *values["B"],
         *values["evals"]["L"], *values["evals"]["C"], *values["evals"]["A"],
-        *values["slopes"], values["c"], values["c_inv"], values["wi"],
+        *values["slopes"],
+        values["c"], values["c_inv"], values["wi"],
         *values["msm_slopes"], *values["subgroup_slopes"],
     ]
     _check_canonical(fc, fields)
@@ -549,8 +728,8 @@ def build_pairing_script(fixture: dict, claim_mode: str | None = None):
         __import__("py_ecc.bn128", fromlist=["neg"]).neg(g1(vk["alpha_g1"]))
     )
     fixed_evals = (
-        values["evals"]["L"],
-        values["evals"]["C"],
+        _copy_point(fc, values["evals"]["L"]),
+        _copy_point(fc, values["evals"]["C"]),
         tuple((fc.push((value,), "target-eval")[0],) for value in target_eval_values),
     )
     fixed_qs = (
@@ -560,8 +739,12 @@ def build_pairing_script(fixture: dict, claim_mode: str | None = None):
     )
     fixed_traces = tuple(prepare_g2(point) for point in fixed_qs)
 
-    t = _copy_point(fc, values["B"])
-    neg_b_y = _negate_fp2(fc, values["B"][1])
+    miller_b = _copy_point(fc, values["B"])
+    miller_eval_a = _copy_point(fc, values["evals"]["A"])
+    miller_c = fc.copy(values["c"])
+    miller_c_inv = fc.copy(values["c_inv"])
+    t = _copy_point(fc, miller_b)
+    neg_b_y = _negate_fp2(fc, miller_b[1])
     q1_x = fc.fp2_mul(
         fc.frobenius_fp2(values["B"][0]),
         fc.push_fp2(PSI_X),
@@ -588,43 +771,69 @@ def build_pairing_script(fixture: dict, claim_mode: str | None = None):
     )
     q2_y = _negate_fp2(fc, q2_y)
 
-    accumulator = fc.copy(values["c_inv"])
-    slope_index = 0
+    accumulator = fc.copy(miller_c_inv)
     digits = tuple(reversed(ATE_LOOP_COUNT[:-1]))
+
+    def store_miller_state(accumulator, point, line_hash):
+        state = (*accumulator, *point[0], *point[1])
+        for value in state:
+            asm.fetch(value, consume=True)
+            asm.op("TOALTSTACK", 1)
+        asm.fetch(line_hash, consume=True)
+        asm.op("TOALTSTACK", 1)
+
+    def restore_miller_state():
+        line_hash = V("miller-line-hash")
+        asm.op("FROMALTSTACK", 0, line_hash)
+        restored = []
+        for _ in range(FP12.degree + 4):
+            value = V("miller-state")
+            asm.op("FROMALTSTACK", 0, value)
+            restored.append(value)
+        accumulator = tuple(reversed(restored[4:]))
+        point = tuple(reversed(restored[:4]))
+        return line_hash, accumulator, (point[:2], point[2:])
+
     miller_start = len(asm.s.code)
+    line_hash = asm.push(hashlib.sha256(LINE_HASH_DOMAIN).digest(), V("miller-line-hash"))
+    store_miller_state(accumulator, t, line_hash)
+    miller_step_ranges = []
     for step_index, digit in enumerate(digits):
+        step_start = len(asm.s.code)
+        step = values["miller_steps"][step_index]
+        line_hash, accumulator, t = restore_miller_state()
+        line_hash = fc.hash_chain_step(line_hash, step["constants"])
         accumulator = fc.fp12_square(accumulator)
         if digit == 1:
-            accumulator = fc.fp12_multiply(accumulator, values["c_inv"], True, False)
+            accumulator = fc.fp12_multiply(accumulator, miller_c_inv, True, False)
         elif digit == -1:
-            accumulator = fc.fp12_multiply(accumulator, values["c"], True, False)
+            accumulator = fc.fp12_multiply(accumulator, miller_c, True, False)
 
-        for pair_index, trace in enumerate(fixed_traces):
-            line = trace.steps[step_index].double
-            accumulator = fc.line_rhs_constant(
-                accumulator, line, *fixed_evals[pair_index]
+        for pair_index, line in enumerate(step["double_lines"]):
+            accumulator = fc.line_rhs_values(
+                accumulator, line[:2], line[2:], *fixed_evals[pair_index]
             )
 
-        slope = values["slopes"][slope_index]
-        slope_index += 1
         accumulator, t = _double_dynamic(
-            fc, accumulator, t, slope, *values["evals"]["A"]
+            fc, accumulator, t, step["double_slope"], *miller_eval_a
         )
-
         if digit:
-            for pair_index, trace in enumerate(fixed_traces):
-                line = trace.steps[step_index].add
-                if line is None:
-                    raise AssertionError("missing fixed G2 addition line")
-                accumulator = fc.line_rhs_constant(
-                    accumulator, line, *fixed_evals[pair_index]
+            for pair_index, line in enumerate(step["add_lines"]):
+                accumulator = fc.line_rhs_values(
+                    accumulator, line[:2], line[2:], *fixed_evals[pair_index]
                 )
-            slope = values["slopes"][slope_index]
-            slope_index += 1
-            q = (values["B"][0], neg_b_y if digit == -1 else values["B"][1])
+            q = (miller_b[0], neg_b_y if digit == -1 else miller_b[1])
             accumulator, t = _add_dynamic(
-                fc, accumulator, t, q, slope, *values["evals"]["A"]
+                fc, accumulator, t, q, step["add_slope"], *miller_eval_a
             )
+        else:
+            fc.drop(step["add_slope"], *step["add_lines"])
+        store_miller_state(accumulator, t, line_hash)
+        miller_step_ranges.append((step_start, len(asm.s.code)))
+    line_hash, accumulator, t = restore_miller_state()
+    asm.fetch(line_hash, consume=True)
+    asm.push(witness.layout["line_hash"])
+    asm.op("EQUALVERIFY", 2)
     miller_end = len(asm.s.code)
 
     for power, residue_value in ((1, values["c_inv"]), (2, values["c"]), (3, values["c_inv"])):
@@ -638,15 +847,16 @@ def build_pairing_script(fixture: dict, claim_mode: str | None = None):
                 trace.frobenius_lines[line_index],
                 *fixed_evals[pair_index],
             )
-        slope = values["slopes"][slope_index]
-        slope_index += 1
         q = (q1_x, q1_y) if line_index == 0 else (q2_x, q2_y)
         accumulator, t = _add_dynamic(
-            fc, accumulator, t, q, slope, *values["evals"]["A"]
+            fc,
+            accumulator,
+            t,
+            q,
+            values["final_slopes"][line_index],
+            *miller_eval_a,
         )
 
-    if slope_index != len(values["slopes"]):
-        raise AssertionError("incorrect number of B slope witnesses")
     accumulator = fc.fp12_multiply(accumulator, values["wi"], True, False)
     fc.equal_constant(accumulator, (1,) + (0,) * 11, consume=True)
     fc.drop(
@@ -658,16 +868,23 @@ def build_pairing_script(fixture: dict, claim_mode: str | None = None):
         *values["evals"]["C"],
         *values["evals"]["A"],
         *values["slopes"],
+        *values["line_constants"],
         values["c"],
         values["c_inv"],
         values["wi"],
+        *miller_b,
+        *miller_eval_a,
+        miller_c,
+        miller_c_inv,
+        *fixed_evals[0],
+        *fixed_evals[1],
+        *fixed_evals[2],
         *t,
         neg_b_y,
         q1_x,
         q1_y,
         q2_x,
         q2_y,
-        *fixed_evals[2],
     )
     asm.drop_top(len(asm.st))
     if claim_output is not None:
@@ -681,4 +898,5 @@ def build_pairing_script(fixture: dict, claim_mode: str | None = None):
         "miller_loop": (miller_start, miller_end),
         "finalization": (miller_end, len(asm.s.code)),
     }
+    witness.miller_step_ranges = miller_step_ranges
     return asm.s, witness

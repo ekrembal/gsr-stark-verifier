@@ -175,6 +175,13 @@ def main():
         slope_index,
         int.from_bytes(witness.stack[slope_index], "little") ^ 1,
     )
+    line_constant_index = witness.layout["line_constants"][0][0]
+    rejected(
+        script,
+        witness,
+        line_constant_index,
+        int.from_bytes(witness.stack[line_constant_index], "little") ^ 1,
+    )
     digit_index = witness.layout["digits"][0][0]
     digit = int.from_bytes(witness.stack[digit_index], "little")
     rejected(script, witness, digit_index, (digit + 1) % 16)
@@ -208,6 +215,7 @@ def main():
         "wrong_fixed_claim": "REJECTED",
         "tampered_c_c_inv_wi": "REJECTED",
         "tampered_slope": "REJECTED",
+        "tampered_line_constant": "REJECTED",
         "wrong_window_digit": "REJECTED",
         "fixed_script_bytes": len(script.code),
         "fixed_witness_items": len(witness.stack),

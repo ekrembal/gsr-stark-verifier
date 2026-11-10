@@ -80,7 +80,7 @@ def py_ecc_equal(field, left, right):
 
 def check_script(field, operation, left, right=None, sparse_indices=None):
     if operation in ("add", "sub"):
-        expected = getattr(field, operation)(left, right)
+        expected, _ = getattr(field, f"{operation}_lazy")(left, right)
         script = field.emit(operation)
         witness = [*left, *right]
     elif operation == "mul":
@@ -115,9 +115,34 @@ def check_script(field, operation, left, right=None, sparse_indices=None):
     return varops
 
 
+def check_lazy_bounds(rng):
+    for field in FIELDS:
+        for left_bound, right_bound in ((1, 1), (2, 3), (7, 4)):
+            left = tuple(rng.randrange(left_bound * P) for _ in range(field.degree))
+            right = tuple(rng.randrange(right_bound * P) for _ in range(field.degree))
+            for operation in ("add", "sub"):
+                expected, output_bound = getattr(field, f"{operation}_lazy")(
+                    left, right, left_bound, right_bound
+                )
+                actual, _ = run_script(
+                    field.emit(operation, input_bounds=(left_bound, right_bound)),
+                    [num(value) for value in (*left, *right)],
+                )
+                if tuple(actual) != expected:
+                    raise AssertionError(
+                        f"{field.name}.{operation}: expected {expected}, got {actual}"
+                    )
+                if any(not 0 <= value < output_bound * P for value in actual):
+                    raise AssertionError(f"{field.name}.{operation} exceeded its lazy bound")
+                reduced = tuple(value % P for value in actual)
+                if reduced != getattr(field, operation)(left, right):
+                    raise AssertionError(f"{field.name}.{operation} changed the field value")
+
+
 def main() -> None:
     rng = random.Random(0)
     costs = {}
+    check_lazy_bounds(rng)
     for field in FIELDS:
         n = field.degree
         a = tuple(rng.randrange(P) for _ in range(n))
@@ -151,7 +176,7 @@ def main() -> None:
             assert py_ecc_equal(field, as_py_ecc(field, field.square(a)), left_py * left_py)
         assert to_py_fq12(field, field.frobenius(a, 1)) == to_py_fq12(field, a) ** P
         costs[field.name] = checks
-    print(json.dumps({"status": "PASS", "varops": costs}, indent=2))
+    print(json.dumps({"status": "PASS", "lazy_bounds": "PASS", "varops": costs}, indent=2))
 
 
 if __name__ == "__main__":

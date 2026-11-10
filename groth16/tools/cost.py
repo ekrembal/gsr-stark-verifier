@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import argparse
 import sys
 from collections import Counter, defaultdict
 from dataclasses import dataclass
@@ -22,6 +23,7 @@ OP_DEPTH, OP_SUB, OP_PICK, OP_ROLL = 0x74, 0x94, 0x79, 0x7A
 OP_MACRO, OP_CALLMACRO = 0xD0, 0xD1
 
 OPS = {
+    0x63: "IF", 0x64: "NOTIF", 0x67: "ELSE", 0x68: "ENDIF",
     0x69: "VERIFY", 0x6B: "TOALTSTACK", 0x6C: "FROMALTSTACK",
     0x6D: "2DROP", 0x6E: "2DUP", 0x6F: "3DUP", 0x70: "2OVER",
     0x72: "2SWAP", 0x74: "DEPTH", 0x75: "DROP", 0x76: "DUP",
@@ -210,10 +212,10 @@ class CostModel:
         return "unclassified"
 
     def run(self, code: bytes, charge=True) -> None:
+        conditions = []
         for ins in instructions(code):
             self.heights[ins.start] = len(self.stack)
             op = ins.opcode
-            self.opcode_counts[op] += 1
             extra = 0
             stage = self.stage_at(ins.start)
 
@@ -231,6 +233,46 @@ class CostModel:
                     nonlocal extra
                     extra += write_cost(len(data))
 
+            def account() -> None:
+                if charge:
+                    amount = CORE_BASE + extra
+                    self.total += amount
+                    self.by_opcode[op] += amount
+                    self.by_stage[stage] += amount
+
+            executing = all(conditions)
+            if op in (0x63, 0x64):
+                branch = False
+                if executing:
+                    raw = self.stack.pop()
+                    condition = int.from_bytes(raw, "little")
+                    if len(raw) > 1 or raw not in (b"", b"\x01"):
+                        raise ValueError(f"non-minimal conditional value at byte {ins.start}")
+                    branch = bool(condition)
+                    if op == 0x64:
+                        branch = not branch
+                conditions.append(branch)
+                self.opcode_counts[op] += 1
+                account()
+                continue
+            if op == 0x67:
+                if not conditions:
+                    raise ValueError(f"unbalanced ELSE at byte {ins.start}")
+                conditions[-1] = not conditions[-1]
+                self.opcode_counts[op] += 1
+                account()
+                continue
+            if op == 0x68:
+                if not conditions:
+                    raise ValueError(f"unbalanced ENDIF at byte {ins.start}")
+                conditions.pop()
+                self.opcode_counts[op] += 1
+                account()
+                continue
+            if not executing:
+                continue
+
+            self.opcode_counts[op] += 1
             if op <= 0x4E:
                 if ins.data is None:
                     raise ValueError("push is missing data")
@@ -429,11 +471,9 @@ class CostModel:
             else:
                 raise ValueError(f"unsupported opcode 0x{op:02x} at byte {ins.start}")
 
-            if charge:
-                amount = CORE_BASE + extra
-                self.total += amount
-                self.by_opcode[op] += amount
-                self.by_stage[stage] += amount
+            account()
+        if conditions:
+            raise ValueError("unterminated conditional")
 
 
 def anchor_script(raw: bytes, stack: list[bytes], threshold: int, stage_ranges):
@@ -505,7 +545,15 @@ def opcode_name(op: int) -> str:
 
 
 def main() -> None:
-    path = Path(sys.argv[1]) if len(sys.argv) > 1 else ROOT / "build/v1-fixed-current.json"
+    parser = argparse.ArgumentParser()
+    parser.add_argument(
+        "bundle",
+        nargs="?",
+        default=str(ROOT / "build/v1-fixed-current.json"),
+    )
+    parser.add_argument("--annex-bytes", type=int, default=0)
+    args = parser.parse_args()
+    path = Path(args.bundle)
     bundle = json.loads(path.read_text())
     fixture = json.loads((ROOT / "fixtures/receipt.json").read_text())
     raw_script, witness = build_pairing_script(fixture, "fixed")
@@ -539,7 +587,7 @@ def main() -> None:
     model.by_opcode["MACRO_UNROLL"] += unroll_charge
     model.by_stage["macro_unroll"] += unroll_charge
 
-    execution = meter(bundle)
+    execution = meter(bundle, annex_bytes=args.annex_bytes)
     counts_match = model.opcode_counts == meter_opcode_counts(execution["opcodes"])
     result = {
         "model_varops": model.total,

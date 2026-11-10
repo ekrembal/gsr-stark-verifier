@@ -103,6 +103,11 @@ def main():
         step_blocks[kind] = block
     if set(step_blocks) != {"double", "double_add"}:
         raise AssertionError("expected double and double-add subgroup macros")
+    shamir_blocks = {
+        bytes(script.code[start:end]) for start, end in witness.shamir_step_ranges
+    }
+    if len(shamir_blocks) != 1 or len(witness.shamir_step_ranges) != 128:
+        raise AssertionError("Shamir MSM steps are not one byte-identical block")
     compressed_fixed = compressed_script(script)
     compressed_result = evaluate(compressed_fixed, witness.stack)
     if compressed_result.returncode or json.loads(compressed_result.stdout).get("error"):
@@ -165,9 +170,10 @@ def main():
         line_constant_index,
         int.from_bytes(witness.stack[line_constant_index], "little") ^ 1,
     )
-    digit_index = witness.layout["digits"][0][0]
-    digit = int.from_bytes(witness.stack[digit_index], "little")
-    rejected(script, witness, digit_index, (digit + 1) % 16)
+    bit_index = witness.layout["bits"][0][0][0]
+    bit = int.from_bytes(witness.stack[bit_index], "little")
+    rejected(script, witness, bit_index, bit ^ 1)
+    rejected(script, witness, bit_index, 2)
 
     witness_script, witness_mode = build_pairing_script(fixture, "witness")
     output_check = Script().data(bytes.fromhex(fixture["claim_digest"]))
@@ -192,6 +198,7 @@ def main():
         "compression_equivalence": "PASS",
         "claim_witness_digest_bytes": fixture["claim_digest"],
         "subgroup_step_macros": len(step_blocks),
+        "shamir_step_macros": len(shamir_blocks),
         "tampered_A_B_C": "REJECTED",
         "out_of_subgroup_B": "REJECTED",
         "noncanonical_field": "REJECTED",
@@ -200,7 +207,8 @@ def main():
         "tampered_c_c_inv_wi": "REJECTED",
         "tampered_slope": "REJECTED",
         "tampered_line_constant": "REJECTED",
-        "wrong_window_digit": "REJECTED",
+        "wrong_shamir_bit": "REJECTED",
+        "non_boolean_shamir_bit": "REJECTED",
         "fixed_script_bytes": len(script.code),
         "fixed_witness_items": len(witness.stack),
         "fixed_varops": fixed_varops,

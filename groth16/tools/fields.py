@@ -93,6 +93,38 @@ class Field:
         a, b = self.normalize(a), self.normalize(b)
         return tuple((x - y) % P for x, y in zip(a, b, strict=True))
 
+    def add_lazy(self, a, b, left_bound: int = 1, right_bound: int = 1):
+        a, b = tuple(map(int, a)), tuple(map(int, b))
+        if len(a) != self.degree or len(b) != self.degree:
+            raise ValueError(f"{self.name} requires {self.degree} coefficients")
+        if left_bound < 1 or right_bound < 1:
+            raise ValueError("lazy bounds must be positive")
+        if any(not 0 <= value < left_bound * P for value in a):
+            raise AssertionError("left operand exceeds its lazy bound")
+        if any(not 0 <= value < right_bound * P for value in b):
+            raise AssertionError("right operand exceeds its lazy bound")
+        bound = left_bound + right_bound
+        result = tuple(x + y for x, y in zip(a, b, strict=True))
+        if any(not 0 <= value < bound * P for value in result):
+            raise AssertionError("lazy addition exceeds its output bound")
+        return result, bound
+
+    def sub_lazy(self, a, b, left_bound: int = 1, right_bound: int = 1):
+        a, b = tuple(map(int, a)), tuple(map(int, b))
+        if len(a) != self.degree or len(b) != self.degree:
+            raise ValueError(f"{self.name} requires {self.degree} coefficients")
+        if left_bound < 1 or right_bound < 1:
+            raise ValueError("lazy bounds must be positive")
+        if any(not 0 <= value < left_bound * P for value in a):
+            raise AssertionError("left operand exceeds its lazy bound")
+        if any(not 0 <= value < right_bound * P for value in b):
+            raise AssertionError("right operand exceeds its lazy bound")
+        bound = left_bound + right_bound
+        result = tuple(x + right_bound * P - y for x, y in zip(a, b, strict=True))
+        if any(not 0 <= value < bound * P for value in result):
+            raise AssertionError("lazy subtraction exceeds its output bound")
+        return result, bound
+
     def mul_sparse(self, a, b, rhs_indices: tuple[int, ...]) -> tuple[int, ...]:
         a = self.normalize(a)
         if len(b) != len(rhs_indices) or any(i < 0 or i >= self.degree for i in rhs_indices):
@@ -147,7 +179,12 @@ class Field:
             out = accumulator
         return out
 
-    def emit(self, operation: str, rhs_indices: tuple[int, ...] | None = None) -> Script:
+    def emit(
+        self,
+        operation: str,
+        rhs_indices: tuple[int, ...] | None = None,
+        input_bounds: tuple[int, int] = (1, 1),
+    ) -> Script:
         n = self.degree
         right = tuple(range(n)) if rhs_indices is None else tuple(rhs_indices)
         if operation == "frobenius":
@@ -155,6 +192,8 @@ class Field:
         if operation not in ("add", "sub", "mul", "square", "sparse_mul"):
             raise ValueError(operation)
         if operation == "square":
+            if self.name == "Fp12":
+                return self._emit_symmetric_square()
             script = Script()
             for _ in range(n):
                 script.int(n - 1).op("PICK")
@@ -164,7 +203,7 @@ class Field:
             return self._emit_mul(right)
         if len(right) != n:
             raise ValueError("add/sub require a full right-hand element")
-        return self._emit_add_sub(operation)
+        return self._emit_add_sub(operation, input_bounds)
 
     def _copy(self, script: Script, original_depth: int, index: int) -> None:
         depth = original_depth - index - 1
@@ -184,8 +223,11 @@ class Field:
         for _ in range(output_count):
             script.op("FROMALTSTACK")
 
-    def _emit_add_sub(self, operation: str) -> Script:
+    def _emit_add_sub(self, operation: str, input_bounds: tuple[int, int]) -> Script:
         n = self.degree
+        left_bound, right_bound = input_bounds
+        if left_bound < 1 or right_bound < 1:
+            raise ValueError("lazy bounds must be positive")
         script = Script()
         for k in reversed(range(n)):
             self._copy(script, 2 * n, k)
@@ -193,8 +235,8 @@ class Field:
             if operation == "add":
                 script.op("ADD")
             else:
-                script.op("SWAP").int(P).op("ADD", "SWAP", "SUB")
-            script.int(P).op("MOD", "TOALTSTACK")
+                script.op("SWAP").int(right_bound * P).op("ADD", "SWAP", "SUB")
+            script.op("TOALTSTACK")
         self._clear_inputs_and_restore(script, 2 * n, n)
         return script
 
@@ -247,6 +289,46 @@ class Field:
             script.int(P).op("MOD")
             script.op("TOALTSTACK")
         self._clear_inputs_and_restore(script, input_count, n)
+        return script
+
+    def _emit_symmetric_square(self) -> Script:
+        n = self.degree
+        pairs = [(left, right) for left in range(n) for right in range(left, n)]
+        script = Script()
+        for pair_index, (left, right) in enumerate(pairs):
+            stack_size = n + pair_index
+            self._copy(script, stack_size, left)
+            self._copy(script, stack_size + 1, right)
+            script.op("MUL")
+
+        products = {pair: n + index for index, pair in enumerate(pairs)}
+        stack_size = n + len(pairs)
+        for output in reversed(range(n)):
+            terms = []
+            for pair in pairs:
+                for out_index, factor in self.tensor[pair[0]][pair[1]]:
+                    if out_index == output:
+                        terms.append((products[pair], factor, pair[0] != pair[1]))
+            offset = sum(
+                P ** 2 * abs(factor) * (2 if doubled else 1)
+                for _, factor, doubled in terms
+                if factor < 0
+            )
+            script.int(offset)
+            for product_index, factor, doubled in terms:
+                self._copy(script, stack_size + 1, product_index)
+                if doubled:
+                    script.op("DUP", "ADD")
+                magnitude = abs(factor)
+                if magnitude != 1:
+                    script.int(magnitude).op("MUL")
+                if factor < 0:
+                    script.op("SUB")
+                else:
+                    script.op("ADD")
+            script.int(P).op("MOD", "TOALTSTACK")
+
+        self._clear_inputs_and_restore(script, stack_size, n)
         return script
 
     def emit_line_mul(self, rhs_indices: tuple[int, ...]) -> Script:

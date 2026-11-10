@@ -4,6 +4,7 @@
 Reuses recursive-stwo's deterministic transaction builder and its instrumented `gsr-meter`, so Core itself derives
 the transaction weight and the varops budget from the serialized transaction and the spent output.
 """
+import argparse
 import json
 import os
 import subprocess
@@ -24,10 +25,21 @@ METER = Path(
 )
 
 
-def meter(bundle: dict, tx=None, spent_value: int = 5_000_000_000) -> dict:
+def meter(
+    bundle: dict,
+    tx=None,
+    spent_value: int = 5_000_000_000,
+    annex_bytes: int = 0,
+) -> dict:
     """Meter `bundle` as the only input of `tx` (default: the deterministic 1-in/1-out spend)."""
     if tx is None:
         tx, _, _ = build(bundle)
+    if annex_bytes:
+        if annex_bytes < 1:
+            raise ValueError("annex_bytes must be positive")
+        tx.wit.vtxinwit[0].scriptWitness.stack.append(
+            b"\x50" + bytes(annex_bytes - 1)
+        )
     request = meter_request(bundle, tx, spent_value)
     if "GSR_METER" not in os.environ:
         request["budget"] = tx.get_weight() * 10000
@@ -65,8 +77,12 @@ def limits(bundle: dict, execution: dict) -> dict:
 
 
 def main() -> None:
-    bundle = json.loads(Path(sys.argv[1] if len(sys.argv) > 1 else ROOT / "build/bundle.json").read_text())
-    execution = meter(bundle)
+    parser = argparse.ArgumentParser()
+    parser.add_argument("bundle", nargs="?", default=str(ROOT / "build/bundle.json"))
+    parser.add_argument("--annex-bytes", type=int, default=0)
+    args = parser.parse_args()
+    bundle = json.loads(Path(args.bundle).read_text())
+    execution = meter(bundle, annex_bytes=args.annex_bytes)
     checks = limits(bundle, execution)
     keys = (
         "ok", "error", "transaction_weight", "budget", "varops", "sha256_calls",
@@ -77,6 +93,7 @@ def main() -> None:
     report = {"script_bytes": len(bytes.fromhex(bundle["script"])),
               "witness_items": len(bundle["witness"]),
               "witness_payload_bytes": sum(len(bytes.fromhex(w)) for w in bundle["witness"]),
+              "annex_bytes": args.annex_bytes,
               **{k: execution[k] for k in keys}, "limits": checks, "limits_pass": all(checks.values())}
     report_path = ROOT / "build/cost-report.json"
     report_path.write_text(json.dumps({**report, "opcodes": execution["opcodes"]}, indent=2) + "\n")

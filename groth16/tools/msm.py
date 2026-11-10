@@ -6,7 +6,7 @@ import hashlib
 import sys
 from pathlib import Path
 
-from py_ecc.bn128 import G1, add, multiply, neg
+from py_ecc.bn128 import FQ, G1, add, multiply, neg
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "risc0-succinct/tools"))
 from bn254 import P, R, g1, linear_combination
@@ -113,6 +113,48 @@ def build_msm_data(fixture: dict, c0: int, c1: int):
     raise RuntimeError("could not find non-degenerate affine MSM offsets")
 
 
+def build_shamir_data(fixture: dict, c0: int, c1: int):
+    fixed, ic3, ic4 = _fixed_base(fixture)
+    ic34 = add(ic3, ic4)
+    initial = multiply(fixed, pow(2, -128, R))
+    if ic34 is None or initial is None:
+        raise RuntimeError("Shamir constants contain infinity")
+    selected = {1: ic3, 2: ic4, 3: ic34}
+    point = initial
+    steps = []
+    for index in reversed(range(128)):
+        x, y = point
+        denominator = 2 * y
+        if not denominator:
+            raise RuntimeError("Shamir accumulator doubling is exceptional")
+        double_slope = 3 * x * x / denominator
+        point = add(point, point)
+        bit0, bit1 = (c0 >> index) & 1, (c1 >> index) & 1
+        choice = bit0 | (bit1 << 1)
+        add_slope = 0
+        if choice:
+            q = selected[choice]
+            dx = point[0] - q[0]
+            if not dx:
+                raise RuntimeError("Shamir accumulator addition is exceptional")
+            add_slope = int((point[1] - q[1]) / dx) % P
+            point = add(point, q)
+            if point is None:
+                raise RuntimeError("Shamir accumulator reached infinity")
+        steps.append({
+            "index": index,
+            "bit0": bit0,
+            "bit1": bit1,
+            "double_slope": int(double_slope) % P,
+            "add_slope": add_slope,
+        })
+    expected = add(fixed, add(multiply(ic3, c0), multiply(ic4, c1)))
+    if point != expected:
+        raise AssertionError("Shamir MSM does not match the claim linear combination")
+    return {"initial": initial, "steps": steps, "expected": expected,
+            "points": {key: value for key, value in selected.items()}}
+
+
 def _select_table_point(fc, table, digit):
     asm = fc.asm
     table_items = []
@@ -171,60 +213,185 @@ def _add_g1(fc, accumulator, point, slope):
     return next_x, next_y
 
 
+def _double_g1(fc, point, slope):
+    x, y = point
+    two_y = fc.op(FP, "add", y, y)
+    lhs = fc.multiply(slope, two_y)
+    x_squared = fc.op(FP, "square", x)
+    rhs_twice = fc.op(FP, "add", x_squared, x_squared)
+    rhs = fc.op(FP, "add", rhs_twice, x_squared)
+    fc.equal(lhs, rhs)
+    _check_nonzero(fc, two_y)
+
+    slope_squared = fc.op(FP, "square", slope)
+    twice_x = fc.op(FP, "add", x, x)
+    next_x = fc.op(FP, "sub", slope_squared, twice_x)
+    x_difference = fc.op(FP, "sub", x, next_x)
+    slope_difference = fc.multiply(slope, x_difference)
+    next_y = fc.op(FP, "sub", slope_difference, y)
+    fc.drop(two_y, lhs, x_squared, rhs_twice, rhs, slope_squared, twice_x)
+    fc.drop(x_difference, slope_difference, slope, x, y)
+    return next_x, next_y
+
+
+def _check_bit(asm, bit):
+    asm.fetch(bit[0], consume=False)
+    asm.push(0)
+    zero = V("shamir-bit-zero")
+    asm.op("NUMEQUAL", 2, zero)
+    asm.fetch(bit[0], consume=False)
+    asm.push(1)
+    one = V("shamir-bit-one")
+    asm.op("NUMEQUAL", 2, one)
+    valid = V("shamir-bit-valid")
+    asm.op("OR", 2, valid)
+    asm.fetch(valid, consume=True)
+    asm.op("VERIFY", 1)
+
+
+def _recompose_bit(asm, accumulator, bit):
+    doubled = asm.fetch(accumulator[0], consume=True)
+    asm.op("2MUL", 1, doubled)
+    asm.fetch(bit[0], consume=False)
+    result = V("shamir-scalar")
+    asm.op("ADD", 2, result)
+    return (result,)
+
+
+def _select_shamir_point(asm, bit0, bit1, points):
+    asm.fetch(bit0[0], consume=False)
+    asm.op("IF", 1)
+    asm.fetch(bit1[0], consume=False)
+    asm.op("IF", 1)
+    asm.s.int(1)
+    asm.s.int(int(points[3][0]))
+    asm.s.int(int(points[3][1]))
+    asm.s.op("ELSE")
+    asm.s.int(1)
+    asm.s.int(int(points[1][0]))
+    asm.s.int(int(points[1][1]))
+    asm.s.op("ENDIF")
+    asm.s.op("ELSE")
+    asm.fetch(bit1[0], consume=False)
+    asm.op("IF", 1)
+    asm.s.int(1)
+    asm.s.int(int(points[2][0]))
+    asm.s.int(int(points[2][1]))
+    asm.s.op("ELSE")
+    asm.s.int(0)
+    asm.s.int(int(points[1][0]))
+    asm.s.int(int(points[1][1]))
+    asm.s.op("ENDIF")
+    asm.s.op("ENDIF")
+    flag, qx, qy = V("shamir-add-flag"), V("shamir-qx"), V("shamir-qy")
+    asm.st.extend((flag, qx, qy))
+    return flag, ((qx,), (qy,))
+
+
+def _conditional_add_g1(fc, accumulator, point, flag, slope):
+    asm = fc.asm
+    asm.fetch(flag, consume=False)
+    asm.op("IF", 1)
+    before = asm.st.copy()
+    next_accumulator = _add_g1(fc, accumulator, point, slope)
+    asm.drop(flag)
+    true_state = asm.st.copy()
+    asm.s.op("ELSE")
+    asm.st = before
+    asm.drop(point[0][0])
+    asm.drop(point[1][0])
+    asm.drop(slope[0])
+    asm.drop(flag)
+    false_state = asm.st.copy()
+    if len(true_state) != len(false_state):
+        raise AssertionError("Shamir conditional branches have different stack effects")
+    asm.s.op("ENDIF")
+    asm.st = true_state
+    return next_accumulator
+
+
 def append_claim_msm(fc, values, layout, fixture: dict, claim_mode: str):
-    """Check claim digits, compute L in Script, and optionally return the digest bytes."""
+    """Check Shamir bits, compute L in Script, and optionally return digest bytes."""
     if claim_mode not in ("fixed", "witness"):
         raise ValueError(claim_mode)
     c0, c1 = values["claim"]
-    digits = values["digits"]
+    bits0, bits1 = values["bits"]
     expected_c0, expected_c1 = claim_scalars(fixture)
-
-    for scalar, start in zip((c0, c1), (0, WINDOWS), strict=True):
-        rebuilt = fc.asm.push(0, V("claim-recomposition"))
-        for index in range(WINDOWS):
-            digit = digits[start + index][0]
-            fc.asm.fetch(digit, consume=False)
-            fc.asm.push(16)
-            below16 = V("claim-digit-range")
-            fc.asm.op("LESSTHAN", 2, below16)
-            fc.asm.op("VERIFY", 1)
-
-            fc.asm.fetch(digit, consume=False)
-            if index:
-                fc.asm.push(WINDOW_BITS * index)
-                shifted = V("claim-digit-shift")
-                fc.asm.op("LSHIFT", 2, shifted)
-            else:
-                shifted = V("claim-digit-shift")
-            total = V("claim-recomposition")
-            fc.asm.raw(Script().op("ADD"), 2, total)
-            rebuilt = total
-        fc.asm.fetch(scalar[0], consume=False)
-        fc.asm.op("NUMEQUALVERIFY", 2)
 
     if claim_mode == "fixed":
         fc.equal_constant(c0, (expected_c0,))
         fc.equal_constant(c1, (expected_c1,))
 
-    data = build_msm_data(fixture, expected_c0, expected_c1)
+    data = build_shamir_data(fixture, expected_c0, expected_c1)
+    asm = fc.asm
+
+    def store(recomposed, accumulator):
+        state = (
+            *recomposed[0], *recomposed[1], *accumulator[0], *accumulator[1]
+        )
+        for index, value in enumerate(state):
+            fc.bounds.pop(value, None)
+            asm.fetch(value, consume=True)
+            if index >= 2:
+                asm.push(P)
+                canonical = V("shamir-state")
+                asm.op("MOD", 2, canonical)
+            asm.op("TOALTSTACK", 1)
+
+    def restore():
+        restored = []
+        for _ in range(4):
+            value = V("shamir-state")
+            asm.op("FROMALTSTACK", 0, value)
+            fc.bounds[value] = 1
+            restored.append(value)
+        state = tuple(reversed(restored))
+        return (state[0],), (state[1],), (state[2],), (state[3],)
+
+    recomposed0 = (asm.push(0, V("shamir-scalar")),)
+    recomposed1 = (asm.push(0, V("shamir-scalar")),)
     accumulator = (
-        fc.push((int(data["initial"][0]),), "msm-initial"),
-        fc.push((int(data["initial"][1]),), "msm-initial"),
+        fc.push((int(data["initial"][0]),), "shamir-initial"),
+        fc.push((int(data["initial"][1]),), "shamir-initial"),
     )
-    for index, (table, digit, slope) in enumerate(
-        zip(data["tables"], (entry[0] for entry in digits), values["msm_slopes"], strict=True)
+    store((recomposed0, recomposed1), accumulator)
+    step_ranges = []
+    for step, hints in zip(
+        values["shamir_steps"], data["steps"], strict=True
     ):
-        point = _select_table_point(fc, table, digit)
-        accumulator = _add_g1(fc, accumulator, point, slope)
+        step_start = len(asm.s.code)
+        recomposed0, recomposed1, accumulator_x, accumulator_y = restore()
+        accumulator = (accumulator_x, accumulator_y)
+        _check_bit(asm, step["bit0"])
+        _check_bit(asm, step["bit1"])
+        recomposed0 = _recompose_bit(asm, recomposed0, step["bit0"])
+        recomposed1 = _recompose_bit(asm, recomposed1, step["bit1"])
+        accumulator = _double_g1(fc, accumulator, step["double_slope"])
+        flag, point = _select_shamir_point(
+            asm, step["bit0"], step["bit1"], data["points"]
+        )
+        asm.drop(step["bit0"][0])
+        asm.drop(step["bit1"][0])
+        accumulator = _conditional_add_g1(
+            fc, accumulator, point, flag, step["add_slope"]
+        )
+        store((recomposed0, recomposed1), accumulator)
+        step_ranges.append((step_start, len(asm.s.code)))
+
+    recomposed0, recomposed1, accumulator_x, accumulator_y = restore()
+    fc.equal(recomposed0, c0)
+    fc.equal(recomposed1, c1)
+    accumulator = (accumulator_x, accumulator_y)
     fc.equal(accumulator[0], values["L"][0])
     fc.equal(accumulator[1], values["L"][1])
-    fc.drop(*accumulator)
+    fc.drop(recomposed0, recomposed1, *accumulator)
 
-    if claim_mode == "fixed":
-        return None
-    output = _claim_bytes(fc, values["claim_digest"], c0[0], c1[0])
-    fc.asm.op("TOALTSTACK", 1)
-    return output
+    if claim_mode == "witness":
+        output = _claim_bytes(fc, values["claim_digest"], c0[0], c1[0])
+        fc.asm.op("TOALTSTACK", 1)
+    else:
+        output = None
+    return output, step_ranges
 
 
 def _claim_bytes(fc, digest, c0, c1):

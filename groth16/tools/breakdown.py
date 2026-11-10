@@ -145,11 +145,11 @@ def witness_categories(witness):
             [coordinate for name in ("A", "B", "C") for coordinate in layout[name]]
         ),
         "slopes": indices(
-            layout["slopes"] + layout["msm_slopes"] + layout["subgroup_slopes"]
+            layout["slopes"] + layout["shamir_slopes"] + layout["subgroup_slopes"]
         ),
         "line_coefficients_plus_binding": indices(layout["line_constants"]),
         "residue_values": indices([layout[name] for name in ("c", "c_inv", "wi")]),
-        "window_digits": indices(layout["digits"]),
+        "shamir_bits": indices(layout["bits"][0] + layout["bits"][1]),
     }
     used = set()
     result = {}

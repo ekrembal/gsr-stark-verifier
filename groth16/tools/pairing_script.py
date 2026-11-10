@@ -76,6 +76,7 @@ class Witness:
     stage_ranges: dict[str, tuple[int, int]] = field(default_factory=dict)
     miller_step_ranges: list[tuple[int, int]] = field(default_factory=list)
     subgroup_step_ranges: list[tuple[int, int]] = field(default_factory=list)
+    shamir_step_ranges: list[tuple[int, int]] = field(default_factory=list)
 
 
 def build_witness(fixture: dict, claim_mode: str | None = None) -> Witness:
@@ -111,16 +112,13 @@ def build_witness(fixture: dict, claim_mode: str | None = None) -> Witness:
     layout["c_inv"] = add("c_inv", tower_from_fq12(residue_inverse))
     layout["wi"] = add("wi", tower_from_fq12(wi))
     subgroup_trace = None
+    shamir_data = None
     if claim_mode is not None:
-        from msm import build_msm_data, claim_scalars
+        from msm import build_shamir_data, claim_scalars
 
         c0, c1 = claim_scalars(fixture)
-        msm_data = build_msm_data(fixture, c0, c1)
+        shamir_data = build_shamir_data(fixture, c0, c1)
         layout["claim"] = (add("c0", [c0]), add("c1", [c1]))
-        digits = [(c0 >> (4 * i)) & 15 for i in range(32)]
-        digits += [(c1 >> (4 * i)) & 15 for i in range(32)]
-        layout["digits"] = [add("digit", [digit]) for digit in digits]
-        layout["msm_slopes"] = [add("msm_slope", [slope]) for slope in msm_data["slopes"]]
         if not is_g2_subgroup_x0(b):
             raise ValueError("fixture B point is outside the BN254 G2 subgroup")
         subgroup_trace = g2_x0_subgroup_trace(b)
@@ -235,6 +233,27 @@ def build_witness(fixture: dict, claim_mode: str | None = None) -> Witness:
             *(step["add_lines"] if step["has_add"] else ()),
         )
     ]
+    if shamir_data is not None:
+        bits = ([None] * 128, [None] * 128)
+        steps = [None] * 128
+        slopes = []
+        for step in reversed(shamir_data["steps"]):
+            double_slope = append_stack_values([step["double_slope"]])
+            add_slope = append_stack_values([step["add_slope"]])
+            bit0 = append_stack_values([step["bit0"]])
+            bit1 = append_stack_values([step["bit1"]])
+            slopes.extend((double_slope, add_slope))
+            bits[0][step["index"]] = bit0
+            bits[1][step["index"]] = bit1
+            steps[127 - step["index"]] = {
+                "bit0": bit0,
+                "bit1": bit1,
+                "double_slope": double_slope,
+                "add_slope": add_slope,
+            }
+        layout["bits"] = bits
+        layout["shamir_steps"] = steps
+        layout["shamir_slopes"] = slopes
     if subgroup_trace is not None:
         layout["subgroup_slopes"] = []
         layout["subgroup_steps"] = [None] * len(subgroup_trace["steps"])
@@ -260,47 +279,88 @@ def build_witness(fixture: dict, claim_mode: str | None = None) -> Witness:
 class FieldCode:
     def __init__(self, asm: Asm):
         self.asm = asm
+        self.bounds = {}
+
+    def _bound(self, value):
+        return self.bounds.get(value, 1)
+
+    def _fetch(self, value, consume: bool, reduce: bool = False):
+        bound = self._bound(value)
+        fetched = self.asm.fetch(value, consume)
+        if consume:
+            self.bounds.pop(value, None)
+        elif fetched is not value:
+            self.bounds[fetched] = bound
+        if reduce and bound > 1:
+            self.asm.push(P)
+            reduced = V(value.tag)
+            self.asm.op("MOD", 2, reduced)
+            self.bounds[reduced] = 1
+            return reduced
+        return fetched
 
     def op(self, field, operation: str, *operands, consume: bool | tuple[bool, ...] = False):
         flags = (consume,) * len(operands) if isinstance(consume, bool) else consume
         if len(flags) != len(operands):
             raise ValueError("one consume flag is required per operand")
+        bounds = tuple(max((self._bound(value) for value in operand), default=1)
+                       for operand in operands)
+        reduce_inputs = operation in ("mul", "square", "sparse_mul")
         for operand, consume_operand in zip(operands, flags, strict=True):
             for value in operand:
-                self.asm.fetch(value, consume_operand)
+                self._fetch(value, consume_operand, reduce_inputs)
+        output_bound = bounds[0] + bounds[1] if operation in ("add", "sub") else 1
+        if operation in ("add", "sub") and (output_bound * P - 1).bit_length() > 520 * 8:
+            raise OverflowError("lazy field value exceeds the Script numeric-element limit")
         output = tuple(V(field.name) for _ in range(field.degree))
-        self.asm.raw(field.emit(operation), sum(len(x) for x in operands), *output)
+        self.asm.raw(
+            field.emit(operation, input_bounds=bounds[:2]),
+            sum(len(x) for x in operands),
+            *output,
+        )
+        for value in output:
+            self.bounds[value] = output_bound
         return output
 
     def frobenius(self, value, power: int, consume: bool = False):
         for item in value:
-            self.asm.fetch(item, consume)
+            self._fetch(item, consume, reduce=True)
         output = tuple(V("Fp12") for _ in range(FP12.degree))
         self.asm.raw(FP12.emit_frobenius(power), len(value), *output)
+        for item in output:
+            self.bounds[item] = 1
         return output
 
     def frobenius_fp2(self, value, power: int = 1, consume: bool = False):
         for item in value:
-            self.asm.fetch(item, consume)
+            self._fetch(item, consume, reduce=True)
         output = tuple(V("Fp2") for _ in range(FP2.degree))
         self.asm.raw(FP2.emit_frobenius(power), len(value), *output)
+        for item in output:
+            self.bounds[item] = 1
         return output
 
     def copy(self, value):
-        return tuple(self.asm.pick(item) for item in value)
+        result = tuple(self.asm.pick(item) for item in value)
+        for source, target in zip(value, result, strict=True):
+            self.bounds[target] = self._bound(source)
+        return result
 
     def push(self, value, tag: str):
-        return tuple(self.asm.push(int(x) % P, V(tag)) for x in value)
+        result = tuple(self.asm.push(int(x) % P, V(tag)) for x in value)
+        for item in result:
+            self.bounds[item] = 1
+        return result
 
     def equal(self, left, right, consume_left: bool = False, consume_right: bool = False):
         for a, b in zip(left, right, strict=True):
-            self.asm.fetch(a, consume_left)
-            self.asm.fetch(b, consume_right)
+            self._fetch(a, consume_left, reduce=True)
+            self._fetch(b, consume_right, reduce=True)
             self.asm.op("NUMEQUALVERIFY", 2)
 
     def equal_constant(self, left, right, consume: bool = False):
         for value, constant in zip(left, right, strict=True):
-            self.asm.fetch(value, consume)
+            self._fetch(value, consume, reduce=True)
             self.asm.push(int(constant) % P)
             self.asm.op("NUMEQUALVERIFY", 2)
 
@@ -409,12 +469,14 @@ class FieldCode:
         rhs = slope_x + bias_y
         output = tuple(V("Fp12") for _ in range(FP12.degree))
         for value in (*accumulator, *rhs):
-            self.asm.fetch(value, consume=True)
+            self._fetch(value, consume=True, reduce=True)
         self.asm.raw(
             FP12.emit_line_mul(LINE_INDICES),
             FP12.degree + len(LINE_INDICES),
             *output,
         )
+        for item in output:
+            self.bounds[item] = 1
         self.drop(slope_x, bias_y)
         return output
 
@@ -470,8 +532,9 @@ def _layout_vars(layout: dict):
     )
     if "claim" in layout:
         index_groups.extend(layout["claim"])
-        index_groups.extend(layout["digits"])
-        index_groups.extend(layout["msm_slopes"])
+        index_groups.extend(layout["bits"][0])
+        index_groups.extend(layout["bits"][1])
+        index_groups.extend(layout["shamir_slopes"])
         index_groups.extend(layout["subgroup_slopes"])
     if "claim_digest" in layout:
         index_groups.append([layout["claim_digest"]])
@@ -514,8 +577,20 @@ def _layout_vars(layout: dict):
     if "claim" in layout:
         result.update({
             "claim": tuple(vector(part) for part in layout["claim"]),
-            "digits": [vector(part) for part in layout["digits"]],
-            "msm_slopes": [vector(part) for part in layout["msm_slopes"]],
+            "bits": tuple(
+                [vector(part) for part in scalar_bits]
+                for scalar_bits in layout["bits"]
+            ),
+            "shamir_steps": [
+                {
+                    name: vector(step[name])
+                    for name in ("bit0", "bit1", "double_slope", "add_slope")
+                }
+                for step in layout["shamir_steps"]
+            ],
+            "shamir_slopes": [
+                vector(part) for part in layout["shamir_slopes"]
+            ],
             "subgroup_slopes": [vector(part) for part in layout["subgroup_slopes"]],
             "subgroup_steps": [
                 {
@@ -692,8 +767,14 @@ def _g2_psi(fc: FieldCode, point, power: int):
 
 def _g2_subgroup_check(fc: FieldCode, values):
     def store(point, base):
-        for value in (*point[0], *point[1], *base[0], *base[1]):
+        state = (*point[0], *point[1], *base[0], *base[1])
+        for index, value in enumerate(state):
+            fc.bounds.pop(value, None)
             fc.asm.fetch(value, consume=True)
+            if index < 4:
+                fc.asm.push(P)
+                canonical = V("subgroup-state")
+                fc.asm.op("MOD", 2, canonical)
             fc.asm.op("TOALTSTACK", 1)
 
     def restore():
@@ -701,6 +782,7 @@ def _g2_subgroup_check(fc: FieldCode, values):
         for _ in range(8):
             value = V("subgroup-state")
             fc.asm.op("FROMALTSTACK", 0, value)
+            fc.bounds[value] = 1
             restored.append(value)
         state = tuple(reversed(restored))
         return (state[:2], state[2:4]), (state[4:6], state[6:8])
@@ -752,7 +834,7 @@ def _input_checks(fc: FieldCode, values, stage_ranges=None):
         *values["evals"]["L"], *values["evals"]["C"], *values["evals"]["A"],
         *values["slopes"],
         values["c"], values["c_inv"], values["wi"],
-        *values["msm_slopes"], *values["subgroup_slopes"],
+        *values["shamir_slopes"], *values["subgroup_slopes"],
     ]
     _check_canonical(fc, fields)
     for name in ("A", "C", "L"):
@@ -795,7 +877,9 @@ def build_pairing_script(fixture: dict, claim_mode: str | None = None):
     if claim_mode is not None:
         from msm import append_claim_msm
 
-        claim_output = append_claim_msm(fc, values, witness.layout, fixture, claim_mode)
+        claim_output, witness.shamir_step_ranges = append_claim_msm(
+            fc, values, witness.layout, fixture, claim_mode
+        )
     else:
         claim_output = None
     msm_end = len(asm.s.code)
@@ -867,8 +951,13 @@ def build_pairing_script(fixture: dict, claim_mode: str | None = None):
 
     def store_miller_state(accumulator, point, line_hash):
         state = (*accumulator, *point[0], *point[1])
-        for value in state:
+        for index, value in enumerate(state):
+            fc.bounds.pop(value, None)
             asm.fetch(value, consume=True)
+            if index >= FP12.degree:
+                asm.push(P)
+                canonical = V("miller-state")
+                asm.op("MOD", 2, canonical)
             asm.op("TOALTSTACK", 1)
         asm.fetch(line_hash, consume=True)
         asm.op("TOALTSTACK", 1)
@@ -880,6 +969,7 @@ def build_pairing_script(fixture: dict, claim_mode: str | None = None):
         for _ in range(FP12.degree + 4):
             value = V("miller-state")
             asm.op("FROMALTSTACK", 0, value)
+            fc.bounds[value] = 1
             restored.append(value)
         accumulator = tuple(reversed(restored[4:]))
         point = tuple(reversed(restored[:4]))
@@ -983,7 +1073,7 @@ def build_pairing_script(fixture: dict, claim_mode: str | None = None):
     else:
         asm.push(1)
     if claim_mode is not None:
-        witness.stage_ranges["msm_window_tables"] = (msm_start, msm_end)
+        witness.stage_ranges["claim_msm"] = (msm_start, msm_end)
     else:
         witness.stage_ranges["input_checks"] = (input_start, input_end)
     witness.stage_ranges["miller"] = (msm_end, miller_end)

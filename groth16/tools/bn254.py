@@ -21,6 +21,19 @@ from py_ecc.bn128.bn128_pairing import (
 
 P = bn128.field_modulus
 R = curve_order
+G2_X0 = 4965661367192848881
+PSI_X = FQ2(
+    [
+        21575463638280843010398324269430826099269044274347216827212613867836435027261,
+        10307601595873709700152284273816112264069230130616436755625194854815875713954,
+    ]
+)
+PSI_Y = FQ2(
+    [
+        2821565182194536844548159561693502659359617185244120367078079554186484126554,
+        3505843767911556378687030309984248845540243509899259641013678093033130930403,
+    ]
+)
 LAMBDA = int(
     "10486551571378427818905133077457505975146652579011797175399169355881771981095211883813744499745558409789005132135496770941292989421431235276221147148858384772096778432243207188878598198850276842458913349817007302752534892127325269"
 )
@@ -33,6 +46,57 @@ M = LAMBDA // R
 MM = M // 3
 MM_INV = pow(MM, -1, R * H)
 COFACTOR_CUBIC = 3 ** (S - 1) * T
+
+
+def sqrt_mod(value: int) -> int | None:
+    value %= P
+    if value == 0:
+        return 0
+    if pow(value, (P - 1) // 2, P) != 1:
+        return None
+    q, s = P - 1, 0
+    while q % 2 == 0:
+        q //= 2
+        s += 1
+    z = 2
+    while pow(z, (P - 1) // 2, P) != P - 1:
+        z += 1
+    m, c, t, root = s, pow(z, q, P), pow(value, q, P), pow(value, (q + 1) // 2, P)
+    while t != 1:
+        i, t2 = 1, t * t % P
+        while t2 != 1:
+            t2 = t2 * t2 % P
+            i += 1
+        b = pow(c, 1 << (m - i - 1), P)
+        root = root * b % P
+        c = b * b % P
+        t = t * c % P
+        m = i
+    return root
+
+
+def sqrt_fp2(value: FQ2) -> FQ2 | None:
+    a, b = map(int, value.coeffs)
+    norm = sqrt_mod((a * a + b * b) % P)
+    if norm is None:
+        return None
+    inverse_two = pow(2, -1, P)
+    for signed_norm in (norm, -norm % P):
+        real = sqrt_mod((a + signed_norm) * inverse_two)
+        if real is None:
+            continue
+        if real:
+            imaginary = b * pow(2 * real, -1, P) % P
+            candidate = FQ2([real, imaginary])
+            if candidate * candidate == value:
+                return candidate
+        elif b == 0:
+            imaginary = sqrt_mod((signed_norm - a) * inverse_two % P)
+            if imaginary is not None:
+                candidate = FQ2([0, imaginary])
+                if candidate * candidate == value:
+                    return candidate
+    return None
 
 
 def split_digest(digest_hex: str) -> tuple[int, int]:
@@ -50,6 +114,31 @@ def g2(point: list[list[str | int]]):
     return FQ2([int(point[0][1]), int(point[0][0])]), FQ2(
         [int(point[1][1]), int(point[1][0])]
     )
+
+
+def psi_g2(point, power: int = 1):
+    if power < 0:
+        raise ValueError("Frobenius power must be nonnegative")
+    if point is None:
+        return None
+    x, y = point
+    for _ in range(power):
+        x, y = x**P * PSI_X, y**P * PSI_Y
+    return x, y
+
+
+def is_g2_subgroup_x0(point) -> bool:
+    """Check gnark-crypto's BN254 G2 subgroup relation using the 63-bit x0."""
+    if point is None:
+        return True
+    x0_point = multiply(point, G2_X0)
+    x0_plus_one = add(x0_point, point)
+    psi_x0 = psi_g2(x0_point)
+    psi2_x0 = psi_g2(psi_x0)
+    left = add(add(x0_plus_one, psi_x0), psi2_x0)
+    doubled_x0 = add(x0_point, x0_point)
+    right = psi_g2(doubled_x0, 3)
+    return left == right
 
 
 def add_g1(points):

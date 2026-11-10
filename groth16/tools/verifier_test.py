@@ -5,13 +5,13 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "risc0-succinct/tools"))
-from bn254 import P
+from bn254 import G2_X0, P, is_g2_subgroup_x0, sqrt_fp2
 from gsr import BITCOIN_UTIL, EVAL_BUDGET, Script, num
 import gsr_tooling
 from msm import claim_scalars
-from pairing_ref import G2_SUBGROUP_SCALAR, PSI_X, PSI_Y
+from pairing_ref import g2_x0_subgroup_trace
 from pairing_script import build_pairing_script
-from py_ecc.bn128 import FQ2, b2, is_on_curve, multiply
+from py_ecc.bn128 import FQ2, b2, is_on_curve
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -54,57 +54,6 @@ def compressed_script(script):
     return result
 
 
-def sqrt_mod(value):
-    value %= P
-    if value == 0:
-        return 0
-    if pow(value, (P - 1) // 2, P) != 1:
-        return None
-    q, s = P - 1, 0
-    while q % 2 == 0:
-        q //= 2
-        s += 1
-    z = 2
-    while pow(z, (P - 1) // 2, P) != P - 1:
-        z += 1
-    m, c, t, root = s, pow(z, q, P), pow(value, q, P), pow(value, (q + 1) // 2, P)
-    while t != 1:
-        i, t2 = 1, t * t % P
-        while t2 != 1:
-            t2 = t2 * t2 % P
-            i += 1
-        b = pow(c, 1 << (m - i - 1), P)
-        root = root * b % P
-        c = b * b % P
-        t = t * c % P
-        m = i
-    return root
-
-
-def sqrt_fp2(value):
-    a, b = map(int, value.coeffs)
-    norm = sqrt_mod((a * a + b * b) % P)
-    if norm is None:
-        return None
-    inverse_two = pow(2, -1, P)
-    for signed_norm in (norm, -norm % P):
-        real = sqrt_mod((a + signed_norm) * inverse_two)
-        if real is None:
-            continue
-        if real:
-            imaginary = b * pow(2 * real, -1, P) % P
-            candidate = FQ2([real, imaginary])
-            if candidate * candidate == value:
-                return candidate
-        elif b == 0:
-            imaginary = sqrt_mod((signed_norm - a) * inverse_two % P)
-            if imaginary is not None:
-                candidate = FQ2([0, imaginary])
-                if candidate * candidate == value:
-                    return candidate
-    return None
-
-
 def point_outside_g2_subgroup():
     for x0 in range(1, 100):
         x = FQ2([x0, x0 + 1])
@@ -114,10 +63,21 @@ def point_outside_g2_subgroup():
         point = (x, y)
         if not is_on_curve(point, b2):
             continue
-        psi = (x**P * PSI_X, y**P * PSI_Y)
-        if multiply(point, G2_SUBGROUP_SCALAR) != psi:
+        if not is_g2_subgroup_x0(point):
             return point
     raise RuntimeError("failed to find a twist point outside G2 subgroup")
+
+
+def subgroup_slope_values(trace):
+    slopes = []
+    for step_index in reversed(range(len(trace["steps"]))):
+        step = trace["steps"][step_index]
+        slopes.extend((step["double_slope"], step["add_slope"]))
+    slopes.extend(
+        trace["relations"][name]
+        for name in ("double_x0", "psi2_x0", "psi_x0", "x0_plus_one")
+    )
+    return slopes
 
 
 def main():
@@ -130,6 +90,19 @@ def main():
     if response.get("error"):
         raise RuntimeError(response["error"])
     fixed_varops = EVAL_BUDGET - response["varops-budget-remaining"]
+    if len(witness.subgroup_step_ranges) != G2_X0.bit_length() - 1:
+        raise AssertionError("incorrect number of x0 subgroup scalar steps")
+    step_blocks = {}
+    for bit, (start, end) in zip(
+        bin(G2_X0)[3:], witness.subgroup_step_ranges, strict=True
+    ):
+        kind = "double" if bit == "0" else "double_add"
+        block = bytes(script.code[start:end])
+        if kind in step_blocks and step_blocks[kind] != block:
+            raise AssertionError(f"{kind} subgroup steps are not byte-identical")
+        step_blocks[kind] = block
+    if set(step_blocks) != {"double", "double_add"}:
+        raise AssertionError("expected double and double-add subgroup macros")
     compressed_fixed = compressed_script(script)
     compressed_result = evaluate(compressed_fixed, witness.stack)
     if compressed_result.returncode or json.loads(compressed_result.stdout).get("error"):
@@ -147,6 +120,16 @@ def main():
     ):
         for index, value in zip(target, coordinate.coeffs, strict=True):
             outside_witness[index] = num(int(value))
+    outside_trace = g2_x0_subgroup_trace(outside)
+    if outside_trace["accepts"]:
+        raise AssertionError("test point unexpectedly satisfies the x0 relation")
+    for indices, slope in zip(
+        witness.layout["subgroup_slopes"],
+        subgroup_slope_values(outside_trace),
+        strict=True,
+    ):
+        for index, value in zip(indices, slope, strict=True):
+            outside_witness[index] = num(value)
     outside_result = evaluate(script, outside_witness)
     if outside_result.returncode == 0 and not json.loads(outside_result.stdout).get("error"):
         raise AssertionError("on-twist B point outside G2 subgroup was accepted")
@@ -208,6 +191,7 @@ def main():
         "compressed_witness": "PASS",
         "compression_equivalence": "PASS",
         "claim_witness_digest_bytes": fixture["claim_digest"],
+        "subgroup_step_macros": len(step_blocks),
         "tampered_A_B_C": "REJECTED",
         "out_of_subgroup_B": "REJECTED",
         "noncanonical_field": "REJECTED",

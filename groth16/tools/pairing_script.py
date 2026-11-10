@@ -10,17 +10,26 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "risc0-succinct/tools"))
 from gsr import Asm, Script, V, num
 
-from bn254 import FQ, FQ12, P, W, compute_c_wi, g1, g2, linear_combination
+from bn254 import (
+    FQ,
+    FQ12,
+    P,
+    W,
+    compute_c_wi,
+    g1,
+    g2,
+    is_g2_subgroup_x0,
+    linear_combination,
+)
 from fields import FP, FP2, FP12
 from pairing_ref import (
     ATE_LOOP_COUNT,
-    G2_SUBGROUP_SCALAR,
     LINE_INDICES,
     PSI_X,
     PSI_Y,
     _fq12_from_tower,
     fixture_pairing,
-    g2_scalar_trace,
+    g2_x0_subgroup_trace,
     prepare_g2,
 )
 
@@ -66,6 +75,7 @@ class Witness:
     slopes: tuple[tuple[int, int], ...]
     stage_ranges: dict[str, tuple[int, int]] = field(default_factory=dict)
     miller_step_ranges: list[tuple[int, int]] = field(default_factory=list)
+    subgroup_step_ranges: list[tuple[int, int]] = field(default_factory=list)
 
 
 def build_witness(fixture: dict, claim_mode: str | None = None) -> Witness:
@@ -100,6 +110,7 @@ def build_witness(fixture: dict, claim_mode: str | None = None) -> Witness:
     layout["c"] = add("c", tower_from_fq12(residue))
     layout["c_inv"] = add("c_inv", tower_from_fq12(residue_inverse))
     layout["wi"] = add("wi", tower_from_fq12(wi))
+    subgroup_trace = None
     if claim_mode is not None:
         from msm import build_msm_data, claim_scalars
 
@@ -110,12 +121,11 @@ def build_witness(fixture: dict, claim_mode: str | None = None) -> Witness:
         digits += [(c1 >> (4 * i)) & 15 for i in range(32)]
         layout["digits"] = [add("digit", [digit]) for digit in digits]
         layout["msm_slopes"] = [add("msm_slope", [slope]) for slope in msm_data["slopes"]]
-        subgroup_point, subgroup_slopes = g2_scalar_trace(b, G2_SUBGROUP_SCALAR)
-        psi_x = b[0] ** P * PSI_X
-        psi_y = b[1] ** P * PSI_Y
-        if subgroup_point != (psi_x, psi_y):
+        if not is_g2_subgroup_x0(b):
             raise ValueError("fixture B point is outside the BN254 G2 subgroup")
-        layout["subgroup_slopes"] = [add("subgroup_slope", slope) for slope in subgroup_slopes]
+        subgroup_trace = g2_x0_subgroup_trace(b)
+        if not subgroup_trace["accepts"]:
+            raise ValueError("fixture B point fails the x0 subgroup relation")
 
     def line_values(line):
         return [
@@ -225,6 +235,24 @@ def build_witness(fixture: dict, claim_mode: str | None = None) -> Witness:
             *(step["add_lines"] if step["has_add"] else ()),
         )
     ]
+    if subgroup_trace is not None:
+        layout["subgroup_slopes"] = []
+        layout["subgroup_steps"] = [None] * len(subgroup_trace["steps"])
+        for step_index in reversed(range(len(subgroup_trace["steps"]))):
+            step = subgroup_trace["steps"][step_index]
+            double_slope = append_stack_values(step["double_slope"])
+            add_slope = append_stack_values(step["add_slope"])
+            layout["subgroup_slopes"].extend((double_slope, add_slope))
+            layout["subgroup_steps"][step_index] = {
+                "double_slope": double_slope,
+                "add_slope": add_slope,
+                "has_add": step["has_add"],
+            }
+        layout["subgroup_relations"] = {}
+        for name in ("double_x0", "psi2_x0", "psi_x0", "x0_plus_one"):
+            slope = append_stack_values(subgroup_trace["relations"][name])
+            layout["subgroup_slopes"].append(slope)
+            layout["subgroup_relations"][name] = slope
     layout["line_hash"] = line_hash
     return Witness(stack, layout, b_trace.slope_witnesses)
 
@@ -489,6 +517,18 @@ def _layout_vars(layout: dict):
             "digits": [vector(part) for part in layout["digits"]],
             "msm_slopes": [vector(part) for part in layout["msm_slopes"]],
             "subgroup_slopes": [vector(part) for part in layout["subgroup_slopes"]],
+            "subgroup_steps": [
+                {
+                    "double_slope": vector(step["double_slope"]),
+                    "add_slope": vector(step["add_slope"]),
+                    "has_add": step["has_add"],
+                }
+                for step in layout["subgroup_steps"]
+            ],
+            "subgroup_relations": {
+                name: vector(indices)
+                for name, indices in layout["subgroup_relations"].items()
+            },
         })
     if "claim_digest" in layout:
         result["claim_digest"] = variables[layout["claim_digest"]]
@@ -632,35 +672,77 @@ def _g2_add_point(fc: FieldCode, point, other, slope):
     return next_x, next_y
 
 
-def _g2_subgroup_check(fc: FieldCode, values):
-    point = _copy_point(fc, values["B"])
-    slope_index = 0
-    for digit in bin(G2_SUBGROUP_SCALAR)[3:]:
-        point = _g2_double_point(fc, point, values["subgroup_slopes"][slope_index])
-        slope_index += 1
-        if digit == "1":
-            point = _g2_add_point(
-                fc, point, values["B"], values["subgroup_slopes"][slope_index]
-            )
-            slope_index += 1
+def _g2_psi(fc: FieldCode, point, power: int):
+    x, y = point
+    for _ in range(power):
+        x = fc.fp2_mul(
+            fc.frobenius_fp2(x),
+            fc.push_fp2(PSI_X),
+            consume_left=True,
+            consume_right=True,
+        )
+        y = fc.fp2_mul(
+            fc.frobenius_fp2(y),
+            fc.push_fp2(PSI_Y),
+            consume_left=True,
+            consume_right=True,
+        )
+    return x, y
 
-    psi_x = fc.fp2_mul(
-        fc.frobenius_fp2(values["B"][0]),
-        fc.push_fp2(PSI_X),
-        consume_left=True,
-        consume_right=True,
+
+def _g2_subgroup_check(fc: FieldCode, values):
+    def store(point, base):
+        for value in (*point[0], *point[1], *base[0], *base[1]):
+            fc.asm.fetch(value, consume=True)
+            fc.asm.op("TOALTSTACK", 1)
+
+    def restore():
+        restored = []
+        for _ in range(8):
+            value = V("subgroup-state")
+            fc.asm.op("FROMALTSTACK", 0, value)
+            restored.append(value)
+        state = tuple(reversed(restored))
+        return (state[:2], state[2:4]), (state[4:6], state[6:8])
+
+    base = _copy_point(fc, values["B"])
+    point = _copy_point(fc, values["B"])
+    store(point, base)
+    step_ranges = []
+    for step in values["subgroup_steps"]:
+        step_start = len(fc.asm.s.code)
+        point, base = restore()
+        point = _g2_double_point(fc, point, step["double_slope"])
+        if step["has_add"]:
+            point = _g2_add_point(fc, point, base, step["add_slope"])
+        else:
+            fc.drop(step["add_slope"])
+        store(point, base)
+        step_ranges.append((step_start, len(fc.asm.s.code)))
+
+    point, base = restore()
+    psi_x0 = _g2_psi(fc, point, 1)
+    psi2_x0 = _g2_psi(fc, point, 2)
+    x0_plus_one = _g2_add_point(
+        fc,
+        _copy_point(fc, point),
+        base,
+        values["subgroup_relations"]["x0_plus_one"],
     )
-    psi_y = fc.fp2_mul(
-        fc.frobenius_fp2(values["B"][1]),
-        fc.push_fp2(PSI_Y),
-        consume_left=True,
-        consume_right=True,
+    left = _g2_add_point(
+        fc, x0_plus_one, psi_x0, values["subgroup_relations"]["psi_x0"]
     )
-    if slope_index != len(values["subgroup_slopes"]):
-        raise AssertionError("incorrect G2 subgroup slope count")
-    fc.equal(point[0], psi_x)
-    fc.equal(point[1], psi_y)
-    fc.drop(point[0], point[1], psi_x, psi_y)
+    left = _g2_add_point(
+        fc, left, psi2_x0, values["subgroup_relations"]["psi2_x0"]
+    )
+    doubled_x0 = _g2_double_point(
+        fc, point, values["subgroup_relations"]["double_x0"]
+    )
+    right = _g2_psi(fc, doubled_x0, 3)
+    fc.equal(left[0], right[0])
+    fc.equal(left[1], right[1])
+    fc.drop(*base, *psi_x0, *psi2_x0, *left, *doubled_x0, *right)
+    return step_ranges
 
 
 def _input_checks(fc: FieldCode, values, stage_ranges=None):
@@ -688,11 +770,12 @@ def _input_checks(fc: FieldCode, values, stage_ranges=None):
     fc.equal(y_squared, curve_rhs)
     fc.drop(y_squared, x_squared, x_cubed, twist_b, curve_rhs)
     subgroup_start = len(fc.asm.s.code)
-    _g2_subgroup_check(fc, values)
+    subgroup_step_ranges = _g2_subgroup_check(fc, values)
     subgroup_end = len(fc.asm.s.code)
     if stage_ranges is not None:
         stage_ranges["input_checks"] = (input_start, subgroup_start)
         stage_ranges["g2_subgroup"] = (subgroup_start, subgroup_end)
+    return subgroup_step_ranges
 
 
 def build_pairing_script(fixture: dict, claim_mode: str | None = None):
@@ -704,7 +787,9 @@ def build_pairing_script(fixture: dict, claim_mode: str | None = None):
     vk = fixture["verifying_key"]
     input_start = len(asm.s.code)
     if claim_mode is not None:
-        _input_checks(fc, values, witness.stage_ranges)
+        witness.subgroup_step_ranges = _input_checks(
+            fc, values, witness.stage_ranges
+        )
     input_end = len(asm.s.code)
     msm_start = input_end
     if claim_mode is not None:

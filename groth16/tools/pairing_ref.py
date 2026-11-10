@@ -8,7 +8,7 @@ from py_ecc import bn128
 from py_ecc.bn128 import FQ, FQ2, FQ12, add, curve_order, is_on_curve, multiply, neg
 from py_ecc.bn128.bn128_pairing import final_exponentiate
 
-from bn254 import P, g1, g2, linear_combination
+from bn254 import G2_X0, P, PSI_X, PSI_Y, g1, g2, linear_combination
 from fields import FP12
 
 ATE_LOOP_COUNT = (
@@ -16,24 +16,12 @@ ATE_LOOP_COUNT = (
     -1, 0, 0, 0, 0, -1, 0, 0, 1, 0, -1, 0, 0, 1, 0, 0, 0, 0, 0, -1, 0, 0, -1, 0, 1,
     0, -1, 0, 0, 0, -1, 0, -1, 0, 0, 0, 1, 0, 1, 1,
 )
-LOOP_X = 6 * 4965661367192848881 + 2
+LOOP_X = 6 * G2_X0 + 2
 assert len(ATE_LOOP_COUNT) == 65
 assert sum(digit << i for i, digit in enumerate(ATE_LOOP_COUNT)) == LOOP_X
 
-PSI_X = FQ2(
-    [
-        21575463638280843010398324269430826099269044274347216827212613867836435027261,
-        10307601595873709700152284273816112264069230130616436755625194854815875713954,
-    ]
-)
-PSI_Y = FQ2(
-    [
-        2821565182194536844548159561693502659359617185244120367078079554186484126554,
-        3505843767911556378687030309984248845540243509899259641013678093033130930403,
-    ]
-)
 LINE_INDICES = (6, 7, 8, 9)
-G2_SUBGROUP_SCALAR = 17887900258952609094 + (8020209761171036667 << 64)
+G2_SUBGROUP_SCALAR = 6 * G2_X0**2
 
 
 @dataclass(frozen=True)
@@ -124,6 +112,43 @@ def g2_scalar_trace(q, scalar: int):
             t, line = _add(t, q)
             slopes.append((int(line.slope.coeffs[0]), int(line.slope.coeffs[1])))
     return t, tuple(slopes)
+
+
+def g2_x0_subgroup_trace(q):
+    """Return fixed-layout slope hints for gnark's 63-bit G2 relation."""
+    steps = []
+    t = q
+    for digit in bin(G2_X0)[3:]:
+        t, double_line = _double(t)
+        double_slope = tuple(map(int, double_line.slope.coeffs))
+        add_slope = (0, 0)
+        if digit == "1":
+            t, add_line = _add(t, q)
+            add_slope = tuple(map(int, add_line.slope.coeffs))
+        steps.append({
+            "double_slope": double_slope,
+            "add_slope": add_slope,
+            "has_add": digit == "1",
+        })
+
+    x0_plus_one, plus_line = _add(t, q)
+    psi_x0 = _frob_g2(t)
+    psi2_x0 = _frob_g2(psi_x0)
+    left_one, psi_one_line = _add(x0_plus_one, psi_x0)
+    left, psi_two_line = _add(left_one, psi2_x0)
+    doubled_x0, double_x0_line = _double(t)
+    right = _frob_g2(_frob_g2(_frob_g2(doubled_x0)))
+    relations = {
+        "x0_plus_one": tuple(map(int, plus_line.slope.coeffs)),
+        "psi_x0": tuple(map(int, psi_one_line.slope.coeffs)),
+        "psi2_x0": tuple(map(int, psi_two_line.slope.coeffs)),
+        "double_x0": tuple(map(int, double_x0_line.slope.coeffs)),
+    }
+    return {
+        "steps": steps,
+        "relations": relations,
+        "accepts": left == right,
+    }
 
 
 def _fq12_from_tower(coefficients: tuple[int, ...]) -> FQ12:

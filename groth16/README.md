@@ -8,16 +8,16 @@ using the pinned GSR meter built against Bitcoin Core
 
 | Metric | Fixed claim | Witness claim |
 |---|---:|---:|
-| Committed compressed Script | 80,458 B | 80,672 B |
-| Unrolled Script | 1,490,285 B | 1,490,840 B |
-| Witness items / payload | 2,368 / 54,087 B | 2,369 / 54,119 B |
-| Transaction weight | 137,333 WU | 137,580 WU |
-| Varops budget | 1,372,830,000 | 1,375,300,000 |
-| Varops, compressed execution | 1,170,939,207 | 1,171,753,157 |
-| GSR macro references | 158,452 | 158,681 |
+| Committed compressed Script | 79,884 B | 80,100 B |
+| Unrolled Script | 1,322,069 B | 1,322,624 B |
+| Witness items / payload | 2,234 / 47,561 B | 2,235 / 47,593 B |
+| Transaction weight | 130,099 WU | 130,348 WU |
+| Varops budget | 1,300,490,000 | 1,302,980,000 |
+| Varops, compressed execution | 1,065,748,388 | 1,066,553,068 |
+| GSR macro references | 142,010 | 142,238 |
 | SHA-256 calls / input bytes | 64 / 35,695 B | 64 / 35,695 B |
-| Peak stack entries | 2,401 | 2,402 |
-| Peak stack payload | 55,050 B | 55,082 B |
+| Peak stack entries | 2,271 | 2,272 |
+| Peak stack payload | 48,652 B | 48,684 B |
 | Largest stack element | 824 B | 824 B |
 | Interpreter result | Pass (`ok=true`) | Pass (`ok=true`) |
 | Final stack contract | Exactly `true` | One truthy 32-byte claim digest |
@@ -29,7 +29,7 @@ not the single-byte value `true`.
 | Limit | Fixed claim | Witness claim | Limit |
 |---|---:|---:|---:|
 | Standard transaction weight | Pass | Pass | 400,000 WU |
-| Varops budget | Pass | Pass | 1,372,830,000 / 1,375,300,000 |
+| Varops budget | Pass | Pass | 1,300,490,000 / 1,302,980,000 |
 | Unrolled Script size | Pass | Pass | 4,000,000 B |
 | Peak stack entries | Pass | Pass | 32,768 |
 | Peak live stack payload | Pass | Pass | 8,000,000 B |
@@ -39,12 +39,12 @@ not the single-byte value `true`.
 
 | Comparison | Weight | Varops | Committed verifier | Witness |
 |---|---:|---:|---:|---:|
-| This Groth16 verifier, fixed claim | 137,333 WU | 1,170,939,207 | 80,458 B | 54,087 B |
-| This Groth16 verifier, witness claim | 137,580 WU | 1,171,753,157 | 80,672 B | 54,119 B |
+| This Groth16 verifier, fixed claim | 130,099 WU | 1,065,748,388 | 79,884 B | 47,561 B |
+| This Groth16 verifier, witness claim | 130,348 WU | 1,066,553,068 | 80,100 B | 47,593 B |
 | [PR #20 STARK verifier](https://github.com/zkpinbtc/gsr-stark-verifier/pull/20) | 272,064 WU | 2.32B | 48,776 B | 221,068 B |
 
-The fixed-claim varops margin is 201,890,793; the witness-claim margin is
-203,546,843. Both spends fit without padding. The current result is about half
+The fixed-claim varops margin is 234,741,612; the witness-claim margin is
+236,426,932. Both spends fit without padding. The current result is about half
 PR #20's WU and varops, but it does not reach the later optimization target of
 less than 100,000 WU, 0.7B varops, or 50 KB committed Script.
 
@@ -58,29 +58,29 @@ totals to the directly measured compressed Script size.
 
 | Claim | Stage | Macro definitions | Main body / call sites | Committed bytes |
 |---|---|---:|---:|---:|
-| Fixed | Input checks | 45 B | 3,728 B | 3,773 B |
-| Fixed | G2 subgroup | 506 B | 108 B | 614 B |
-| Fixed | MSM / window tables | 148 B | 69,003 B | 69,151 B |
-| Fixed | Miller | 3,529 B | 526 B | 4,055 B |
-| Fixed | Final | 853 B | 2,012 B | 2,865 B |
-| Witness | Input checks | 45 B | 3,728 B | 3,773 B |
-| Witness | G2 subgroup | 506 B | 108 B | 614 B |
-| Witness | MSM / window tables | 184 B | 69,187 B | 69,371 B |
-| Witness | Miller | 3,529 B | 526 B | 4,055 B |
-| Witness | Final | 853 B | 2,006 B | 2,859 B |
+| Fixed | Input checks | 45 B | 2,897 B | 2,942 B |
+| Fixed | G2 subgroup | 631 B | 270 B | 901 B |
+| Fixed | MSM / window tables | 158 B | 69,001 B | 69,159 B |
+| Fixed | Miller | 3,538 B | 520 B | 4,058 B |
+| Fixed | Final | 828 B | 1,996 B | 2,824 B |
+| Witness | Input checks | 45 B | 2,897 B | 2,942 B |
+| Witness | G2 subgroup | 629 B | 270 B | 899 B |
+| Witness | MSM / window tables | 194 B | 69,185 B | 69,379 B |
+| Witness | Miller | 3,540 B | 520 B | 4,060 B |
+| Witness | Final | 828 B | 1,992 B | 2,820 B |
 
 ### Witness payload by category
 
 | Category | Fixed claim | Witness claim |
 |---|---:|---:|
 | Proof points A/B/C | 256 B | 256 B |
-| Slopes (Miller, subgroup, MSM) | 20,087 B | 20,087 B |
+| Slopes (Miller, subgroup, MSM) | 13,561 B | 13,561 B |
 | Fixed line coefficients | 32,627 B | 32,627 B |
 | Line-binding witness bytes | 0 B | 0 B |
 | Residue values (`c`, `c⁻¹`, `wi`) | 769 B | 769 B |
 | Window digits | 60 B | 60 B |
 | Everything else | 288 B | 320 B |
-| **Total** | **54,087 B** | **54,119 B** |
+| **Total** | **47,561 B** | **47,593 B** |
 
 The line hash and initial domain hash are 64 Script-constant bytes, not witness
 payload. The meter reports 64 SHA-256 calls and 35,695 input bytes.
@@ -97,6 +97,21 @@ The checked pairing relation is
 `e(A, B) · e(−L, γ) · e(−C, δ) = e(α, β)`. Script checks canonical field
 encodings, G1 curve membership for A/C/L, B's BN254 twist membership and G2
 subgroup criterion, affine slope hints, and the residue-witness relation.
+The G2 check uses gnark-crypto's BN254 Frobenius relation
+`[x₀+1]B + ψ([x₀]B) + ψ²([x₀]B) = ψ³([2x₀]B)`, with the 63-bit
+`x₀ = 4965661367192848881`. Script computes `[x₀]B` once (62 doubles and 27
+double-add steps), forms `[x₀+1]B` with one addition, and obtains `[2x₀]B`
+with one doubling. Its two byte-identical scalar-step classes and the final
+relation additions use witness slope hints checked by Script. The Python
+reference accepted 200 random G2 points and rejected 200 random on-twist
+non-subgroup points, agreeing with `[r]B = ∞` on all 400 samples.
+Affine exceptional cases are rejected: doubles require `2y ≠ 0`, and additions
+require distinct x-coordinates. For honest finite subgroup B, every scalar
+prefix is nonzero and below r. On that subgroup `ψ` acts by
+`λ = 6x₀² mod r`; integer checks give `x₀ ≠ ±1`,
+`x₀+1 ≠ ±x₀λ`, and `x₀+1+x₀λ ≠ ±x₀λ² mod r`, so the fixed relation
+additions are neither equal nor opposite. Infinity has no affine witness
+encoding.
 Fixed `a0`, `a1`, and `bn254_control_id` are folded into the constant part of
 L; two 4-bit, 32-window tables compute the variable `c0·IC3 + c1·IC4` term.
 Fixed mode binds both claim scalars to the fixture. Witness mode checks the
@@ -128,23 +143,23 @@ formulas follow BitVM commit `c620dbfaacebdf778e765a6681985350389973b1`:
 `ReadCost(n) = 350 + 2·wordspan(n)`; `MoveCost(d) = 200 + 23d`;
 `MulCost(n,m) = 700 + n + 18m + n·m` plus the product write; trimmed operand
 sizes for MOD; and the macro-unroll precharge. The fixed-claim result is
-1,170,939,207 model varops versus 1,170,939,207 meter varops, with identical
+1,065,748,388 model varops versus 1,065,748,388 meter varops, with identical
 opcode counts (difference 0).
 
 | Fixed-claim stage | Varops |
 |---|---:|
-| Input checks | 7,467,742 |
-| G2 subgroup | 144,592,398 |
-| MSM / window tables | 22,987,894 |
-| Miller, including pairing preamble | 761,141,063 |
-| Final | 24,433,528 |
-| Macro-unroll precharge | 210,316,216 |
+| Input checks | 5,766,910 |
+| G2 subgroup | 60,922,179 |
+| MSM / window tables | 23,005,558 |
+| Miller, including pairing preamble | 761,636,759 |
+| Final | 24,446,412 |
+| Macro-unroll precharge | 189,970,204 |
 | Final stack check | 366 |
-| **Total** | **1,170,939,207** |
+| **Total** | **1,065,748,388** |
 
-The largest opcode costs are MUL at 262,675,020 varops, macro-unroll
-precharge at 210,316,216, PICK at 197,383,934, ADD at 98,700,472, MOD at
-63,477,374, and ROLL at 43,196,632. This profile includes the step hash
+The largest opcode costs are MUL at 255,961,412 varops, macro-unroll
+precharge at 189,970,204, PICK at 183,121,554, ADD at 93,316,344, MOD at
+55,961,470, and ROLL at 23,926,259. This profile includes the step hash
 length-prefixing and the fixed stack schedule.
 
 Standalone field-operation microbenchmarks use one random canonical input per
@@ -183,8 +198,9 @@ python tools/breakdown.py --claim witness --bundle build/witness.json
 
 `tools/generate.py` checks GSR `compress`, `unroll`, and `check` equivalence.
 Run `PYTHON=/path/to/python bash tools/test.sh` for the Python reference,
-field and pairing differential tests, tamper checks, byte-identical Miller
-steps, compression equivalence, and native fixture verification.
+400-point G2 subgroup relation test, field and pairing differential tests,
+tamper checks, byte-identical Miller and subgroup steps, compression
+equivalence, and native fixture verification.
 
 ### Security notes
 
@@ -203,7 +219,8 @@ standalone rather than presented as transaction results.
 
 | Step | Change or probe | Before | After | Result |
 |---|---|---|---|---|
-| 0 | Static cost model | — | 1,170,939,207 model / meter varops; opcode counts match | Validated exactly on the final compressed transaction |
+| 0 | Static cost model | — | 1,170,939,207 model / meter varops; opcode counts match | Validated exactly at the Round 1 baseline |
+| Round 2 B | 63-bit Frobenius G2 subgroup relation | 137,333 WU / 1,170,939,207 varops / 80,458 B | 130,099 WU / 1,065,748,388 varops / 79,884 B | Retained; −7,234 WU, −105,190,819 varops, −574 B |
 | 1a | Lazy sums and deferred reductions | Step 1d baseline | No retained change | Candidate regressed on compressed cost; reverted (candidate totals were not retained) |
 | 1b | Symmetric Fp12 square | Step 1d baseline | No retained change | Candidate increased compressed WU; reverted (candidate totals were not retained) |
 | 1c | Shallow copies and fewer deep picks | 140,494 WU / 1,233,221,358 varops / 117,868 B | 140,476 WU / 1,218,605,654 varops / 117,850 B | Retained; −18 WU, −14,615,704 varops, −18 B |

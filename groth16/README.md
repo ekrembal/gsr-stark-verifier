@@ -48,6 +48,43 @@ The fixed-claim varops margin is 201,890,793; the witness-claim margin is
 PR #20's WU and varops, but it does not reach the later optimization target of
 less than 100,000 WU, 0.7B varops, or 50 KB committed Script.
 
+### Compressed Script bytes by stage
+
+Macro-definition bytes are attributed to stages in proportion to the expanded
+bytes of their invocations in each stage. Main-body bytes, including inline
+instructions and macro call sites, are attributed by the expanded execution
+span. This allocation is reproducible with `tools/breakdown.py`; each column
+totals to the directly measured compressed Script size.
+
+| Claim | Stage | Macro definitions | Main body / call sites | Committed bytes |
+|---|---|---:|---:|---:|
+| Fixed | Input checks | 45 B | 3,728 B | 3,773 B |
+| Fixed | G2 subgroup | 506 B | 108 B | 614 B |
+| Fixed | MSM / window tables | 148 B | 69,003 B | 69,151 B |
+| Fixed | Miller | 3,529 B | 526 B | 4,055 B |
+| Fixed | Final | 853 B | 2,012 B | 2,865 B |
+| Witness | Input checks | 45 B | 3,728 B | 3,773 B |
+| Witness | G2 subgroup | 506 B | 108 B | 614 B |
+| Witness | MSM / window tables | 184 B | 69,187 B | 69,371 B |
+| Witness | Miller | 3,529 B | 526 B | 4,055 B |
+| Witness | Final | 853 B | 2,006 B | 2,859 B |
+
+### Witness payload by category
+
+| Category | Fixed claim | Witness claim |
+|---|---:|---:|
+| Proof points A/B/C | 256 B | 256 B |
+| Slopes (Miller, subgroup, MSM) | 20,087 B | 20,087 B |
+| Fixed line coefficients | 32,627 B | 32,627 B |
+| Line-binding witness bytes | 0 B | 0 B |
+| Residue values (`c`, `c⁻¹`, `wi`) | 769 B | 769 B |
+| Window digits | 60 B | 60 B |
+| Everything else | 288 B | 320 B |
+| **Total** | **54,087 B** | **54,119 B** |
+
+The line hash and initial domain hash are 64 Script-constant bytes, not witness
+payload. The meter reports 64 SHA-256 calls and 35,695 input bytes.
+
 ## How it works
 
 The fixture is a real RISC Zero 3.0.6 Groth16 receipt produced with
@@ -96,11 +133,11 @@ opcode counts (difference 0).
 
 | Fixed-claim stage | Varops |
 |---|---:|
-| Input checks | 152,060,140 |
-| Claim MSM | 22,987,894 |
-| Pairing preamble | 4,766,966 |
-| Miller loop | 756,374,097 |
-| Finalization | 24,433,528 |
+| Input checks | 7,467,742 |
+| G2 subgroup | 144,592,398 |
+| MSM / window tables | 22,987,894 |
+| Miller, including pairing preamble | 761,141,063 |
+| Final | 24,433,528 |
 | Macro-unroll precharge | 210,316,216 |
 | Final stack check | 366 |
 | **Total** | **1,170,939,207** |
@@ -140,6 +177,8 @@ python tools/generate.py --claim witness --compress --out build/witness.json
 GSR_METER=/path/to/ad6c16ff-gsr-meter python tools/measure.py build/fixed.json
 GSR_METER=/path/to/ad6c16ff-gsr-meter python tools/measure.py build/witness.json
 GSR_METER=/path/to/ad6c16ff-gsr-meter python tools/cost.py build/fixed.json
+python tools/breakdown.py --claim fixed --bundle build/fixed.json
+python tools/breakdown.py --claim witness --bundle build/witness.json
 ```
 
 `tools/generate.py` checks GSR `compress`, `unroll`, and `check` equivalence.

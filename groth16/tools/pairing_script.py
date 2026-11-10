@@ -663,7 +663,8 @@ def _g2_subgroup_check(fc: FieldCode, values):
     fc.drop(point[0], point[1], psi_x, psi_y)
 
 
-def _input_checks(fc: FieldCode, values):
+def _input_checks(fc: FieldCode, values, stage_ranges=None):
+    input_start = len(fc.asm.s.code)
     fields = [
         *values["L"], *values["C"], *values["A"], *values["B"],
         *values["evals"]["L"], *values["evals"]["C"], *values["evals"]["A"],
@@ -686,7 +687,12 @@ def _input_checks(fc: FieldCode, values):
     curve_rhs = fc.fp2_add(x_cubed, twist_b)
     fc.equal(y_squared, curve_rhs)
     fc.drop(y_squared, x_squared, x_cubed, twist_b, curve_rhs)
+    subgroup_start = len(fc.asm.s.code)
     _g2_subgroup_check(fc, values)
+    subgroup_end = len(fc.asm.s.code)
+    if stage_ranges is not None:
+        stage_ranges["input_checks"] = (input_start, subgroup_start)
+        stage_ranges["g2_subgroup"] = (subgroup_start, subgroup_end)
 
 
 def build_pairing_script(fixture: dict, claim_mode: str | None = None):
@@ -698,7 +704,7 @@ def build_pairing_script(fixture: dict, claim_mode: str | None = None):
     vk = fixture["verifying_key"]
     input_start = len(asm.s.code)
     if claim_mode is not None:
-        _input_checks(fc, values)
+        _input_checks(fc, values, witness.stage_ranges)
     input_end = len(asm.s.code)
     msm_start = input_end
     if claim_mode is not None:
@@ -891,12 +897,11 @@ def build_pairing_script(fixture: dict, claim_mode: str | None = None):
         asm.op("FROMALTSTACK", 0, claim_output)
     else:
         asm.push(1)
-    witness.stage_ranges = {
-        "input_checks": (input_start, input_end),
-        "claim_msm": (msm_start, msm_end),
-        "pairing_preamble": (msm_end, miller_start),
-        "miller_loop": (miller_start, miller_end),
-        "finalization": (miller_end, len(asm.s.code)),
-    }
+    if claim_mode is not None:
+        witness.stage_ranges["msm_window_tables"] = (msm_start, msm_end)
+    else:
+        witness.stage_ranges["input_checks"] = (input_start, input_end)
+    witness.stage_ranges["miller"] = (msm_end, miller_end)
+    witness.stage_ranges["final"] = (miller_end, len(asm.s.code))
     witness.miller_step_ranges = miller_step_ranges
     return asm.s, witness
